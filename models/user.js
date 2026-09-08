@@ -52,6 +52,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(255),
         defaultValue: null,
       },
+      token_version: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1,
+      },
     },
     {
       tableName: "users",
