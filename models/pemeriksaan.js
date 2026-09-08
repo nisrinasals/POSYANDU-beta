@@ -1,0 +1,87 @@
+"use strict";
+
+module.exports = (sequelize, DataTypes) => {
+  const Pemeriksaan = sequelize.define(
+    "Pemeriksaan",
+    {
+      id: {
+        type: DataTypes.BIGINT,
+        primaryKey: true,
+        autoIncrement: true,
+        allowNull: false,
+      },
+      kunjungan_id: {
+        type: DataTypes.BIGINT,
+        allowNull: false,
+        unique: true,
+      },
+      profile_kehamilan_id: {
+        type: DataTypes.BIGINT,
+      },
+      tanggal: {
+        type: DataTypes.DATEONLY,
+        allowNull: false,
+        defaultValue: sequelize.literal("CURRENT_DATE"),
+      },
+      usia_bulan: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      kategori_sasaran: {
+        type: DataTypes.STRING(20),
+      },
+      bb_kg: {
+        type: DataTypes.DECIMAL(5, 2),
+      },
+      tb_cm: {
+        type: DataTypes.DECIMAL(5, 2),
+      },
+      lingkar_kepala_cm: {
+        type: DataTypes.DECIMAL(4, 2),
+      },
+      lila_cm: {
+        type: DataTypes.DECIMAL(4, 2),
+      },
+      lingkar_perut_cm: {
+        type: DataTypes.DECIMAL(5, 2),
+      },
+      td_sistole: {
+        type: DataTypes.INTEGER,
+      },
+      td_diastole: {
+        type: DataTypes.INTEGER,
+      },
+      kadar_gula: {
+        type: DataTypes.INTEGER,
+      },
+      detail_skrining: {
+        type: DataTypes.JSONB,
+        defaultValue: {},
+      },
+      topik_penyuluhan: {
+        type: DataTypes.TEXT,
+      },
+      is_perlu_rujukan: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
+    },
+    {
+      tableName: "pemeriksaan",
+      timestamps: false,
+    },
+  );
+
+  Pemeriksaan.associate = function (models) {
+    Pemeriksaan.belongsTo(models.KunjunganPosyandu, {
+      foreignKey: "kunjungan_id",
+      as: "kunjungan",
+    });
+    Pemeriksaan.belongsTo(models.ProfileKehamilan, {
+      foreignKey: "profile_kehamilan_id",
+      as: "profileKehamilan",
+    });
+  };
+
+  return Pemeriksaan;
+};
