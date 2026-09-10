@@ -174,7 +174,7 @@ const STANDAR_PLOT = {
       },
     ],
   },
-  remaja_awal: {
+  uskrem_6_14: {
     plot: [
       {
         nama: "IMT/U",
@@ -187,7 +187,7 @@ const STANDAR_PLOT = {
       },
     ],
   },
-  remaja_akhir: {
+  uskrem_15_18: {
     plot: [
       {
         nama: "IMT/U",
@@ -338,7 +338,7 @@ const evaluasiTekananDarah = (sistole, diastole, kelompokSasaran) => {
     return { kategori: "Risiko", kode: "R", is_merah: true };
   }
 
-  if (["remaja_akhir", "dewasa"].includes(kelompokSasaran)) {
+  if (["uskrem_15_18", "dewasa"].includes(kelompokSasaran)) {
     if (sistole > 140 && diastole < 90) return { kategori: "Hipertensi sistolik terisolasi", kode: "HST", is_merah: true };
     if (sistole >= 180 || diastole >= 110) return { kategori: "Hipertensi tingkat 3", kode: "Ht 3", is_merah: true };
     if (sistole >= 160 || diastole >= 100) return { kategori: "Hipertensi tingkat 2", kode: "Ht 2", is_merah: true };

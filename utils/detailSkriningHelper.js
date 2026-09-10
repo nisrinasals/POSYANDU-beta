@@ -235,12 +235,29 @@ const SKEMA_SKRINING = {
   },
 };
 
+const mergeWithSchema = (schema, input) => {
+  if (Array.isArray(schema)) {
+    return Array.isArray(input) ? [...input] : [...schema];
+  }
+
+  if (schema && typeof schema === "object") {
+    const inputObject = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+
+    return Object.keys({ ...schema, ...inputObject }).reduce((result, key) => {
+      result[key] = key in inputObject ? mergeWithSchema(schema[key], inputObject[key]) : mergeWithSchema(schema[key], undefined);
+      return result;
+    }, {});
+  }
+
+  return input === undefined ? schema : input;
+};
+
 const formatDetailSkrining = (kategoriSasaran, inputSkrining = {}, isTahunan = false) => {
   const schemaDefault = SKEMA_SKRINING[kategoriSasaran];
 
   if (!schemaDefault) return inputSkrining || {};
 
-  const formatted = { ...inputSkrining };
+  const formatted = mergeWithSchema(schemaDefault, inputSkrining);
 
   if (["dewasa", "lansia"].includes(kategoriSasaran)) {
     formatted.is_skrining_tahunan = Boolean(isTahunan);

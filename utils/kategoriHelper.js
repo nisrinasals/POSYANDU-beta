@@ -38,12 +38,12 @@ const tentukanKategori = (tanggal_lahir, kategoriInput = null, tanggal = new Dat
 
   // Priority 2: Penentuan Otomatis Berdasarkan Umur
   if (totalMonths >= 0 && totalMonths <= 11) {
-    return "bayi"; // 0 - 5 bulan
+    return "bayi"; // 0 - 11 bulan
   }
   if (totalMonths >= 12 && totalMonths <= 59) {
-    return "balita"; // 6 - 59 bulan (di bawah 5 tahun)
+    return "balita"; // 12 - 59 bulan (di bawah 5 tahun)
   }
-  if (years >= 5 && years <= 6) {
+  if (years >= 5 && years < 6) {
     return "apras"; // Anak Prasekolah (5 - 6 tahun)
   }
   if (years >= 6 && years <= 14) {
