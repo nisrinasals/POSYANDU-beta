@@ -19,12 +19,16 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       nomor_antrean: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.STRING(10),
         allowNull: false,
       },
       status_langkah: {
         type: DataTypes.STRING(20),
         defaultValue: "langkah_1",
+      },
+      created_at: {
+        type: DataTypes.DATE,
+        defaultValue: sequelize.literal("CURRENT_TIMESTAMP"),
       },
     },
     {

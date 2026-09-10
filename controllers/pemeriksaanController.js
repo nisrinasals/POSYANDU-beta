@@ -5,7 +5,7 @@ const { formatDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
-const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskerem_15_18", "dewasa", "lansia"];
+const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 
 /**
  * HELPER INTERNAL: Get or Create Record Pemeriksaan
@@ -14,7 +14,7 @@ const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_1
 const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = null) => {
   const kunjungan = await KunjunganPosyandu.findByPk(kunjungan_id, {
     include: [
-      { model: SesiPosyandu, as: "sesi_posyandu" },
+      { model: SesiPosyandu, as: "sesiPosyandu" },
       { model: Warga, as: "warga" },
     ],
   });
@@ -26,13 +26,13 @@ const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = 
   }
 
   // Cek Status Sesi Posyandu (Hanya Kader yang dibatasi jika closed)
-  if (kunjungan.sesi_posyandu?.status === "closed" && reqUser?.role === "kader") {
+  if (kunjungan.sesiPosyandu?.status === "closed" && reqUser?.role === "kader") {
     const error = new Error("Sesi Posyandu ini sudah ditutup (closed). Data tidak dapat diubah.");
     error.statusCode = 400;
     throw error;
   }
 
-  const tglPemeriksaan = targetTanggal || kunjungan.sesi_posyandu?.tanggal_pelaksanaan || new Date();
+  const tglPemeriksaan = targetTanggal || kunjungan.sesiPosyandu?.tanggal_pelaksanaan || new Date();
   const { totalMonths } = hitungUmur(kunjungan.warga.tanggal_lahir, tglPemeriksaan);
   const kategoriFix = tentukanKategori(kunjungan.warga.tanggal_lahir, null, tglPemeriksaan);
 
@@ -97,7 +97,7 @@ const getAllPemeriksaan = async (req, res, next) => {
       offset: parseInt(offset, 10),
       order: [
         ["tanggal", "DESC"],
-        ["createdAt", "DESC"],
+        ["created_at", "DESC"],
       ],
       include: [
         {
@@ -121,7 +121,7 @@ const getAllPemeriksaan = async (req, res, next) => {
             },
             {
               model: SesiPosyandu,
-              as: "sesi_posyandu",
+              as: "sesiPosyandu",
               attributes: ["id", "tanggal_pelaksanaan", "status"],
             },
           ],
@@ -173,14 +173,14 @@ const getPemeriksaanById = async (req, res, next) => {
             },
             {
               model: SesiPosyandu,
-              as: "sesi_posyandu",
+              as: "sesiPosyandu",
               attributes: ["id", "tanggal_pelaksanaan", "status"],
             },
           ],
         },
         {
           model: ProfileKehamilan,
-          as: "profile_kehamilan",
+          as: "profileKehamilan",
           required: false,
         },
       ],
@@ -414,7 +414,7 @@ const updatePemeriksaan = async (req, res, next) => {
           model: KunjunganPosyandu,
           as: "kunjungan",
           include: [
-            { model: SesiPosyandu, as: "sesi_posyandu" },
+            { model: SesiPosyandu, as: "sesiPosyandu" },
             { model: Warga, as: "warga" },
           ],
         },
@@ -429,7 +429,7 @@ const updatePemeriksaan = async (req, res, next) => {
     }
 
     // Cek Batasan Sesi Closed untuk Role Kader
-    if (pemeriksaan.kunjungan?.sesi_posyandu?.status === "closed" && req.user.role === "kader") {
+    if (pemeriksaan.kunjungan?.sesiPosyandu?.status === "closed" && req.user.role === "kader") {
       return res.status(400).json({
         success: false,
         message: "Pemeriksaan tidak dapat diubah karena sesi Posyandu sudah ditutup.",
@@ -496,7 +496,7 @@ const deletePemeriksaan = async (req, res, next) => {
     const { id } = req.params;
 
     const pemeriksaan = await Pemeriksaan.findByPk(id, {
-      include: [{ model: KunjunganPosyandu, as: "kunjungan", include: [{ model: SesiPosyandu, as: "sesi_posyandu" }] }],
+      include: [{ model: KunjunganPosyandu, as: "kunjungan", include: [{ model: SesiPosyandu, as: "sesiPosyandu" }] }],
     });
 
     if (!pemeriksaan) {
@@ -506,7 +506,7 @@ const deletePemeriksaan = async (req, res, next) => {
       });
     }
 
-    if (pemeriksaan.kunjungan?.sesi_posyandu?.status === "closed" && req.user.role === "kader") {
+    if (pemeriksaan.kunjungan?.sesiPosyandu?.status === "closed" && req.user.role === "kader") {
       return res.status(400).json({
         success: false,
         message: "Tidak dapat menghapus pemeriksaan karena sesi Posyandu sudah ditutup.",

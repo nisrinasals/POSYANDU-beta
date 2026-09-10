@@ -1,0 +1,259 @@
+const SKEMA_SKRINING = {
+  busui: {
+    tbc: {
+      has_batuk_menerus: false,
+      has_demam_2_minggu: false,
+      has_bb_tetap_atau_turun_2_bulan: false,
+      has_kontak_pasien_tbc: false,
+    },
+    pelayanan_kesehatan: {
+      is_vit_a_given: false,
+      jumlah_kapsul_vit_a: 0,
+      is_rutin_vit_a: false,
+      is_menyusui: true,
+      is_kb_pasca_persalinan: false,
+    },
+  },
+  bumil: {
+    tbc: {
+      has_batuk_menerus: false,
+      has_demam_2_minggu: false,
+      has_bb_tetap_atau_turun_2_bulan: false,
+      has_kontak_pasien_tbc: false,
+    },
+    pelayanan_kesehatan: {
+      jumlah_ttd_given: 0,
+      is_rutin_ttd: false,
+      is_mt_kek_given: false,
+      komposisi_mt_kek: "",
+      jumlah_m_kek: 0,
+      is_rutin_mt_kek: false,
+    },
+  },
+  bayi: {
+    pelayanan_kesehatan: {
+      tempat_imunisasi: "puskesmas || rumah_sakit || klinik",
+      is_asi_eksklusif: false,
+      is_mpasi: false,
+      is_pmt_lokal_pemulihan: false,
+      is_konsumsi_pmt_habis: false,
+      is_vit_a_given: false,
+      is_ikut_kelas_balita: false,
+    },
+    tbc: {
+      has_batuk_2_minggu: false,
+      has_demam_2_minggu: false,
+      has_bb_tetap_atau_turun_2_bulan: false,
+      has_lesu_malaise: false,
+    },
+  },
+  balita: {
+    pelayanan_kesehatan: {
+      tempat_imunisasi: "puskesmas || rumah_sakit || klinik",
+      is_mp_asi: false,
+      is_pmt_lokal_pemulihan: false,
+      is_konsumsi_pmt_habis: false,
+      is_vit_a_given: false,
+      is_obat_cacing_given: false,
+      is_ikut_kelas_balita: false,
+    },
+    tbc: {
+      has_batuk_2_minggu: false,
+      has_demam_2_minggu: false,
+      has_bb_tetap_atau_turun_2_bulan: false,
+      has_lesu_malaise: false,
+    },
+  },
+  apras: {
+    pelayanan_kesehatan: {
+      is_obat_cacing_given: false,
+    },
+    tbc: {
+      has_batuk_2_minggu: false,
+      has_demam_2_minggu: false,
+      has_bb_tetap_atau_turun_2_bulan: false,
+      has_lesu_malaise: false,
+    },
+  },
+  uskrem_6_14: {
+    pemeriksaan_6_bulanan: {
+      tes_penglihatan_hitung_jari: {
+        is_mata_kanan_normal: true,
+        is_mata_kiri_normal: true,
+      },
+      tes_pendengaran_berbisik: {
+        is_telinga_kanan_normal: true,
+        is_telinga_kiri_normal: true,
+      },
+    },
+    pemeriksaan_tahunan_remaja_putri: {
+      is_skrining_jiwa: false,
+      is_periksa_hb: false,
+    },
+    tbc: {
+      has_batuk_2_minggu: false,
+      has_demam_2_minggu: false,
+      has_bb_tetap_atau_turun_2_bulan: false,
+      has_lesu_malaise: false,
+    },
+  },
+  uskrem_15_18: {
+    pemeriksaan_6_bulanan: {
+      tes_penglihatan_hitung_jari: {
+        is_mata_kanan_normal: true,
+        is_mata_kiri_normal: true,
+      },
+      tes_pendengaran_berbisik: {
+        is_telinga_kanan_normal: true,
+        is_telinga_kiri_normal: true,
+      },
+    },
+    pemeriksaan_tahunan_remaja_putri: {
+      is_skrining_jiwa: false,
+      is_periksa_hb: false,
+    },
+    tbc: {
+      has_batuk_2_minggu: false,
+      has_demam_2_minggu: false,
+      has_bb_tetap_atau_turun_2_bulan: false,
+      has_lesu_malaise: false,
+    },
+  },
+  dewasa: {
+    kadar_gula_darah: 0,
+    ploting_gula_darah: "normal",
+    kadar_kolesterol: 0,
+    ploting_kolesterol: "normal",
+    is_menggunakan_kontrasepsi: false,
+    tbc: {
+      has_batuk_lebih_2_minggu: false,
+      has_batuk_kurang_2_minggu: false,
+      gejala_tambahan: {
+        has_nafsu_makan_menurun: false,
+        has_bb_menurun: false,
+        has_lemah_letih_lesu: false,
+        has_keringat_malam_tanpa_fisik: false,
+        has_batuk_darah: false,
+        has_sesak_nafas: false,
+      },
+    },
+    pemeriksaan_6_bulanan: {
+      tes_penglihatan_hitung_jari: {
+        is_mata_kanan_normal: true,
+        is_mata_kiri_normal: true,
+      },
+      tes_pendengaran_berbisik: {
+        is_telinga_kanan_normal: true,
+        is_telinga_kiri_normal: true,
+      },
+    },
+    skrining_ppok_puma: {
+      jenis_kelamin_skor: 0,
+      usia_skor: 0,
+      merokok_skor: 0,
+      napas_pendek_skor: 0,
+      dahak_paru_skor: 0,
+      batuk_atau_spirometri_skor: 0,
+      total_skor_puma: 0,
+    },
+    skrining_kesehatan_jiwa: {
+      bulan_pemeriksaan: "",
+      jawaban_skor: {
+        kurang_bersemangat: 0,
+        murung_tertekan_putus_asa: 0,
+        gugup_cemas_gelisah: 0,
+        sulit_kendalikan_khawatir: 0,
+      },
+      total_skor_jiwa: 0,
+    },
+  },
+  lansia: {
+    kadar_gula_darah: 0,
+    ploting_gula_darah: "",
+    kadar_kolesterol: 0,
+    ploting_kolesterol: "",
+    tbc: {
+      has_batuk_lebih_2_minggu: false,
+      has_batuk_kurang_2_minggu: false,
+      gejala_tambahan: {
+        has_nafsu_makan_menurun: false,
+        has_bb_menurun: false,
+        has_lemah_letih_lesu: false,
+        has_keringat_malam_tanpa_fisik: false,
+        has_batuk_darah: false,
+        has_sesak_nafas: false,
+      },
+    },
+    pemeriksaan_6_bulanan: {
+      tes_penglihatan_hitung_jari: {
+        is_mata_kanan_normal: true,
+        is_mata_kiri_normal: true,
+      },
+      tes_pendengaran_berbisik: {
+        is_telinga_kanan_normal: true,
+        is_telinga_kiri_normal: true,
+      },
+    },
+    aks_aktifitas_harian: {
+      bab_skor: 0,
+      bak_skor: 0,
+      membersihkan_diri_skor: 0,
+      penggunaan_wc_skor: 0,
+      makan_minum_skor: 0,
+      transfer_tempat_tidur_skor: 0,
+      berjalan_tempat_rata_skor: 0,
+      berpakaian_skor: 0,
+      naik_turun_tangga_skor: 0,
+      mandi_skor: 0,
+      total_skor_aks: 0,
+    },
+    skilas: {
+      kognitif_dan_mobilisasi: {
+        has_kendala_orientasi_waktu_tempat: false,
+        has_kendala_ulang_3_kata: false,
+        has_keterbatasan_mobilisasi: false,
+        has_kendala_tes_berdiri_kursi: false,
+      },
+      malnutrisi: {
+        has_bb_turun_3kg_3_bulan: false,
+        has_hilang_nafsu_makan: false,
+        is_lila_kurang_21cm: false,
+      },
+      gangguan_penglihatan: {
+        has_masalah_mata: false,
+        has_kendala_tes_melihat: false,
+      },
+      gangguan_pendengaran: {
+        has_kendala_tes_berbisik: false,
+      },
+      gejala_depresi: {
+        has_sedih_tertekan_putus_asa: false,
+        has_kurang_minat_kesenangan: false,
+      },
+      is_imunisasi_covid19: false,
+    },
+  },
+};
+
+const formatDetailSkrining = (kategoriSasaran, inputSkrining = {}, isTahunan = false) => {
+  const schemaDefault = SKEMA_SKRINING[kategoriSasaran];
+
+  if (!schemaDefault) return inputSkrining || {};
+
+  const formatted = { ...inputSkrining };
+
+  if (["dewasa", "lansia"].includes(kategoriSasaran)) {
+    formatted.is_skrining_tahunan = Boolean(isTahunan);
+
+    if (!isTahunan) {
+      delete formatted.skrining_tahunan;
+    }
+  }
+
+  return formatted;
+};
+
+module.exports = {
+  SKEMA_SKRINING,
+  formatDetailSkrining,
+};

@@ -101,7 +101,7 @@ const getAntreanHariIni = async (req, res, next) => {
     endOfDay.setHours(23, 59, 59, 999);
 
     const whereCondition = {
-      createdAt: {
+      created_at: {
         [Op.between]: [startOfDay, endOfDay],
       },
     };
@@ -117,7 +117,7 @@ const getAntreanHariIni = async (req, res, next) => {
 
     const antrean = await KunjunganPosyandu.findAll({
       where: whereCondition,
-      attributes: ["id", "nomor_antrean", "status_langkah", "createdAt"],
+      attributes: ["id", "nomor_antrean", "status_langkah", "created_at"],
       include: [
         {
           model: Warga,
@@ -131,7 +131,7 @@ const getAntreanHariIni = async (req, res, next) => {
           attributes: ["id", "kategori_sasaran", "bb_kg", "tb_cm"],
         },
       ],
-      order: [["createdAt", "ASC"]],
+      order: [["created_at", "ASC"]],
     });
 
     return res.status(200).json({
@@ -160,7 +160,7 @@ const getAllKunjungan = async (req, res, next) => {
     if (status_langkah) whereCondition.status_langkah = status_langkah;
 
     if (start_date && end_date) {
-      whereCondition.createdAt = {
+      whereCondition.created_at = {
         [Op.between]: [new Date(start_date), new Date(end_date)],
       };
     }
@@ -174,7 +174,7 @@ const getAllKunjungan = async (req, res, next) => {
       where: whereCondition,
       limit: parseInt(limit, 10),
       offset: parseInt(offset, 10),
-      order: [["createdAt", "DESC"]],
+      order: [["created_at", "DESC"]],
       include: [
         {
           model: Warga,
@@ -185,7 +185,7 @@ const getAllKunjungan = async (req, res, next) => {
         },
         {
           model: SesiPosyandu,
-          as: "sesi_posyandu",
+          as: "sesiPosyandu",
           attributes: ["id", "tanggal_pelaksanaan", "status"],
         },
         {
@@ -230,7 +230,7 @@ const getKunjunganById = async (req, res, next) => {
         },
         {
           model: SesiPosyandu,
-          as: "sesi_posyandu",
+          as: "sesiPosyandu",
           attributes: ["id", "tanggal_pelaksanaan", "status"],
         },
         {
@@ -304,7 +304,7 @@ const deleteKunjungan = async (req, res, next) => {
     const { id } = req.params;
 
     const kunjungan = await KunjunganPosyandu.findByPk(id, {
-      include: [{ model: SesiPosyandu, as: "sesi_posyandu" }],
+      include: [{ model: SesiPosyandu, as: "sesiPosyandu" }],
     });
 
     if (!kunjungan) {
@@ -315,7 +315,7 @@ const deleteKunjungan = async (req, res, next) => {
     }
 
     // Kader tidak bisa menghapus jika sesi sudah closed
-    if (kunjungan.sesi_posyandu?.status === "closed" && req.user?.role === "kader") {
+    if (kunjungan.sesiPosyandu?.status === "closed" && req.user?.role === "kader") {
       return res.status(400).json({
         success: false,
         message: "Tidak dapat membatalkan kunjungan karena sesi Posyandu sudah ditutup.",

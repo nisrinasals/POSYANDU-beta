@@ -35,6 +35,13 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
+    if (decoded.token_version !== user.token_version) {
+      return res.status(401).json({
+        success: false,
+        message: "Token sudah tidak berlaku. Silakan login kembali.",
+      });
+    }
+
     // Cek status keaktifan user
     if (user.status !== "active") {
       return res.status(403).json({
@@ -91,5 +98,6 @@ const authorize = (...allowedRoles) => {
 
 module.exports = {
   authenticateToken,
-  authorizeRoles,
+  authorize,
+  authorizeRoles: authorize,
 };

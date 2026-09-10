@@ -4,7 +4,7 @@ const ExcelJS = require("exceljs");
 const { tentukanKategori, hitungUmur } = require("../utils/kategoriHelper");
 
 // 9 Kategori Sasaran Resmi ILP
-const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskerem_15_18", "dewasa", "lansia"];
+const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 
 const VALID_STATUS_DOMISILI = ["aktif", "pindah", "meninggal"];
 
@@ -69,7 +69,7 @@ const getAllWarga = async (req, res, next) => {
         },
         {
           model: ProfileKehamilan,
-          as: "profile_kehamilan",
+          as: "profileKehamilan",
           required: false,
           where: { status_kehamilan: "hamil" }, // Cek kehamilan aktif
         },
@@ -80,7 +80,7 @@ const getAllWarga = async (req, res, next) => {
     const formattedRows = rows.map((w) => {
       const plainWarga = w.get({ plain: true });
       const { umurText, totalMonths, totalYears } = hitungUmur(plainWarga.tanggal_lahir);
-      const isHamil = plainWarga.profile_kehamilan && plainWarga.profile_kehamilan.length > 0;
+      const isHamil = plainWarga.profileKehamilan?.some((p) => p.status_kehamilan === "hamil");
 
       const kategoriDinamis = tentukanKategori(plainWarga.tanggal_lahir, isHamil ? "bumil" : null);
 
@@ -140,14 +140,14 @@ const getWargaById = async (req, res, next) => {
         },
         {
           model: ProfileKehamilan,
-          as: "profile_kehamilan",
+          as: "profileKehamilan",
           required: false,
         },
         {
           model: KunjunganPosyandu,
-          as: "kunjungan",
+          as: "kunjunganPosyandu",
           limit: 10,
-          order: [["createdAt", "DESC"]],
+          order: [["created_at", "DESC"]],
           include: [{ model: Pemeriksaan, as: "pemeriksaan" }],
         },
       ],
@@ -162,7 +162,7 @@ const getWargaById = async (req, res, next) => {
 
     const plainWarga = warga.get({ plain: true });
     const { umurText, totalMonths, totalYears } = hitungUmur(plainWarga.tanggal_lahir);
-    const hasAktifKehamilan = plainWarga.profile_kehamilan?.some((p) => p.status_kehamilan === "hamil");
+    const hasAktifKehamilan = plainWarga.profileKehamilan?.some((p) => p.status_kehamilan === "hamil");
 
     const kategoriDinamis = tentukanKategori(plainWarga.tanggal_lahir, hasAktifKehamilan ? "bumil" : null);
 
@@ -437,7 +437,7 @@ const exportWargaExcel = async (req, res, next) => {
         },
         {
           model: ProfileKehamilan,
-          as: "profile_kehamilan",
+          as: "profileKehamilan",
           required: false,
           where: { status_kehamilan: "hamil" },
         },
@@ -447,7 +447,7 @@ const exportWargaExcel = async (req, res, next) => {
     let formattedData = rows.map((w) => {
       const plain = w.get({ plain: true });
       const { umurText } = hitungUmur(plain.tanggal_lahir);
-      const isHamil = plain.profile_kehamilan && plain.profile_kehamilan.length > 0;
+      const isHamil = plain.profileKehamilan?.some((p) => p.status_kehamilan === "hamil");
       const kategori = tentukanKategori(plain.tanggal_lahir, isHamil ? "bumil" : null);
 
       return {
@@ -535,7 +535,7 @@ const getStatistikSasaran = async (req, res, next) => {
         },
         {
           model: ProfileKehamilan,
-          as: "profile_kehamilan",
+          as: "profileKehamilan",
           required: false,
           where: { status_kehamilan: "hamil" },
         },
@@ -550,13 +550,13 @@ const getStatistikSasaran = async (req, res, next) => {
       balita: 0,
       apras: 0,
       uskrem_6_14: 0,
-      uskerem_15_18: 0,
+      uskrem_15_18: 0,
       dewasa: 0,
       lansia: 0,
     };
 
     allWarga.forEach((w) => {
-      const isHamil = w.profile_kehamilan && w.profile_kehamilan.length > 0;
+      const isHamil = w.profileKehamilan?.some((p) => p.status_kehamilan === "hamil");
       const kat = tentukanKategori(w.tanggal_lahir, isHamil ? "bumil" : null);
 
       if (stats[kat] !== undefined) {

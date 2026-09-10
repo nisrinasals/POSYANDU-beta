@@ -82,7 +82,7 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: "posyandu_id",
       as: "posyandu",
     });
-    Warga.hasOne(models.ProfileKehamilan, {
+    Warga.hasMany(models.ProfileKehamilan, {
       foreignKey: "warga_id",
       as: "profileKehamilan",
     });
