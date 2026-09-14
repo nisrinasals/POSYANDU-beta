@@ -1,11 +1,11 @@
 const express = require("express");
 
-const authController = require("./controllers/authController");
-const kunjunganController = require("./controllers/kunjunganController");
-const pemeriksaanController = require("./controllers/pemeriksaanController");
-const posyanduController = require("./controllers/posyanduController");
-const wargaController = require("./controllers/wargaController");
-const { authenticateToken, authorize } = require("./middleware/authMiddleware");
+const authController = require("../controllers/authController");
+const kunjunganController = require("../controllers/kunjunganController");
+const pemeriksaanController = require("../controllers/pemeriksaanController");
+const posyanduController = require("../controllers/posyanduController");
+const wargaController = require("../controllers/wargaController");
+const { authenticateToken, authorize } = require("../middleware/authMiddleware");
 
 const api = express.Router();
 const authenticated = [authenticateToken, authorize("kader", "puskesmas", "dinkes")];

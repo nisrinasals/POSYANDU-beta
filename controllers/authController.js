@@ -142,6 +142,13 @@ const resendOtp = async (req, res, next) => {
   try {
     const { email, purpose } = req.body;
 
+    if (!["register", "reset_password"].includes(purpose)) {
+      return res.status(400).json({
+        success: false,
+        message: "Purpose OTP tidak valid.",
+      });
+    }
+
     // Mencegah spam kirim OTP (minimal jeda 1 menit)
     const lastOtp = await EmailOtp.findOne({
       where: { email, purpose, is_used: false },

@@ -7,6 +7,8 @@ const { tentukanKategori, hitungUmur } = require("../utils/kategoriHelper");
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 
 const VALID_STATUS_DOMISILI = ["aktif", "pindah", "meninggal"];
+const VALID_JENIS_KELAMIN = ["L", "P"];
+const VALID_STATUS_PERKAWINAN = ["menikah", "tidak_menikah"];
 
 /**
  * HELPER INTERNAL: Scoping Hak Akses Berdasarkan Role (Kader, Puskesmas, Dinkes, SA)
@@ -225,6 +227,13 @@ const createWarga = async (req, res, next) => {
       });
     }
 
+    if (!VALID_JENIS_KELAMIN.includes(jenis_kelamin) || !VALID_STATUS_PERKAWINAN.includes(status_perkawinan || "tidak_menikah") || !VALID_STATUS_DOMISILI.includes(status_domisili)) {
+      return res.status(400).json({
+        success: false,
+        message: "Nilai jenis kelamin, status perkawinan, atau status domisili tidak valid.",
+      });
+    }
+
     const posyanduEksis = await Posyandu.findByPk(posyanduTarget);
     if (!posyanduEksis) {
       return res.status(404).json({
@@ -317,6 +326,17 @@ const updateWarga = async (req, res, next) => {
           message: `NIK [${nik}] sudah digunakan oleh warga lain.`,
         });
       }
+    }
+
+    if (
+      (jenis_kelamin !== undefined && !VALID_JENIS_KELAMIN.includes(jenis_kelamin)) ||
+      (status_perkawinan !== undefined && !VALID_STATUS_PERKAWINAN.includes(status_perkawinan)) ||
+      (status_domisili !== undefined && !VALID_STATUS_DOMISILI.includes(status_domisili))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Nilai jenis kelamin, status perkawinan, atau status domisili tidak valid.",
+      });
     }
 
     await warga.update({
