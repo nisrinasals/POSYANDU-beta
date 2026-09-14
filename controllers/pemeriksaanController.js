@@ -301,7 +301,7 @@ const getStep3Pemeriksaan = async (req, res, next) => {
     });
 
     const plotData = ["bumil", "busui", "dewasa", "lansia"].includes(current.kategori_sasaran)
-      ? evaluasiPemeriksaan({ ...measurements, kategori_sasaran: current.kategori_sasaran, jenis_kelamin: current.kunjungan.warga.jenis_kelamin })
+      ? evaluasiPemeriksaan({ ...measurements, kategori_sasaran: current.kategori_sasaran, jenis_kelamin: current.kunjungan.warga.jenis_kelamin, tanggal_lahir: current.kunjungan.warga.tanggal_lahir })
       : null;
     const periodeAcuan = current.profileKehamilan || getLatestPregnancyProfile(current.kunjungan.warga.profileKehamilan || []);
     const periode = tentukanPeriodePemeriksaan(current.kategori_sasaran, current.tanggal, periodeAcuan);

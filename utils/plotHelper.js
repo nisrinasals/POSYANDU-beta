@@ -3,6 +3,8 @@
  * File: utils/plotHelper.js
  */
 
+const referenceTable = require("./referenceTable.json");
+
 // ----------------------------------------------------------------------
 // 1. DATA ACUAN STANDAR PLOT ILP POSYANDU PER KATEGORI SASARAN
 // ----------------------------------------------------------------------
@@ -438,139 +440,128 @@ const evaluasiLila = (lila_cm, kelompokSasaran) => {
 };
 
 // ----------------------------------------------------------------------
-// 4. EVALUATOR Z-SCORE BAYI / BALITA / APRAS / REMAJA
+// 4. EVALUATOR ANTROPOMETRI ANAK BERBASIS TABEL PERMENKES
 // ----------------------------------------------------------------------
 
-/**
- * Evaluator BB/U (0 - 60 Bulan)
- */
-const evaluasiBBU = (bb_kg, usiaBulan, jenisKelamin, tabelRefBBU) => {
-  const ref = tabelRefBBU?.[jenisKelamin]?.[usiaBulan];
-  if (!ref) return { error: `Data referensi BB/U tidak ditemukan untuk ${jenisKelamin} usia ${usiaBulan} bulan` };
-
-  const zScore = parseFloat(hitungZScore(bb_kg, ref.median, ref.sdPos1, ref.sdNeg1).toFixed(2));
-
-  let kategori = "";
-  let kode = "";
-  let is_merah = false;
-
-  if (zScore < -3) {
-    kategori = "Berat badan sangat kurang";
-    kode = "BGM";
-    is_merah = true;
-  } else if (zScore >= -3 && zScore < -2) {
-    kategori = "Berat badan kurang";
-    kode = "BGM";
-    is_merah = true;
-  } else if (zScore >= -2 && zScore <= 1) {
-    kategori = "Berat badan normal";
-    kode = "N";
-    is_merah = false;
-  } else {
-    kategori = "Risiko berat badan lebih";
-    kode = "L";
-    is_merah = true;
-  }
-
-  return {
-    indikator: "BB/U",
-    nilai_riil: bb_kg,
-    z_score: zScore,
-    kategori,
-    kode,
-    is_merah,
-  };
+const normalizeGender = (gender) => {
+  const value = String(gender || "")
+    .trim()
+    .toLowerCase();
+  if (["l", "laki-laki", "laki laki", "male"].includes(value)) return "laki-laki";
+  if (["p", "perempuan", "female"].includes(value)) return "perempuan";
+  return value;
 };
 
-/**
- * Evaluator TB/U (Tinggi/Panjang Badan menurut Umur)
- */
-const evaluasiTBU = (tb_cm, usiaBulan, jenisKelamin, tabelRefTBU) => {
-  const ref = tabelRefTBU?.[jenisKelamin]?.[usiaBulan];
-  if (!ref) return { error: `Data referensi TB/U tidak ditemukan untuk ${jenisKelamin} usia ${usiaBulan} bulan` };
-
-  const zScore = parseFloat(hitungZScore(tb_cm, ref.median, ref.sdPos1, ref.sdNeg1).toFixed(2));
-
-  let kategori = "";
-  let kode = "";
-  let is_merah = false;
-
-  if (zScore < -3) {
-    kategori = "Sangat pendek";
-    kode = "SP";
-    is_merah = true;
-  } else if (zScore >= -3 && zScore < -2) {
-    kategori = "Pendek (Stunting)";
-    kode = "P";
-    is_merah = true;
-  } else if (zScore >= -2 && zScore <= 3) {
-    kategori = "Normal";
-    kode = "N";
-    is_merah = false;
-  } else {
-    kategori = "Tinggi";
-    kode = "T";
-    is_merah = false;
-  }
-
-  return {
-    indikator: "TB/U",
-    nilai_riil: tb_cm,
-    z_score: zScore,
-    kategori,
-    kode,
-    is_merah,
-  };
+const getReferenceTable = (index, gender) => {
+  const normalizedGender = normalizeGender(gender);
+  return referenceTable.tables.find((table) => table.index === index && table.gender === normalizedGender);
 };
 
-/**
- * Evaluator IMT/U (60 - 216 Bulan / 5 - 18 Tahun)
- */
-const evaluasiIMTU = (bb_kg, tb_cm, usiaBulan, jenisKelamin, tabelRefIMTU) => {
+const getReferenceRow = (index, gender, lookupKey, lookupValue) => {
+  const table = getReferenceTable(index, gender);
+  if (!table) return { error: `Tabel referensi ${index} tidak ditemukan untuk ${normalizeGender(gender)}.` };
+
+  const numericValue = Number(lookupValue);
+  const rows = table.rows.filter((row) => Number.isFinite(Number(row[lookupKey])));
+  if (!Number.isFinite(numericValue) || rows.length === 0) {
+    return { error: `Data referensi ${index} tidak ditemukan untuk ${normalizeGender(gender)} ${lookupKey} ${lookupValue}.` };
+  }
+
+  const exactRow = rows.find((row) => Number(row[lookupKey]) === numericValue);
+  if (exactRow) return { table, row: exactRow };
+
+  // Measurement-axis values are tabulated at fixed increments; nearest row is deterministic and preserves source values.
+  const isMeasurementAxis = ["BB/PB", "BB/TB"].includes(index);
+  if (isMeasurementAxis) {
+    const min = Number(rows[0][lookupKey]);
+    const max = Number(rows[rows.length - 1][lookupKey]);
+    if (numericValue < min || numericValue > max) {
+      return { error: `Data referensi ${index} tidak ditemukan untuk ${normalizeGender(gender)} ${lookupKey} ${lookupValue}.` };
+    }
+    const row = rows.reduce((nearest, candidate) => (Math.abs(Number(candidate[lookupKey]) - numericValue) < Math.abs(Number(nearest[lookupKey]) - numericValue) ? candidate : nearest));
+    return { table, row };
+  }
+
+  return { error: `Data referensi ${index} tidak ditemukan untuk ${normalizeGender(gender)} usia ${lookupValue} bulan.` };
+};
+
+const classifyReferenceValue = (value, row, kind) => {
+  const isFiveToEighteenBmi = kind === "bmi_5_18";
+  let category;
+  let kode;
+  let is_merah;
+  let sd_position;
+
+  if (value < row.sd_minus_3) {
+    category = kind === "height" ? "Sangat pendek" : "Gizi buruk (severely wasted)";
+    kode = kind === "height" ? "SP" : "GiBur";
+    is_merah = true;
+    sd_position = "<-3 SD";
+  } else if (value < row.sd_minus_2) {
+    category = kind === "weight" ? "Berat badan kurang" : kind === "height" ? "Pendek (stunted)" : "Gizi kurang (wasted)";
+    kode = kind === "weight" ? "BGM" : kind === "height" ? "P" : "GiKur";
+    is_merah = true;
+    sd_position = "-3 SD s.d. <-2 SD";
+  } else if (value <= row.sd_plus_1) {
+    category = kind === "weight" ? "Berat badan normal" : kind === "height" ? "Normal" : "Gizi baik (normal)";
+    kode = kind === "weight" ? "N" : kind === "height" ? "N" : "Baik";
+    is_merah = false;
+    sd_position = "-2 SD s.d. +1 SD";
+  } else if (value <= row.sd_plus_2) {
+    category = kind === "weight" ? "Risiko berat badan lebih" : "Berisiko gizi lebih (possible risk of overweight)";
+    kode = kind === "weight" ? "L" : "RGL";
+    is_merah = true;
+    sd_position = ">+1 SD s.d. +2 SD";
+  } else if (value <= row.sd_plus_3) {
+    category = kind === "height" ? "Tinggi" : isFiveToEighteenBmi ? "Obesitas (obese)" : "Gizi lebih (overweight)";
+    kode = kind === "height" ? "T" : isFiveToEighteenBmi ? "Obes" : "GL";
+    is_merah = kind !== "height";
+    sd_position = ">+2 SD s.d. +3 SD";
+  } else {
+    category = kind === "height" ? "Tinggi" : "Obesitas (obese)";
+    kode = kind === "height" ? "T" : "Obes";
+    is_merah = kind !== "height";
+    sd_position = ">+3 SD";
+  }
+
+  return { kategori: category, kode, is_merah, sd_position, reference: row };
+};
+
+const evaluasiBBU = (bb_kg, usiaBulan, jenisKelamin) => {
+  const result = getReferenceRow("BB/U", jenisKelamin, "age_months", usiaBulan);
+  if (result.error) return { error: result.error };
+  return { indikator: "BB/U", nilai_riil: bb_kg, ...classifyReferenceValue(Number(bb_kg), result.row, "weight") };
+};
+
+const evaluasiTBU = (tb_cm, usiaBulan, jenisKelamin) => {
+  const index = usiaBulan < 24 ? "PB/U" : "TB/U";
+  const result = getReferenceRow(index, jenisKelamin, "age_months", usiaBulan);
+  if (result.error) return { error: result.error };
+  return { indikator: index, nilai_riil: tb_cm, ...classifyReferenceValue(Number(tb_cm), result.row, "height") };
+};
+
+const evaluateWeightForSize = (weight, size, usiaBulan, jenisKelamin) => {
+  const index = usiaBulan < 24 ? "BB/PB" : "BB/TB";
+  const lookupKey = index === "BB/PB" ? "length_cm" : "height_cm";
+  const result = getReferenceRow(index, jenisKelamin, lookupKey, size);
+  if (result.error) return { error: result.error };
+  return { indikator: index, nilai_riil: weight, nilai_acuan: size, ...classifyReferenceValue(Number(weight), result.row, "weight") };
+};
+
+const evaluasiIMTU = (bb_kg, tb_cm, usiaBulan, jenisKelamin) => {
   if (!bb_kg || !tb_cm) return { error: "Berat badan dan tinggi badan harus diisi." };
-
-  const tbMeter = tb_cm / 100;
-  const imt = parseFloat((bb_kg / (tbMeter * tbMeter)).toFixed(2));
-
-  const ref = tabelRefIMTU?.[jenisKelamin]?.[usiaBulan];
-  if (!ref) return { error: `Data referensi IMT/U tidak ditemukan untuk ${jenisKelamin} usia ${usiaBulan} bulan` };
-
-  const zScore = parseFloat(hitungZScore(imt, ref.median, ref.sdPos1, ref.sdNeg1).toFixed(2));
-
-  let kategori = "";
-  let kode = "";
-  let is_merah = false;
-
-  if (zScore < -3) {
-    kategori = "Gizi sangat kurang";
-    kode = "GiKur";
-    is_merah = true;
-  } else if (zScore >= -3 && zScore < -2) {
-    kategori = "Gizi kurang";
-    kode = "GiKur";
-    is_merah = true;
-  } else if (zScore >= -2 && zScore <= 1) {
-    kategori = "Gizi baik (normal)";
-    kode = "Baik";
-    is_merah = false;
-  } else if (zScore > 1 && zScore <= 2) {
-    kategori = "Gizi lebih";
-    kode = "GL";
-    is_merah = true;
-  } else {
-    kategori = "Obesitas";
-    kode = "Obes";
-    is_merah = true;
-  }
-
-  return {
-    indikator: "IMT/U",
-    nilai_imt: imt,
-    z_score: zScore,
-    kategori,
-    kode,
-    is_merah,
-  };
+  const imt = parseFloat((bb_kg / (tb_cm / 100) ** 2).toFixed(2));
+  const index = usiaBulan < 24 ? "IMT/U" : "IMT/U";
+  const table = referenceTable.tables.find(
+    (candidate) =>
+      candidate.index === index &&
+      candidate.gender === normalizeGender(jenisKelamin) &&
+      ((usiaBulan < 24 && candidate.age_range === "0-24 bulan") || (usiaBulan >= 24 && usiaBulan <= 60 && candidate.age_range === "24-60 bulan") || (usiaBulan > 60 && candidate.age_range === "5-18 tahun")),
+  );
+  if (!table) return { error: `Data referensi IMT/U tidak ditemukan untuk ${normalizeGender(jenisKelamin)} usia ${usiaBulan} bulan.` };
+  const row = table.rows.find((candidate) => Number(candidate.age_months) === Number(usiaBulan));
+  if (!row) return { error: `Data referensi IMT/U tidak ditemukan untuk ${normalizeGender(jenisKelamin)} usia ${usiaBulan} bulan.` };
+  return { indikator: "IMT/U", nilai_imt: imt, ...classifyReferenceValue(imt, row, usiaBulan > 60 ? "bmi_5_18" : "bmi") };
 };
 
 // ----------------------------------------------------------------------
@@ -580,19 +571,21 @@ const evaluasiIMTU = (bb_kg, tb_cm, usiaBulan, jenisKelamin, tabelRefIMTU) => {
 /**
  * Evaluasi Otomatis Khusus Bayi, Balita, Apras, Remaja
  */
-const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin, tabelRefBBU, tabelRefTBU, tabelRefIMTU }) => {
+const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin }) => {
   const usiaBulan = hitungUsiaBulan(tanggal_lahir);
 
-  const hasilBBU = evaluasiBBU(bb_kg, usiaBulan, jenis_kelamin, tabelRefBBU);
-  const hasilTBU = evaluasiTBU(tb_cm, usiaBulan, jenis_kelamin, tabelRefTBU);
-  const hasilIMTU = evaluasiIMTU(bb_kg, tb_cm, usiaBulan, jenis_kelamin, tabelRefIMTU);
-
-  const isPerluRujukan = Boolean(hasilBBU.is_merah || hasilTBU.is_merah || hasilIMTU.is_merah);
+  const hasilBBU = usiaBulan <= 60 ? evaluasiBBU(bb_kg, usiaBulan, jenis_kelamin) : null;
+  const hasilTBU = usiaBulan <= 60 ? evaluasiTBU(tb_cm, usiaBulan, jenis_kelamin) : null;
+  const hasilUkuran = usiaBulan <= 60 ? evaluateWeightForSize(bb_kg, tb_cm, usiaBulan, jenis_kelamin) : null;
+  const hasilIMTU = evaluasiIMTU(bb_kg, tb_cm, usiaBulan, jenis_kelamin);
+  const hasil = [hasilBBU, hasilTBU, hasilUkuran, hasilIMTU].filter(Boolean);
+  const isPerluRujukan = hasil.some((item) => item.is_merah === true);
 
   return {
     usia_bulan: usiaBulan,
     bbu: hasilBBU,
     tbu: hasilTBU,
+    bb_panjang_tinggi: hasilUkuran,
     imtu: hasilIMTU,
     status_rujukan: isPerluRujukan ? "merah" : "hijau",
     is_perlu_rujukan: isPerluRujukan,
@@ -604,6 +597,10 @@ const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin,
  */
 const evaluasiPemeriksaan = (data) => {
   const { kategori_sasaran, bb_kg, tb_cm, td_sistole, td_diastole, lila_cm, lingkar_perut_cm, jenis_kelamin } = data;
+
+  if (["bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18"].includes(kategori_sasaran) && data.tanggal_lahir) {
+    return kalkulasiAntropometriAnak({ bb_kg, tb_cm, tanggal_lahir: data.tanggal_lahir, jenis_kelamin });
+  }
 
   const hasil = {
     imt: evaluasiIMT(bb_kg, tb_cm, kategori_sasaran),
