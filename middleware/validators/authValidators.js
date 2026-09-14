@@ -11,7 +11,7 @@ const password = body("password").isString().isLength({ min: 8, max: 72 }).withM
 const newPassword = body("new_password").isString().isLength({ min: 8, max: 72 }).withMessage("Password baru harus 8 sampai 72 karakter.");
 
 const register = [
-  body("role").trim().isIn(["kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin", "sa"]).withMessage("Role tidak valid."),
+  body("role").trim().isIn(["kader", "puskesmas", "dinkes"]).withMessage("Role registrasi publik tidak valid."),
   email,
   password,
   body("nama_lengkap").trim().isLength({ min: 2, max: 100 }).withMessage("Nama lengkap harus 2 sampai 100 karakter."),

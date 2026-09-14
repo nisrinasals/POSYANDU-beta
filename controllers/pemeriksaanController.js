@@ -16,7 +16,7 @@ const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_1
 const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = null) => {
   const kunjungan = await KunjunganPosyandu.findByPk(kunjungan_id, {
     include: [
-      { model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(reqUser)] },
+      { model: SesiPosyandu, as: "sesiPosyandu", required: true, include: [getPosyanduInclude(reqUser)] },
       {
         model: Warga,
         as: "warga",
@@ -104,6 +104,7 @@ const getAllPemeriksaan = async (req, res, next) => {
         {
           model: KunjunganPosyandu,
           as: "kunjungan",
+          required: true,
           where: Object.keys(kunjunganWhere).length > 0 ? kunjunganWhere : undefined,
           attributes: ["id", "sesi_posyandu_id", "warga_id", "nomor_antrean", "status_langkah"],
           include: [
@@ -123,6 +124,7 @@ const getAllPemeriksaan = async (req, res, next) => {
             {
               model: SesiPosyandu,
               as: "sesiPosyandu",
+              required: true,
               include: [getPosyanduInclude(req.user)],
               attributes: ["id", "tanggal_pelaksanaan", "status"],
             },
@@ -159,6 +161,7 @@ const getPemeriksaanById = async (req, res, next) => {
         {
           model: KunjunganPosyandu,
           as: "kunjungan",
+          required: true,
           attributes: ["id", "sesi_posyandu_id", "warga_id", "nomor_antrean", "status_langkah"],
           include: [
             {
@@ -176,6 +179,7 @@ const getPemeriksaanById = async (req, res, next) => {
             {
               model: SesiPosyandu,
               as: "sesiPosyandu",
+              required: true,
               include: [getPosyanduInclude(req.user)],
               attributes: ["id", "tanggal_pelaksanaan", "status"],
             },
@@ -416,8 +420,9 @@ const updatePemeriksaan = async (req, res, next) => {
         {
           model: KunjunganPosyandu,
           as: "kunjungan",
+          required: true,
           include: [
-            { model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(req.user)] },
+            { model: SesiPosyandu, as: "sesiPosyandu", required: true, include: [getPosyanduInclude(req.user)] },
             {
               model: Warga,
               as: "warga",
@@ -499,7 +504,7 @@ const deletePemeriksaan = async (req, res, next) => {
     const { id } = req.params;
 
     const pemeriksaan = await Pemeriksaan.findByPk(id, {
-      include: [{ model: KunjunganPosyandu, as: "kunjungan", include: [{ model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(req.user)] }] }],
+      include: [{ model: KunjunganPosyandu, as: "kunjungan", required: true, include: [{ model: SesiPosyandu, as: "sesiPosyandu", required: true, include: [getPosyanduInclude(req.user)] }] }],
     });
 
     if (!pemeriksaan) {

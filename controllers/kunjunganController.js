@@ -134,6 +134,7 @@ const getAntreanHariIni = async (req, res, next) => {
         {
           model: SesiPosyandu,
           as: "sesiPosyandu",
+          required: true,
           include: [getPosyanduInclude(req.user)],
           attributes: ["id", "tanggal_pelaksanaan", "status"],
         },
@@ -193,6 +194,7 @@ const getAllKunjungan = async (req, res, next) => {
         {
           model: SesiPosyandu,
           as: "sesiPosyandu",
+          required: true,
           include: [getPosyanduInclude(req.user)],
           attributes: ["id", "tanggal_pelaksanaan", "status"],
         },
@@ -239,6 +241,7 @@ const getKunjunganById = async (req, res, next) => {
         {
           model: SesiPosyandu,
           as: "sesiPosyandu",
+          required: true,
           include: [getPosyanduInclude(req.user)],
           attributes: ["id", "tanggal_pelaksanaan", "status"],
         },
@@ -285,7 +288,7 @@ const updateStatusLangkah = async (req, res, next) => {
     }
 
     const kunjungan = await KunjunganPosyandu.findByPk(id, {
-      include: [{ model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(req.user)] }],
+      include: [{ model: SesiPosyandu, as: "sesiPosyandu", required: true, include: [getPosyanduInclude(req.user)] }],
     });
     if (!kunjungan) {
       return res.status(404).json({
@@ -315,7 +318,7 @@ const deleteKunjungan = async (req, res, next) => {
     const { id } = req.params;
 
     const kunjungan = await KunjunganPosyandu.findByPk(id, {
-      include: [{ model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(req.user)] }],
+      include: [{ model: SesiPosyandu, as: "sesiPosyandu", required: true, include: [getPosyanduInclude(req.user)] }],
     });
 
     if (!kunjungan) {

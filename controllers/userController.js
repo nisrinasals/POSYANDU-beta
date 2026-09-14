@@ -19,7 +19,7 @@ const canManageTarget = (actor, target, { allowAdminReplacement = false } = {}) 
   if (!ADMIN_ROLES.includes(actor.role)) return false;
   if (actor.role === "sa") return true;
   if (actor.role === "puskesmasAdmin") {
-    return target.puskesmas_id === actor.puskesmas_id && ["puskesmas", "kader"].includes(target.role);
+    return Number(target.puskesmas_id) === Number(actor.puskesmas_id) && ["puskesmas", "kader"].includes(target.role);
   }
   if (actor.role === "dinkesAdmin") {
     if (allowAdminReplacement) return target.role === "puskesmas" && target.puskesmas_id !== null;
@@ -28,7 +28,7 @@ const canManageTarget = (actor, target, { allowAdminReplacement = false } = {}) 
   return false;
 };
 
-const getTargetUser = (id) => User.findByPk(id);
+const getTargetUser = (id, actor) => User.findOne({ where: { id, ...(actor ? getUserScope(actor) : {}) } });
 const userAttributes = { exclude: ["password_hash", "token_version"] };
 
 const getUserScope = (actor) => {
@@ -70,7 +70,7 @@ const getUserById = async (req, res, next) => {
 const changeUserRole = async (req, res, next) => {
   try {
     if (rejectSelf(req, req.params.id, res)) return;
-    const target = await getTargetUser(req.params.id);
+    const target = await getTargetUser(req.params.id, req.user);
     if (!target || !canManageTarget(req.user, target)) return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk mengubah role user ini." });
     if (req.user.role !== "sa" && req.body.role === "sa") return res.status(403).json({ success: false, message: "Role sa hanya dapat ditetapkan oleh sa." });
     if (req.user.role === "puskesmasAdmin" && !["kader", "puskesmas"].includes(req.body.role)) return res.status(403).json({ success: false, message: "Admin Puskesmas hanya dapat mengatur role kader atau puskesmas." });
@@ -84,7 +84,7 @@ const changeUserRole = async (req, res, next) => {
 const changeUserStatus = async (req, res, next) => {
   try {
     if (rejectSelf(req, req.params.id, res)) return;
-    const target = await getTargetUser(req.params.id);
+    const target = await getTargetUser(req.params.id, req.user);
     if (!target || !canManageTarget(req.user, target)) return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk mengubah status user ini." });
     await target.update({ status: req.body.status, token_version: target.token_version + 1 });
     return res.status(200).json({ success: true, message: "Status user berhasil diubah.", data: target });
@@ -132,7 +132,7 @@ const uploadProfilePicture = async (req, res, next) => {
 const verifyUser = async (req, res, next) => {
   try {
     if (rejectSelf(req, req.params.id, res)) return;
-    const target = await getTargetUser(req.params.id);
+    const target = await getTargetUser(req.params.id, req.user);
     if (!target) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
     if (!canManageTarget(req.user, target)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk memverifikasi akun ini." });
@@ -151,7 +151,7 @@ const replacePuskesmasAdmin = async (req, res, next) => {
       await transaction.rollback();
       return;
     }
-    const replacement = await getTargetUser(req.params.id);
+    const replacement = await getTargetUser(req.params.id, req.user);
     if (!replacement) {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: "User pengganti tidak ditemukan." });
@@ -174,7 +174,7 @@ const replacePuskesmasAdmin = async (req, res, next) => {
 const deactivateUser = async (req, res, next) => {
   try {
     if (rejectSelf(req, req.params.id, res)) return;
-    const target = await getTargetUser(req.params.id);
+    const target = await getTargetUser(req.params.id, req.user);
     if (!target) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
     if (!canManageTarget(req.user, target)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk menonaktifkan akun ini." });
@@ -197,4 +197,6 @@ module.exports = {
   getMyProfile,
   updateMyProfile,
   uploadProfilePicture,
+  canManageTarget,
+  rejectSelf,
 };

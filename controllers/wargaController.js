@@ -2,7 +2,7 @@ const { Warga, Posyandu, Puskesmas, KunjunganPosyandu, Pemeriksaan, ProfileKeham
 const { Op } = require("sequelize");
 const ExcelJS = require("exceljs");
 const { tentukanKategori, tentukanKategoriAktif, hitungUmur, hitungRekapSasaran } = require("../utils/kategoriHelper");
-const { canAccessPosyandu } = require("../utils/posyanduAccessHelper");
+const { canAccessPosyandu, getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 
 // 9 Kategori Sasaran Resmi ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -309,10 +309,10 @@ const createWarga = async (req, res, next) => {
     }
 
     const posyanduEksis = await Posyandu.findByPk(posyanduTarget);
-    if (!posyanduEksis) {
+    if (!posyanduEksis || !canAccessPosyandu(req.user, posyanduEksis)) {
       return res.status(404).json({
         success: false,
-        message: "Data Posyandu tidak ditemukan.",
+        message: "Data Posyandu tidak ditemukan atau di luar scope Anda.",
       });
     }
 
@@ -375,7 +375,7 @@ const updateWarga = async (req, res, next) => {
       });
     }
 
-    const warga = await Warga.findByPk(id);
+    const warga = await Warga.findOne({ where: { id }, include: [getPosyanduInclude(req.user)] });
     if (!warga) {
       return res.status(404).json({
         success: false,
@@ -411,6 +411,10 @@ const updateWarga = async (req, res, next) => {
         success: false,
         message: "Nilai jenis kelamin, status perkawinan, atau status domisili tidak valid.",
       });
+    }
+
+    if (posyandu_id !== undefined && !canAccessPosyandu(req.user, await Posyandu.findByPk(posyandu_id))) {
+      return res.status(403).json({ success: false, message: "Posyandu tujuan berada di luar scope Anda." });
     }
 
     await warga.update({
@@ -468,7 +472,7 @@ const updateStatusDomisili = async (req, res, next) => {
       });
     }
 
-    const warga = await Warga.findByPk(id);
+    const warga = await Warga.findOne({ where: { id }, include: [getPosyanduInclude(req.user)] });
     if (!warga) {
       return res.status(404).json({
         success: false,

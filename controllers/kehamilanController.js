@@ -1,20 +1,12 @@
 "use strict";
 
 const { ProfileKehamilan, Warga, Posyandu } = require("../models");
+const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 
 const getScopedWarga = (req, wargaId) => {
-  const role = req.user?.role;
-  const posyanduWhere = {};
-
-  if (role === "kader") {
-    posyanduWhere.id = req.user.posyandu_id;
-  } else if (role === "puskesmas") {
-    posyanduWhere.puskesmas_id = req.user.puskesmas_id;
-  }
-
   return Warga.findOne({
     where: { id: wargaId },
-    include: [{ model: Posyandu, as: "posyandu", where: Object.keys(posyanduWhere).length ? posyanduWhere : undefined }],
+    include: [getPosyanduInclude(req.user)],
   });
 };
 

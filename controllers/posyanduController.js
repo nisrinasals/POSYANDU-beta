@@ -1,5 +1,6 @@
 const { Posyandu, Puskesmas, Kelurahan, Kecamatan } = require("../models");
 const { Op } = require("sequelize");
+const { getPosyanduScope } = require("../utils/posyanduAccessHelper");
 
 /**
  * 1. GET ALL POSYANDU (Support Search & Pagination)
@@ -11,10 +12,11 @@ const getAllPosyandu = async (req, res, next) => {
 
     // Condition filter untuk Posyandu
     const whereCondition = {};
+    Object.assign(whereCondition, getPosyanduScope(req.user));
     if (search) {
       whereCondition.nama_posyandu = { [Op.iLike]: `%${search}%` };
     }
-    if (puskesmas_id) {
+    if (puskesmas_id && !Object.prototype.hasOwnProperty.call(getPosyanduScope(req.user), "puskesmas_id")) {
       whereCondition.puskesmas_id = puskesmas_id;
     }
 
@@ -74,7 +76,8 @@ const getPosyanduById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const posyandu = await Posyandu.findByPk(id, {
+    const posyandu = await Posyandu.findOne({
+      where: { id, ...getPosyanduScope(req.user) },
       include: [
         {
           model: Puskesmas,
