@@ -87,6 +87,26 @@ const tentukanKategoriAktif = (tanggal_lahir, profiles = [], tanggal = new Date(
   return tentukanKategori(tanggal_lahir, getLatestPregnancyProfile(profiles), tanggal);
 };
 
+const hitungSelisihHari = (tanggalAwal, tanggalAkhir) => {
+  const awal = new Date(`${tanggalAwal}T00:00:00Z`);
+  const akhir = new Date(`${tanggalAkhir}T00:00:00Z`);
+  return Math.floor((akhir - awal) / 86400000);
+};
+
+const tentukanPeriodePemeriksaan = (kategoriSasaran, tanggalPemeriksaan, dataAcuan = {}) => {
+  if (kategoriSasaran !== "busui" || !dataAcuan.tanggal_persalinan) return null;
+
+  const usiaHari = hitungSelisihHari(dataAcuan.tanggal_persalinan, tanggalPemeriksaan);
+  if (usiaHari < 0) return { usia_hari: usiaHari, periode: null };
+  if (usiaHari < 7) return { usia_hari: usiaHari, periode: "0-7_hari" };
+  if (usiaHari <= 28) return { usia_hari: usiaHari, periode: "7-28_hari" };
+  if (usiaHari <= 42) return { usia_hari: usiaHari, periode: "28-42_hari" };
+
+  const usiaBulan = hitungUmur(dataAcuan.tanggal_persalinan, tanggalPemeriksaan).totalMonths;
+  if (usiaBulan >= 2 && usiaBulan <= 24) return { usia_hari: usiaHari, periode: `bulan_${usiaBulan}` };
+  return { usia_hari: usiaHari, periode: null };
+};
+
 const hitungRekapSasaran = (wargaList = [], tanggal = new Date()) => {
   const categories = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
   const stats = { total_warga: 0, ...Object.fromEntries(categories.map((category) => [category, 0])) };
@@ -112,5 +132,7 @@ module.exports = {
   tentukanKategoriUmur,
   tentukanKategoriAktif,
   getLatestPregnancyProfile,
+  hitungSelisihHari,
+  tentukanPeriodePemeriksaan,
   hitungRekapSasaran,
 };

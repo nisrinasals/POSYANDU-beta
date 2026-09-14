@@ -1,6 +1,6 @@
 const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan } = require("../models");
 const { Op } = require("sequelize");
-const { tentukanKategoriAktif, hitungUmur } = require("../utils/kategoriHelper");
+const { tentukanKategoriAktif, tentukanPeriodePemeriksaan, getLatestPregnancyProfile, hitungUmur } = require("../utils/kategoriHelper");
 const { formatDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
 const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
@@ -218,7 +218,7 @@ const getPemeriksaanById = async (req, res, next) => {
 const getStep3Pemeriksaan = async (req, res, next) => {
   try {
     const pemeriksaan = await Pemeriksaan.findByPk(req.params.id, {
-      attributes: ["id", "tanggal", "usia_bulan", "kategori_sasaran", "bb_kg", "tb_cm", "lingkar_kepala_cm", "lila_cm", "lingkar_perut_cm", "td_sistole", "td_diastole", "kadar_gula"],
+      attributes: ["id", "tanggal", "usia_bulan", "kategori_sasaran", "profile_kehamilan_id", "bb_kg", "tb_cm", "lingkar_kepala_cm", "lila_cm", "lingkar_perut_cm", "td_sistole", "td_diastole", "kadar_gula"],
       include: [
         {
           model: KunjunganPosyandu,
@@ -226,7 +226,13 @@ const getStep3Pemeriksaan = async (req, res, next) => {
           required: true,
           attributes: ["id", "warga_id", "sesi_posyandu_id"],
           include: [
-            { model: Warga, as: "warga", required: true, attributes: ["id", "nik", "nama_lengkap", "tanggal_lahir", "jenis_kelamin"] },
+            {
+              model: Warga,
+              as: "warga",
+              required: true,
+              attributes: ["id", "nik", "nama_lengkap", "tanggal_lahir", "jenis_kelamin"],
+              include: [{ model: ProfileKehamilan, as: "profileKehamilan", required: false, attributes: ["id", "tanggal_persalinan", "status_kehamilan", "is_menyusui"] }],
+            },
             {
               model: SesiPosyandu,
               as: "sesiPosyandu",
@@ -236,6 +242,7 @@ const getStep3Pemeriksaan = async (req, res, next) => {
             },
           ],
         },
+        { model: ProfileKehamilan, as: "profileKehamilan", required: false, attributes: ["id", "tanggal_persalinan", "status_kehamilan", "is_menyusui"] },
       ],
     });
 
@@ -265,12 +272,17 @@ const getStep3Pemeriksaan = async (req, res, next) => {
           include: [{ model: SesiPosyandu, as: "sesiPosyandu", required: true, attributes: [], include: [getPosyanduInclude(req.user)] }],
         },
       ],
-      order: [["tanggal", "ASC"], ["id", "ASC"]],
+      order: [
+        ["tanggal", "ASC"],
+        ["id", "ASC"],
+      ],
     });
 
     const plotData = ["bumil", "busui", "dewasa", "lansia"].includes(current.kategori_sasaran)
       ? evaluasiPemeriksaan({ ...measurements, kategori_sasaran: current.kategori_sasaran, jenis_kelamin: current.kunjungan.warga.jenis_kelamin })
       : null;
+    const periodeAcuan = current.profileKehamilan || getLatestPregnancyProfile(current.kunjungan.warga.profileKehamilan || []);
+    const periode = tentukanPeriodePemeriksaan(current.kategori_sasaran, current.tanggal, periodeAcuan);
 
     return res.status(200).json({
       success: true,
@@ -280,6 +292,7 @@ const getStep3Pemeriksaan = async (req, res, next) => {
         kategori_sasaran: current.kategori_sasaran,
         usia_bulan: current.usia_bulan,
         tanggal: current.tanggal,
+        periode,
         warga: current.kunjungan.warga,
         pengukuran_step_2: measurements,
         standar_plot: STANDAR_PLOT[current.kategori_sasaran] || null,
