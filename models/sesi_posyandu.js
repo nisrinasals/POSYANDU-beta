@@ -18,9 +18,21 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DATEONLY,
         allowNull: false,
       },
+      lokasi: {
+        type: DataTypes.STRING(255),
+        allowNull: false,
+      },
+      rw: {
+        type: DataTypes.STRING(5),
+        allowNull: false,
+      },
       status: {
         type: DataTypes.STRING(10),
+        allowNull: false,
         defaultValue: "open",
+        validate: {
+          isIn: [["open", "closed"]],
+        },
       },
     },
     {
