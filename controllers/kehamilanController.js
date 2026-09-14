@@ -83,7 +83,7 @@ const updateKehamilan = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Data kehamilan tidak ditemukan atau Anda tidak memiliki hak akses." });
     }
 
-    const allowedFields = ["nama_suami", "hpht", "hpl", "anak_ke", "jarak_anak_sebelum_bulan", "tanggal_persalinan", "cara_persalinan", "status_kehamilan"];
+    const allowedFields = ["nama_suami", "hpht", "hpl", "anak_ke", "jarak_anak_sebelum_bulan", "tanggal_persalinan", "cara_persalinan", "status_kehamilan", "is_menyusui"];
     const payload = Object.fromEntries(Object.entries(req.body).filter(([field]) => allowedFields.includes(field)));
     await data.update(payload);
 
@@ -100,7 +100,10 @@ const updateStatusKehamilan = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Data kehamilan tidak ditemukan atau Anda tidak memiliki hak akses." });
     }
 
-    await data.update({ status_kehamilan: req.body.status_kehamilan });
+    const payload = { status_kehamilan: req.body.status_kehamilan };
+    if (req.body.is_menyusui !== undefined) payload.is_menyusui = req.body.is_menyusui;
+    if (req.body.tanggal_persalinan !== undefined) payload.tanggal_persalinan = req.body.tanggal_persalinan;
+    await data.update(payload);
     return res.status(200).json({ success: true, message: "Status kehamilan berhasil diperbarui.", data });
   } catch (error) {
     next(error);

@@ -1,7 +1,7 @@
 const { Warga, Posyandu, Puskesmas, KunjunganPosyandu, Pemeriksaan, ProfileKehamilan } = require("../models");
 const { Op } = require("sequelize");
 const ExcelJS = require("exceljs");
-const { tentukanKategori, hitungUmur } = require("../utils/kategoriHelper");
+const { tentukanKategori, tentukanKategoriAktif, hitungUmur, hitungRekapSasaran } = require("../utils/kategoriHelper");
 
 // 9 Kategori Sasaran Resmi ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -21,7 +21,7 @@ const getRoleScope = (req) => {
 
   if (role === "kader") {
     wargaWhere.posyandu_id = user.posyandu_id;
-  } else if (role === "puskesmas") {
+  } else if (role === "puskesmas" || role === "puskesmasAdmin") {
     posyanduWhere.puskesmas_id = user.puskesmas_id;
   } else if (role === "dinkes" || role === "sa") {
   }
@@ -34,7 +34,8 @@ const getRoleScope = (req) => {
  */
 const getAllWarga = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, search, posyandu_id, jenis_kelamin, kategori_sasaran, status_domisili = "aktif", rt, rw } = req.query;
+    const { page = 1, limit = 10, search, posyandu_id, jenis_kelamin, kategori_sasaran, category, status_domisili = "aktif", rt, rw } = req.query;
+    const activeCategoryFilter = category || kategori_sasaran;
 
     const offset = (page - 1) * limit;
     const { wargaWhere, posyanduWhere, role } = getRoleScope(req);
@@ -59,8 +60,8 @@ const getAllWarga = async (req, res, next) => {
 
     const { count, rows } = await Warga.findAndCountAll({
       where: wargaWhere,
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      limit: activeCategoryFilter ? undefined : parseInt(limit, 10),
+      offset: activeCategoryFilter ? undefined : parseInt(offset, 10),
       order: [["nama_lengkap", "ASC"]],
       include: [
         {
@@ -73,7 +74,8 @@ const getAllWarga = async (req, res, next) => {
           model: ProfileKehamilan,
           as: "profileKehamilan",
           required: false,
-          where: { status_kehamilan: "hamil" }, // Cek kehamilan aktif
+          separate: true,
+          order: [["id", "DESC"]],
         },
       ],
     });
@@ -82,9 +84,7 @@ const getAllWarga = async (req, res, next) => {
     const formattedRows = rows.map((w) => {
       const plainWarga = w.get({ plain: true });
       const { umurText, totalMonths, totalYears } = hitungUmur(plainWarga.tanggal_lahir);
-      const isHamil = plainWarga.profileKehamilan?.some((p) => p.status_kehamilan === "hamil");
-
-      const kategoriDinamis = tentukanKategori(plainWarga.tanggal_lahir, isHamil ? "bumil" : null);
+      const kategoriDinamis = tentukanKategoriAktif(plainWarga.tanggal_lahir, plainWarga.profileKehamilan);
 
       return {
         ...plainWarga,
@@ -97,23 +97,25 @@ const getAllWarga = async (req, res, next) => {
 
     // Saring filter kategori_sasaran jika dikirim dari frontend
     let filteredResult = formattedRows;
-    if (kategori_sasaran) {
-      if (!VALID_KATEGORI.includes(kategori_sasaran)) {
+    if (activeCategoryFilter) {
+      if (!VALID_KATEGORI.includes(activeCategoryFilter)) {
         return res.status(400).json({
           success: false,
           message: `Kategori sasaran tidak valid. Pilihan: ${VALID_KATEGORI.join(", ")}`,
         });
       }
-      filteredResult = formattedRows.filter((item) => item.kategori_sasaran_saat_ini === kategori_sasaran);
+      filteredResult = formattedRows.filter((item) => item.kategori_sasaran_saat_ini === activeCategoryFilter);
     }
+
+    const paginatedResult = activeCategoryFilter ? filteredResult.slice(offset, offset + parseInt(limit, 10)) : filteredResult;
 
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil data warga / sasaran.",
-      data: filteredResult,
+      data: paginatedResult,
       pagination: {
-        total_items: kategori_sasaran ? filteredResult.length : count,
-        total_pages: Math.ceil((kategori_sasaran ? filteredResult.length : count) / limit),
+        total_items: activeCategoryFilter ? filteredResult.length : count,
+        total_pages: Math.ceil((activeCategoryFilter ? filteredResult.length : count) / limit),
         current_page: parseInt(page, 10),
         items_per_page: parseInt(limit, 10),
       },
@@ -164,9 +166,7 @@ const getWargaById = async (req, res, next) => {
 
     const plainWarga = warga.get({ plain: true });
     const { umurText, totalMonths, totalYears } = hitungUmur(plainWarga.tanggal_lahir);
-    const hasAktifKehamilan = plainWarga.profileKehamilan?.some((p) => p.status_kehamilan === "hamil");
-
-    const kategoriDinamis = tentukanKategori(plainWarga.tanggal_lahir, hasAktifKehamilan ? "bumil" : null);
+    const kategoriDinamis = tentukanKategoriAktif(plainWarga.tanggal_lahir, plainWarga.profileKehamilan);
 
     return res.status(200).json({
       success: true,
@@ -430,7 +430,8 @@ const updateStatusDomisili = async (req, res, next) => {
  */
 const exportWargaExcel = async (req, res, next) => {
   try {
-    const { posyandu_id, kategori_sasaran, status_domisili = "aktif", search } = req.query;
+    const { posyandu_id, kategori_sasaran, category, status_domisili = "aktif", search } = req.query;
+    const activeCategoryFilter = category || kategori_sasaran;
     const { wargaWhere, posyanduWhere, role } = getRoleScope(req);
 
     if (status_domisili && status_domisili !== "all") {
@@ -459,7 +460,8 @@ const exportWargaExcel = async (req, res, next) => {
           model: ProfileKehamilan,
           as: "profileKehamilan",
           required: false,
-          where: { status_kehamilan: "hamil" },
+          separate: true,
+          order: [["id", "DESC"]],
         },
       ],
     });
@@ -467,8 +469,7 @@ const exportWargaExcel = async (req, res, next) => {
     let formattedData = rows.map((w) => {
       const plain = w.get({ plain: true });
       const { umurText } = hitungUmur(plain.tanggal_lahir);
-      const isHamil = plain.profileKehamilan?.some((p) => p.status_kehamilan === "hamil");
-      const kategori = tentukanKategori(plain.tanggal_lahir, isHamil ? "bumil" : null);
+      const kategori = tentukanKategoriAktif(plain.tanggal_lahir, plain.profileKehamilan);
 
       return {
         ...plain,
@@ -477,8 +478,8 @@ const exportWargaExcel = async (req, res, next) => {
       };
     });
 
-    if (kategori_sasaran) {
-      formattedData = formattedData.filter((item) => item.kategori_sasaran === kategori_sasaran);
+    if (activeCategoryFilter) {
+      formattedData = formattedData.filter((item) => item.kategori_sasaran === activeCategoryFilter);
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -557,32 +558,13 @@ const getStatistikSasaran = async (req, res, next) => {
           model: ProfileKehamilan,
           as: "profileKehamilan",
           required: false,
-          where: { status_kehamilan: "hamil" },
+          separate: true,
+          order: [["id", "DESC"]],
         },
       ],
     });
 
-    const stats = {
-      total_warga: allWarga.length,
-      bumil: 0,
-      busui: 0,
-      bayi: 0,
-      balita: 0,
-      apras: 0,
-      uskrem_6_14: 0,
-      uskrem_15_18: 0,
-      dewasa: 0,
-      lansia: 0,
-    };
-
-    allWarga.forEach((w) => {
-      const isHamil = w.profileKehamilan?.some((p) => p.status_kehamilan === "hamil");
-      const kat = tentukanKategori(w.tanggal_lahir, isHamil ? "bumil" : null);
-
-      if (stats[kat] !== undefined) {
-        stats[kat] += 1;
-      }
-    });
+    const stats = hitungRekapSasaran(allWarga, new Date());
 
     return res.status(200).json({
       success: true,

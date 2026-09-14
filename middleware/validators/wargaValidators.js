@@ -12,6 +12,7 @@ const listFilters = [
   query("posyandu_id").optional().isInt({ min: 1 }).withMessage("posyandu_id harus berupa ID positif.").toInt(),
   query("jenis_kelamin").optional().isIn(["L", "P"]).withMessage("jenis_kelamin harus L atau P."),
   query("kategori_sasaran").optional().isIn(kategori).withMessage("kategori_sasaran tidak valid."),
+  query("category").optional().isIn(kategori).withMessage("category tidak valid."),
   query("status_domisili")
     .optional()
     .isIn(["all", ...statusDomisili])

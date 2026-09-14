@@ -17,19 +17,7 @@ const hitungUmur = (tanggal_lahir, tanggal = new Date()) => {
   return { years, totalMonths };
 };
 
-/**
- * Menentukan kategori pemeriksaan secara otomatis berdasarkan tgl_lahir
- * @param {string|Date} tanggal_lahir - Tanggal lahir warga
- * @param {string} [kategoriInput] - Kategori opsional dari request ('bumil'/'busui')
- * @param {string|Date} [tanggal] - Tanggal pemeriksaan
- * @returns {string} Kategori akhir
- */
-const tentukanKategori = (tanggal_lahir, kategoriInput = null, tanggal = new Date()) => {
-  // Priority 1: Status Khusus Manual (Bumil / Busui)
-  if (kategoriInput === "bumil" || kategoriInput === "busui") {
-    return kategoriInput;
-  }
-
+const tentukanKategoriUmur = (tanggal_lahir, tanggal = new Date()) => {
   if (!tanggal_lahir) {
     throw new Error("Tanggal lahir warga diperlukan untuk menentukan kategori.");
   }
@@ -62,7 +50,67 @@ const tentukanKategori = (tanggal_lahir, kategoriInput = null, tanggal = new Dat
   return "dewasa"; // Fallback default
 };
 
+const getLatestPregnancyProfile = (profiles = []) => {
+  if (!Array.isArray(profiles) || profiles.length === 0) return null;
+  return [...profiles].sort((a, b) => {
+    const aId = Number(a.id || 0);
+    const bId = Number(b.id || 0);
+    if (aId !== bId) return bId - aId;
+    const aDate = new Date(a.updated_at || a.tanggal_persalinan || a.hpht || 0).getTime();
+    const bDate = new Date(b.updated_at || b.tanggal_persalinan || b.hpht || 0).getTime();
+    return bDate - aDate;
+  })[0];
+};
+
+/**
+ * Menentukan satu sasaran aktif warga berdasarkan status kehamilan dan umur.
+ * Profil hamil selalu mengalahkan kategori umur; menyusui berlaku maksimal 24
+ * bulan sejak tanggal persalinan.
+ */
+const tentukanKategori = (tanggal_lahir, pregnancyProfile = null, tanggal = new Date()) => {
+  if (typeof pregnancyProfile === "string") {
+    pregnancyProfile = ["bumil", "busui"].includes(pregnancyProfile) ? { status_kehamilan: pregnancyProfile } : null;
+  }
+
+  if (pregnancyProfile?.status_kehamilan === "hamil") return "bumil";
+
+  const tanggalPersalinan = pregnancyProfile?.tanggal_persalinan;
+  const monthsSinceDelivery = tanggalPersalinan ? hitungUmur(tanggalPersalinan, tanggal).totalMonths : null;
+  if (pregnancyProfile?.is_menyusui === true && monthsSinceDelivery !== null && monthsSinceDelivery >= 0 && monthsSinceDelivery <= 24) {
+    return "busui";
+  }
+
+  return tentukanKategoriUmur(tanggal_lahir, tanggal);
+};
+
+const tentukanKategoriAktif = (tanggal_lahir, profiles = [], tanggal = new Date()) => {
+  return tentukanKategori(tanggal_lahir, getLatestPregnancyProfile(profiles), tanggal);
+};
+
+const hitungRekapSasaran = (wargaList = [], tanggal = new Date()) => {
+  const categories = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
+  const stats = { total_warga: 0, ...Object.fromEntries(categories.map((category) => [category, 0])) };
+  const uniqueWarga = new Map();
+
+  for (const warga of wargaList) {
+    const uniqueKey = warga.nik || warga.id;
+    if (uniqueKey !== undefined && uniqueWarga.has(String(uniqueKey))) continue;
+    if (uniqueKey !== undefined) uniqueWarga.set(String(uniqueKey), warga);
+  }
+
+  stats.total_warga = uniqueWarga.size;
+  for (const warga of uniqueWarga.values()) {
+    const category = tentukanKategoriAktif(warga.tanggal_lahir, warga.profileKehamilan, tanggal);
+    if (stats[category] !== undefined) stats[category] += 1;
+  }
+  return stats;
+};
+
 module.exports = {
   hitungUmur,
   tentukanKategori,
+  tentukanKategoriUmur,
+  tentukanKategoriAktif,
+  getLatestPregnancyProfile,
+  hitungRekapSasaran,
 };

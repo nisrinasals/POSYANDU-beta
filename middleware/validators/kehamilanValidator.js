@@ -16,6 +16,7 @@ const makePregnancyFields = () => {
     body("jarak_anak_sebelum_bulan").optional({ nullable: true }).isInt({ min: 0 }).withMessage("jarak_anak_sebelum_bulan harus berupa bilangan bulat nol atau lebih.").toInt(),
     body("cara_persalinan").optional({ nullable: true }).isIn(caraPersalinan).withMessage("cara_persalinan tidak valid."),
     body("status_kehamilan").optional().isIn(statuses).withMessage("status_kehamilan tidak valid."),
+    body("is_menyusui").optional().isBoolean().withMessage("is_menyusui harus berupa boolean.").toBoolean(),
   ];
 };
 
@@ -23,7 +24,12 @@ const getKehamilanByWarga = [positiveId("warga_id")];
 const getKehamilanById = [positiveId()];
 const createKehamilan = [body("warga_id").isInt({ min: 1 }).withMessage("warga_id harus berupa ID positif.").toInt(), ...makePregnancyFields()];
 const updateKehamilan = [positiveId(), ...makePregnancyFields().map((validator) => validator.optional())];
-const updateStatusKehamilan = [positiveId(), body("status_kehamilan").isIn(statuses).withMessage("status_kehamilan tidak valid.")];
+const updateStatusKehamilan = [
+  positiveId(),
+  body("status_kehamilan").isIn(statuses).withMessage("status_kehamilan tidak valid."),
+  body("is_menyusui").optional().isBoolean().withMessage("is_menyusui harus berupa boolean.").toBoolean(),
+  body("tanggal_persalinan").optional({ nullable: true }).isISO8601({ strict: true, strictSeparator: true }).withMessage("tanggal_persalinan harus berupa tanggal ISO yang valid."),
+];
 
 module.exports = {
   getKehamilanByWarga,

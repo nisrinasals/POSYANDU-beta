@@ -1,6 +1,6 @@
 const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan } = require("../models");
 const { Op } = require("sequelize");
-const { tentukanKategori, hitungUmur } = require("../utils/kategoriHelper");
+const { tentukanKategoriAktif, hitungUmur } = require("../utils/kategoriHelper");
 const { formatDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
 
@@ -15,7 +15,11 @@ const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = 
   const kunjungan = await KunjunganPosyandu.findByPk(kunjungan_id, {
     include: [
       { model: SesiPosyandu, as: "sesiPosyandu" },
-      { model: Warga, as: "warga" },
+      {
+        model: Warga,
+        as: "warga",
+        include: [{ model: ProfileKehamilan, as: "profileKehamilan", required: false }],
+      },
     ],
   });
 
@@ -34,7 +38,7 @@ const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = 
 
   const tglPemeriksaan = targetTanggal || kunjungan.sesiPosyandu?.tanggal_pelaksanaan || new Date();
   const { totalMonths } = hitungUmur(kunjungan.warga.tanggal_lahir, tglPemeriksaan);
-  const kategoriFix = tentukanKategori(kunjungan.warga.tanggal_lahir, null, tglPemeriksaan);
+  const kategoriFix = tentukanKategoriAktif(kunjungan.warga.tanggal_lahir, kunjungan.warga.profileKehamilan, tglPemeriksaan);
 
   // Cari atau Buat Record Pemeriksaan
   let [pemeriksaan] = await Pemeriksaan.findOrCreate({
@@ -232,7 +236,7 @@ const createPemeriksaan = async (req, res, next) => {
 
     const { kunjungan, pemeriksaan, tglPemeriksaan, totalMonths, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user, tanggal);
 
-    const kategoriAkhir = kategoriInput || kategoriFix;
+    const kategoriAkhir = kategoriFix;
 
     // Pengecekan Skrining Tahunan (Khusus Dewasa & Lansia)
     let isTahunanFix = false;
@@ -415,7 +419,11 @@ const updatePemeriksaan = async (req, res, next) => {
           as: "kunjungan",
           include: [
             { model: SesiPosyandu, as: "sesiPosyandu" },
-            { model: Warga, as: "warga" },
+            {
+              model: Warga,
+              as: "warga",
+              include: [{ model: ProfileKehamilan, as: "profileKehamilan", required: false }],
+            },
           ],
         },
       ],
@@ -451,17 +459,18 @@ const updatePemeriksaan = async (req, res, next) => {
       updatedUsiaBulan = totalMonths;
     }
 
+    const kategoriAktif = tentukanKategoriAktif(pemeriksaan.kunjungan.warga.tanggal_lahir, pemeriksaan.kunjungan.warga.profileKehamilan, targetTanggal);
+
     // Format ulang detail_skrining jika ada update payload JSONB
     let updatedDetailSkrining = pemeriksaan.detail_skrining;
     if (detail_skrining !== undefined) {
-      const kategoriAktif = kategori_sasaran || pemeriksaan.kategori_sasaran;
       const isTahunan = is_skrining_tahunan !== undefined ? is_skrining_tahunan : pemeriksaan.detail_skrining?.is_skrining_tahunan || false;
 
       updatedDetailSkrining = formatDetailSkrining(kategoriAktif, detail_skrining, isTahunan);
     }
 
     await pemeriksaan.update({
-      kategori_sasaran: kategori_sasaran || pemeriksaan.kategori_sasaran,
+      kategori_sasaran: kategoriAktif,
       tanggal: targetTanggal,
       usia_bulan: updatedUsiaBulan,
       profile_kehamilan_id: profile_kehamilan_id !== undefined ? profile_kehamilan_id : pemeriksaan.profile_kehamilan_id,

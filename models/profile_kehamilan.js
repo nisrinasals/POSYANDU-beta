@@ -38,6 +38,11 @@ module.exports = (sequelize, DataTypes) => {
       status_kehamilan: {
         type: DataTypes.STRING(20),
       },
+      is_menyusui: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
     },
     {
       tableName: "profile_kehamilan",
