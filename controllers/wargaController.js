@@ -2,6 +2,7 @@ const { Warga, Posyandu, Puskesmas, KunjunganPosyandu, Pemeriksaan, ProfileKeham
 const { Op } = require("sequelize");
 const ExcelJS = require("exceljs");
 const { tentukanKategori, tentukanKategoriAktif, hitungUmur, hitungRekapSasaran } = require("../utils/kategoriHelper");
+const { canAccessPosyandu } = require("../utils/posyanduAccessHelper");
 
 // 9 Kategori Sasaran Resmi ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -9,6 +10,79 @@ const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_1
 const VALID_STATUS_DOMISILI = ["aktif", "pindah", "meninggal"];
 const VALID_JENIS_KELAMIN = ["L", "P"];
 const VALID_STATUS_PERKAWINAN = ["menikah", "tidak_menikah"];
+
+const assertKaderMutationTarget = async (req, res) => {
+  if (req.user?.role !== "kader" || !req.user.posyandu_id) {
+    res.status(403).json({ success: false, message: "Hanya kader dengan Posyandu tujuan yang dapat melakukan mutasi warga." });
+    return null;
+  }
+
+  const destination = await Posyandu.findByPk(req.user.posyandu_id);
+  if (!destination || !canAccessPosyandu(req.user, destination)) {
+    res.status(403).json({ success: false, message: "Posyandu tujuan tidak valid atau di luar scope Anda." });
+    return null;
+  }
+  return destination;
+};
+
+const verifyMutasiWarga = async (req, res, next) => {
+  try {
+    const destination = await assertKaderMutationTarget(req, res);
+    if (!destination) return;
+
+    const { nik, nama_lengkap, nama_ibu } = req.body;
+    const warga = await Warga.findOne({
+      where: { nik, nama_lengkap: { [Op.iLike]: nama_lengkap }, nama_ibu: { [Op.iLike]: nama_ibu } },
+      include: [{ model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "puskesmas_id"] }],
+    });
+
+    if (!warga) return res.status(404).json({ success: false, message: "Data warga tidak cocok dengan NIK, nama lengkap, dan nama ibu." });
+    return res.status(200).json({
+      success: true,
+      message: "Data warga ditemukan. Silakan konfirmasi mutasi.",
+      data: {
+        id: warga.id,
+        nik: warga.nik,
+        nama_lengkap: warga.nama_lengkap,
+        nama_ibu: warga.nama_ibu,
+        posyandu_saat_ini: warga.posyandu,
+        posyandu_tujuan: { id: destination.id, nama_posyandu: destination.nama_posyandu, puskesmas_id: destination.puskesmas_id },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const confirmMutasiWarga = async (req, res, next) => {
+  const transaction = await Warga.sequelize.transaction();
+  try {
+    const destination = await assertKaderMutationTarget(req, res);
+    if (!destination) {
+      await transaction.rollback();
+      return;
+    }
+
+    const warga = await Warga.findByPk(req.body.warga_id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!warga) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: "Data warga tidak ditemukan." });
+    }
+
+    const previousPosyanduId = warga.posyandu_id;
+    if (Number(previousPosyanduId) !== Number(destination.id)) await warga.update({ posyandu_id: destination.id }, { transaction });
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: Number(previousPosyanduId) === Number(destination.id) ? "Warga sudah berada di Posyandu ini." : "Warga berhasil dimutasi ke Posyandu tujuan.",
+      data: { id: warga.id, nik: warga.nik, nama_lengkap: warga.nama_lengkap, posyandu_id: warga.posyandu_id },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    next(error);
+  }
+};
 
 /**
  * HELPER INTERNAL: Scoping Hak Akses Berdasarkan Role (Kader, Puskesmas, Dinkes, SA)
@@ -577,6 +651,8 @@ const getStatistikSasaran = async (req, res, next) => {
 };
 
 module.exports = {
+  verifyMutasiWarga,
+  confirmMutasiWarga,
   getAllWarga,
   getWargaById,
   createWarga,

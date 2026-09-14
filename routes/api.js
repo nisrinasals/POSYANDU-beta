@@ -45,6 +45,8 @@ api.get("/warga/:id", authenticated, wargaValidators.getWargaById, validateResul
 api.post("/warga", authenticated, wargaValidators.createWarga, validateResult, wargaController.createWarga);
 api.put("/warga/:id", authenticated, wargaValidators.getWargaById, wargaValidators.updateWarga, validateResult, wargaController.updateWarga);
 api.patch("/warga/:id/status-domisili", authenticated, wargaValidators.getWargaById, wargaValidators.updateStatusDomisili, validateResult, wargaController.updateStatusDomisili);
+api.post("/warga/mutasi/verify", authenticated, wargaValidators.verifyMutasi, validateResult, wargaController.verifyMutasiWarga);
+api.patch("/warga/mutasi/confirm", authenticated, wargaValidators.confirmMutasi, validateResult, wargaController.confirmMutasiWarga);
 
 // Sesi Posyandu routes
 api.get("/sesi-posyandu", sesiAuthenticated, sesiPosyanduValidators.list, validateResult, sesiPosyanduController.getSesiPosyandu);
