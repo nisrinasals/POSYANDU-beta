@@ -4,6 +4,8 @@ const { Op } = require("sequelize");
 const { User, EmailOtp, Puskesmas, Posyandu } = require("../models");
 const sendEmail = require("../utils/mailer");
 
+const REGISTERABLE_ROLES = ["dinkes", "puskesmas", "kader"];
+
 /**
  * Helper untuk membuat 6 digit angka OTP
  */
@@ -17,6 +19,10 @@ const generateOTP = () => {
 const register = async (req, res, next) => {
   try {
     const { role, email, password, nama_lengkap, telepon, nik, puskesmas_id, posyandu_id } = req.body;
+
+    if (!REGISTERABLE_ROLES.includes(role)) {
+      return res.status(403).json({ success: false, message: "Role tersebut tidak dapat melakukan self-register." });
+    }
 
     // Cek apakah email atau NIK sudah terdaftar
     const existingUser = await User.findOne({

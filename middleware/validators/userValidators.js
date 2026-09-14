@@ -5,6 +5,7 @@ const { positiveId, pagination } = require("./common");
 
 const verifyUser = [positiveId()];
 const replacePuskesmasAdmin = [positiveId()];
+const replaceDinkesAdmin = [positiveId()];
 const deactivateUser = [positiveId()];
 const getUsers = [
   ...pagination,
@@ -27,4 +28,4 @@ const updateMyProfile = [
     .withMessage("NIK harus terdiri dari 16 digit angka."),
 ];
 
-module.exports = { getUsers, getUserById, changeUserRole, changeUserStatus, updateMyProfile, verifyUser, replacePuskesmasAdmin, deactivateUser };
+module.exports = { getUsers, getUserById, changeUserRole, changeUserStatus, updateMyProfile, verifyUser, replacePuskesmasAdmin, replaceDinkesAdmin, deactivateUser };

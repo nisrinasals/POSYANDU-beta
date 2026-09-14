@@ -5,7 +5,7 @@ const path = require("path");
 const { User } = require("../models");
 const { Op } = require("sequelize");
 
-const ADMIN_ROLES = ["sa", "dinkesAdmin", "puskesmasAdmin"];
+const SA_ASSIGNABLE_ROLES = ["dinkesAdmin", "dinkes", "puskesmasAdmin", "puskesmas", "kader"];
 
 const rejectSelf = (req, targetId, res) => {
   if (Number(req.user.id) === Number(targetId)) {
@@ -15,20 +15,38 @@ const rejectSelf = (req, targetId, res) => {
   return false;
 };
 
-const canManageTarget = (actor, target, { allowAdminReplacement = false } = {}) => {
-  if (!ADMIN_ROLES.includes(actor.role)) return false;
-  if (actor.role === "sa") return true;
-  if (actor.role === "puskesmasAdmin") {
-    return Number(target.puskesmas_id) === Number(actor.puskesmas_id) && ["puskesmas", "kader"].includes(target.role);
-  }
-  if (actor.role === "dinkesAdmin") {
-    if (allowAdminReplacement) return target.role === "puskesmas" && target.puskesmas_id !== null;
-    return target.role !== "sa";
-  }
+const samePuskesmas = (actor, target) => Number(target.puskesmas_id) === Number(actor.puskesmas_id);
+
+const canVerifyUser = (actor, target) => {
+  if (actor.role === "sa") return ["dinkes", "puskesmas", "kader"].includes(target.role);
+  if (actor.role === "dinkesAdmin") return ["dinkes", "puskesmas"].includes(target.role);
+  if (actor.role === "puskesmasAdmin") return samePuskesmas(actor, target) && ["puskesmas", "kader"].includes(target.role);
   return false;
 };
 
-const getTargetUser = (id, actor) => User.findOne({ where: { id, ...(actor ? getUserScope(actor) : {}) } });
+const canChangeUserRole = (actor, target, newRole) => {
+  if (actor.role !== "sa") return false;
+  return Number(actor.id) !== Number(target.id) && target.role !== "sa" && SA_ASSIGNABLE_ROLES.includes(newRole);
+};
+
+const canDeactivateUser = (actor, target) => {
+  if (Number(actor.id) === Number(target.id)) return false;
+  if (actor.role === "sa") return true;
+  if (actor.role === "dinkesAdmin") return target.role === "dinkes";
+  if (actor.role === "puskesmasAdmin") return samePuskesmas(actor, target) && ["puskesmas", "kader"].includes(target.role);
+  return false;
+};
+
+const canReplacePuskesmasAdmin = (actor, target) => {
+  if (!["sa", "dinkesAdmin"].includes(actor.role)) return false;
+  return target.role === "puskesmas" && target.puskesmas_id !== null;
+};
+
+const canReplaceDinkesAdmin = (actor, target) => {
+  if (!["sa", "dinkesAdmin"].includes(actor.role)) return false;
+  return Number(actor.id) !== Number(target.id) && target.role === "dinkes";
+};
+
 const userAttributes = { exclude: ["password_hash", "token_version"] };
 
 const getUserScope = (actor) => {
@@ -70,10 +88,8 @@ const getUserById = async (req, res, next) => {
 const changeUserRole = async (req, res, next) => {
   try {
     if (rejectSelf(req, req.params.id, res)) return;
-    const target = await getTargetUser(req.params.id, req.user);
-    if (!target || !canManageTarget(req.user, target)) return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk mengubah role user ini." });
-    if (req.user.role !== "sa" && req.body.role === "sa") return res.status(403).json({ success: false, message: "Role sa hanya dapat ditetapkan oleh sa." });
-    if (req.user.role === "puskesmasAdmin" && !["kader", "puskesmas"].includes(req.body.role)) return res.status(403).json({ success: false, message: "Admin Puskesmas hanya dapat mengatur role kader atau puskesmas." });
+    const target = await User.findByPk(req.params.id);
+    if (!target || !canChangeUserRole(req.user, target, req.body.role)) return res.status(403).json({ success: false, message: "Hanya SA yang dapat mengubah role ke role di bawahnya." });
     await target.update({ role: req.body.role, token_version: target.token_version + 1 });
     return res.status(200).json({ success: true, message: "Role user berhasil diubah.", data: target });
   } catch (error) {
@@ -84,8 +100,8 @@ const changeUserRole = async (req, res, next) => {
 const changeUserStatus = async (req, res, next) => {
   try {
     if (rejectSelf(req, req.params.id, res)) return;
-    const target = await getTargetUser(req.params.id, req.user);
-    if (!target || !canManageTarget(req.user, target)) return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk mengubah status user ini." });
+    const target = await User.findByPk(req.params.id);
+    if (!target || !canDeactivateUser(req.user, target)) return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk menonaktifkan user ini." });
     await target.update({ status: req.body.status, token_version: target.token_version + 1 });
     return res.status(200).json({ success: true, message: "Status user berhasil diubah.", data: target });
   } catch (error) {
@@ -132,9 +148,9 @@ const uploadProfilePicture = async (req, res, next) => {
 const verifyUser = async (req, res, next) => {
   try {
     if (rejectSelf(req, req.params.id, res)) return;
-    const target = await getTargetUser(req.params.id, req.user);
+    const target = await User.findByPk(req.params.id);
     if (!target) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
-    if (!canManageTarget(req.user, target)) {
+    if (!canVerifyUser(req.user, target)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk memverifikasi akun ini." });
     }
     await target.update({ status: "active", verified_by: req.user.id, verified_at: new Date(), token_version: target.token_version + 1 });
@@ -151,12 +167,12 @@ const replacePuskesmasAdmin = async (req, res, next) => {
       await transaction.rollback();
       return;
     }
-    const replacement = await getTargetUser(req.params.id, req.user);
+    const replacement = await User.findByPk(req.params.id);
     if (!replacement) {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: "User pengganti tidak ditemukan." });
     }
-    if (!canManageTarget(req.user, replacement, { allowAdminReplacement: true })) {
+    if (!canReplacePuskesmasAdmin(req.user, replacement)) {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: "Anda tidak dapat mengganti admin pada Puskesmas ini." });
     }
@@ -171,12 +187,37 @@ const replacePuskesmasAdmin = async (req, res, next) => {
   }
 };
 
+const replaceDinkesAdmin = async (req, res, next) => {
+  const transaction = await User.sequelize.transaction();
+  try {
+    if (rejectSelf(req, req.params.id, res)) {
+      await transaction.rollback();
+      return;
+    }
+
+    const replacement = await User.findByPk(req.params.id);
+    if (!replacement || !canReplaceDinkesAdmin(req.user, replacement)) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: "Anda tidak dapat mengganti Admin Dinkes dengan target ini." });
+    }
+
+    await User.update({ role: "dinkes", token_version: User.sequelize.literal('"token_version" + 1') }, { where: { role: "dinkesAdmin" }, transaction });
+    await replacement.update({ role: "dinkesAdmin", status: "active", verified_by: req.user.id, verified_at: new Date(), token_version: replacement.token_version + 1 }, { transaction });
+    await transaction.commit();
+
+    return res.status(200).json({ success: true, message: "Admin Dinkes berhasil diganti.", data: replacement });
+  } catch (error) {
+    await transaction.rollback();
+    next(error);
+  }
+};
+
 const deactivateUser = async (req, res, next) => {
   try {
     if (rejectSelf(req, req.params.id, res)) return;
-    const target = await getTargetUser(req.params.id, req.user);
+    const target = await User.findByPk(req.params.id);
     if (!target) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
-    if (!canManageTarget(req.user, target)) {
+    if (!canDeactivateUser(req.user, target)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk menonaktifkan akun ini." });
     }
     await target.update({ status: "inactive", token_version: target.token_version + 1 });
@@ -193,10 +234,15 @@ module.exports = {
   changeUserStatus,
   verifyUser,
   replacePuskesmasAdmin,
+  replaceDinkesAdmin,
   deactivateUser,
   getMyProfile,
   updateMyProfile,
   uploadProfilePicture,
-  canManageTarget,
   rejectSelf,
+  canVerifyUser,
+  canChangeUserRole,
+  canDeactivateUser,
+  canReplacePuskesmasAdmin,
+  canReplaceDinkesAdmin,
 };

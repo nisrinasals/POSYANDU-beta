@@ -59,12 +59,13 @@ api.patch("/sesi-posyandu/:id/status", sesiAuthenticated, sesiPosyanduValidators
 api.patch("/users/:id/verify", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.verifyUser, validateResult, userController.verifyUser);
 api.patch("/users/:id/deactivate", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.deactivateUser, validateResult, userController.deactivateUser);
 api.put("/users/:id/puskesmas-admin", authenticateToken, authorize("dinkesAdmin"), userValidators.replacePuskesmasAdmin, validateResult, userController.replacePuskesmasAdmin);
+api.put("/users/:id/dinkes-admin", authenticateToken, authorize("dinkesAdmin"), userValidators.replaceDinkesAdmin, validateResult, userController.replaceDinkesAdmin);
 api.get("/users/me", authenticateToken, userController.getMyProfile);
 api.patch("/users/me", authenticateToken, userValidators.updateMyProfile, validateResult, userController.updateMyProfile);
 api.post("/users/me/profile-picture", authenticateToken, uploadProfilePicture, userController.uploadProfilePicture);
 api.get("/users", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.getUsers, validateResult, userController.getUsers);
 api.get("/users/:id", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.getUserById, validateResult, userController.getUserById);
-api.patch("/users/:id/role", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.changeUserRole, validateResult, userController.changeUserRole);
+api.patch("/users/:id/role", authenticateToken, authorize("sa"), userValidators.changeUserRole, validateResult, userController.changeUserRole);
 api.patch("/users/:id/status", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.changeUserStatus, validateResult, userController.changeUserStatus);
 
 // Kehamilan routes
