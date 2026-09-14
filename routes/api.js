@@ -102,6 +102,7 @@ api.delete("/kunjungan/:id", authenticated, validator.kunjungan.idOnly, validate
 // ======================================================
 
 api.get("/pemeriksaan", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.getAllPemeriksaan);
+api.get("/pemeriksaan/:id/step-3", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getStep3Pemeriksaan);
 api.get("/pemeriksaan/:id", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getPemeriksaanById);
 api.post("/pemeriksaan", authenticated, validator.pemeriksaan.createPemeriksaan, validateResult, pemeriksaanController.createPemeriksaan);
 api.post("/pemeriksaan/step-2", authenticated, validator.pemeriksaan.saveStep2, validateResult, pemeriksaanController.saveStep2);

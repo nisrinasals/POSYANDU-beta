@@ -5,6 +5,7 @@ const { formatDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
 const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
+const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -204,6 +205,87 @@ const getPemeriksaanById = async (req, res, next) => {
       success: true,
       message: "Berhasil mengambil detail data pemeriksaan.",
       data: pemeriksaan,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET PEMERIKSAAN STEP 3 / DATA PLOTTING
+ * Read-only: seluruh nilai berasal dari pemeriksaan Step 2 yang tersimpan.
+ */
+const getStep3Pemeriksaan = async (req, res, next) => {
+  try {
+    const pemeriksaan = await Pemeriksaan.findByPk(req.params.id, {
+      attributes: ["id", "tanggal", "usia_bulan", "kategori_sasaran", "bb_kg", "tb_cm", "lingkar_kepala_cm", "lila_cm", "lingkar_perut_cm", "td_sistole", "td_diastole", "kadar_gula"],
+      include: [
+        {
+          model: KunjunganPosyandu,
+          as: "kunjungan",
+          required: true,
+          attributes: ["id", "warga_id", "sesi_posyandu_id"],
+          include: [
+            { model: Warga, as: "warga", required: true, attributes: ["id", "nik", "nama_lengkap", "tanggal_lahir", "jenis_kelamin"] },
+            {
+              model: SesiPosyandu,
+              as: "sesiPosyandu",
+              required: true,
+              attributes: ["id", "posyandu_id", "tanggal_pelaksanaan", "status"],
+              include: [getPosyanduInclude(req.user)],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!pemeriksaan) return res.status(404).json({ success: false, message: "Data pemeriksaan tidak ditemukan." });
+
+    const current = pemeriksaan.get({ plain: true });
+    const measurements = {
+      bb_kg: current.bb_kg,
+      tb_cm: current.tb_cm,
+      lingkar_kepala_cm: current.lingkar_kepala_cm,
+      lila_cm: current.lila_cm,
+      lingkar_perut_cm: current.lingkar_perut_cm,
+      td_sistole: current.td_sistole,
+      td_diastole: current.td_diastole,
+      kadar_gula: current.kadar_gula,
+    };
+
+    const history = await Pemeriksaan.findAll({
+      where: { "$kunjungan.warga_id$": current.kunjungan.warga_id },
+      attributes: ["id", "tanggal", "usia_bulan", "kategori_sasaran", "bb_kg", "tb_cm", "lingkar_kepala_cm", "lila_cm", "lingkar_perut_cm", "td_sistole", "td_diastole", "kadar_gula"],
+      include: [
+        {
+          model: KunjunganPosyandu,
+          as: "kunjungan",
+          required: true,
+          attributes: [],
+          include: [{ model: SesiPosyandu, as: "sesiPosyandu", required: true, attributes: [], include: [getPosyanduInclude(req.user)] }],
+        },
+      ],
+      order: [["tanggal", "ASC"], ["id", "ASC"]],
+    });
+
+    const plotData = ["bumil", "busui", "dewasa", "lansia"].includes(current.kategori_sasaran)
+      ? evaluasiPemeriksaan({ ...measurements, kategori_sasaran: current.kategori_sasaran, jenis_kelamin: current.kunjungan.warga.jenis_kelamin })
+      : null;
+
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil data plotting pemeriksaan Step 3.",
+      data: {
+        pemeriksaan_id: current.id,
+        kategori_sasaran: current.kategori_sasaran,
+        usia_bulan: current.usia_bulan,
+        tanggal: current.tanggal,
+        warga: current.kunjungan.warga,
+        pengukuran_step_2: measurements,
+        standar_plot: STANDAR_PLOT[current.kategori_sasaran] || null,
+        hasil_plot: plotData,
+        historis: history,
+      },
     });
   } catch (error) {
     next(error);
@@ -530,6 +612,7 @@ const deletePemeriksaan = async (req, res, next) => {
 module.exports = {
   getAllPemeriksaan,
   getPemeriksaanById,
+  getStep3Pemeriksaan,
   createPemeriksaan,
   saveStep2,
   saveStep4,
