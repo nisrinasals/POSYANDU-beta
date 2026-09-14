@@ -27,18 +27,11 @@ const createKunjungan = async (req, res, next) => {
     }
 
     // 2. Validasi Keberadaan Warga
-    const warga = await Warga.findByPk(warga_id, { include: [getPosyanduInclude(req.user)] });
+    const warga = await Warga.findByPk(warga_id);
     if (!warga) {
       return res.status(404).json({
         success: false,
         message: "Data Warga tidak ditemukan.",
-      });
-    }
-
-    if (Number(warga.posyandu_id) !== Number(sesi.posyandu_id)) {
-      return res.status(403).json({
-        success: false,
-        message: "Warga dan sesi Posyandu harus berada pada Posyandu yang sama.",
       });
     }
 

@@ -49,7 +49,10 @@ const updateWarga = makeFields().map((validator) => validator.optional());
 const getWargaById = [positiveId()];
 const updateStatusDomisili = [body("status_domisili").isIn(statusDomisili).withMessage("status_domisili tidak valid.")];
 const verifyMutasi = [
-  body("nik").trim().matches(/^\d{16}$/).withMessage("NIK harus terdiri dari 16 digit angka."),
+  body("nik")
+    .trim()
+    .matches(/^\d{16}$/)
+    .withMessage("NIK harus terdiri dari 16 digit angka."),
   body("nama_lengkap").trim().isLength({ min: 2, max: 100 }).withMessage("Nama lengkap harus 2 sampai 100 karakter."),
   body("nama_ibu").trim().isLength({ min: 2, max: 100 }).withMessage("Nama ibu harus 2 sampai 100 karakter."),
 ];
