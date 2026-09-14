@@ -4,6 +4,7 @@ const { tentukanKategoriAktif, hitungUmur } = require("../utils/kategoriHelper")
 const { formatDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
 const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
+const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -15,7 +16,7 @@ const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_1
 const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = null) => {
   const kunjungan = await KunjunganPosyandu.findByPk(kunjungan_id, {
     include: [
-      { model: SesiPosyandu, as: "sesiPosyandu" },
+      { model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(reqUser)] },
       {
         model: Warga,
         as: "warga",
@@ -122,6 +123,7 @@ const getAllPemeriksaan = async (req, res, next) => {
             {
               model: SesiPosyandu,
               as: "sesiPosyandu",
+              include: [getPosyanduInclude(req.user)],
               attributes: ["id", "tanggal_pelaksanaan", "status"],
             },
           ],
@@ -174,6 +176,7 @@ const getPemeriksaanById = async (req, res, next) => {
             {
               model: SesiPosyandu,
               as: "sesiPosyandu",
+              include: [getPosyanduInclude(req.user)],
               attributes: ["id", "tanggal_pelaksanaan", "status"],
             },
           ],
@@ -414,7 +417,7 @@ const updatePemeriksaan = async (req, res, next) => {
           model: KunjunganPosyandu,
           as: "kunjungan",
           include: [
-            { model: SesiPosyandu, as: "sesiPosyandu" },
+            { model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(req.user)] },
             {
               model: Warga,
               as: "warga",
@@ -496,7 +499,7 @@ const deletePemeriksaan = async (req, res, next) => {
     const { id } = req.params;
 
     const pemeriksaan = await Pemeriksaan.findByPk(id, {
-      include: [{ model: KunjunganPosyandu, as: "kunjungan", include: [{ model: SesiPosyandu, as: "sesiPosyandu" }] }],
+      include: [{ model: KunjunganPosyandu, as: "kunjungan", include: [{ model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(req.user)] }] }],
     });
 
     if (!pemeriksaan) {

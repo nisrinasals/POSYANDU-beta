@@ -1,5 +1,6 @@
 const { KunjunganPosyandu, SesiPosyandu, Warga, Posyandu, Pemeriksaan } = require("../models");
 const { Op } = require("sequelize");
+const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 
 /**
  * 1. STEP 1: PENDAFTARAN / PRESENSI WARGA DATANG
@@ -10,7 +11,7 @@ const createKunjungan = async (req, res, next) => {
     const { warga_id, sesi_posyandu_id } = req.body;
 
     // 1. Validasi Keberadaan Sesi Posyandu & Status Wajib 'open'
-    const sesi = await SesiPosyandu.findByPk(sesi_posyandu_id);
+    const sesi = await SesiPosyandu.findByPk(sesi_posyandu_id, { include: [getPosyanduInclude(req.user)] });
     if (!sesi) {
       return res.status(404).json({
         success: false,
@@ -26,11 +27,18 @@ const createKunjungan = async (req, res, next) => {
     }
 
     // 2. Validasi Keberadaan Warga
-    const warga = await Warga.findByPk(warga_id);
+    const warga = await Warga.findByPk(warga_id, { include: [getPosyanduInclude(req.user)] });
     if (!warga) {
       return res.status(404).json({
         success: false,
         message: "Data Warga tidak ditemukan.",
+      });
+    }
+
+    if (Number(warga.posyandu_id) !== Number(sesi.posyandu_id)) {
+      return res.status(403).json({
+        success: false,
+        message: "Warga dan sesi Posyandu harus berada pada Posyandu yang sama.",
       });
     }
 
@@ -130,6 +138,12 @@ const getAntreanHariIni = async (req, res, next) => {
           as: "pemeriksaan",
           attributes: ["id", "kategori_sasaran", "bb_kg", "tb_cm"],
         },
+        {
+          model: SesiPosyandu,
+          as: "sesiPosyandu",
+          include: [getPosyanduInclude(req.user)],
+          attributes: ["id", "tanggal_pelaksanaan", "status"],
+        },
       ],
       order: [["created_at", "ASC"]],
     });
@@ -186,6 +200,7 @@ const getAllKunjungan = async (req, res, next) => {
         {
           model: SesiPosyandu,
           as: "sesiPosyandu",
+          include: [getPosyanduInclude(req.user)],
           attributes: ["id", "tanggal_pelaksanaan", "status"],
         },
         {
@@ -231,6 +246,7 @@ const getKunjunganById = async (req, res, next) => {
         {
           model: SesiPosyandu,
           as: "sesiPosyandu",
+          include: [getPosyanduInclude(req.user)],
           attributes: ["id", "tanggal_pelaksanaan", "status"],
         },
         {
@@ -275,7 +291,9 @@ const updateStatusLangkah = async (req, res, next) => {
       });
     }
 
-    const kunjungan = await KunjunganPosyandu.findByPk(id);
+    const kunjungan = await KunjunganPosyandu.findByPk(id, {
+      include: [{ model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(req.user)] }],
+    });
     if (!kunjungan) {
       return res.status(404).json({
         success: false,
@@ -304,7 +322,7 @@ const deleteKunjungan = async (req, res, next) => {
     const { id } = req.params;
 
     const kunjungan = await KunjunganPosyandu.findByPk(id, {
-      include: [{ model: SesiPosyandu, as: "sesiPosyandu" }],
+      include: [{ model: SesiPosyandu, as: "sesiPosyandu", include: [getPosyanduInclude(req.user)] }],
     });
 
     if (!kunjungan) {

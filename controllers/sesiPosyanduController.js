@@ -2,12 +2,7 @@
 
 const { Op } = require("sequelize");
 const { SesiPosyandu, Posyandu } = require("../models");
-
-const canAccessPosyandu = (user, posyandu) => {
-  if (["dinkes", "dinkesAdmin", "sa"].includes(user.role)) return true;
-  if (user.role === "kader") return Number(posyandu.id) === Number(user.posyandu_id);
-  return ["puskesmas", "puskesmasAdmin"].includes(user.role) && Number(posyandu.puskesmas_id) === Number(user.puskesmas_id);
-};
+const { canAccessPosyandu, getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 
 const assertSessionManager = (user) => {
   if (!["kader", "sa"].includes(user.role)) {
@@ -24,10 +19,9 @@ const getSesiPosyandu = async (req, res, next) => {
     if (posyandu_id) where.posyandu_id = posyandu_id;
     if (status) where.status = status;
     if (tanggal) where.tanggal_pelaksanaan = tanggal;
-    const posyanduWhere = ["puskesmas", "puskesmasAdmin"].includes(req.user.role) ? { puskesmas_id: req.user.puskesmas_id } : req.user.role === "kader" ? { id: req.user.posyandu_id } : undefined;
     const { count, rows } = await SesiPosyandu.findAndCountAll({
       where,
-      include: [{ model: Posyandu, as: "posyandu", where: posyanduWhere }],
+      include: [getPosyanduInclude(req.user)],
       limit: Number(limit),
       offset: (Number(page) - 1) * Number(limit),
       order: [
