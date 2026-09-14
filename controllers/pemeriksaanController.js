@@ -3,6 +3,7 @@ const { Op } = require("sequelize");
 const { tentukanKategoriAktif, hitungUmur } = require("../utils/kategoriHelper");
 const { formatDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
+const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -29,12 +30,7 @@ const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = 
     throw error;
   }
 
-  // Cek Status Sesi Posyandu (Hanya Kader yang dibatasi jika closed)
-  if (kunjungan.sesiPosyandu?.status === "closed" && reqUser?.role === "kader") {
-    const error = new Error("Sesi Posyandu ini sudah ditutup (closed). Data tidak dapat diubah.");
-    error.statusCode = 400;
-    throw error;
-  }
+  if (reqUser?.role === "kader") await assertKaderCanMutateSession(kunjungan.sesiPosyandu);
 
   const tglPemeriksaan = targetTanggal || kunjungan.sesiPosyandu?.tanggal_pelaksanaan || new Date();
   const { totalMonths } = hitungUmur(kunjungan.warga.tanggal_lahir, tglPemeriksaan);
@@ -437,12 +433,7 @@ const updatePemeriksaan = async (req, res, next) => {
     }
 
     // Cek Batasan Sesi Closed untuk Role Kader
-    if (pemeriksaan.kunjungan?.sesiPosyandu?.status === "closed" && req.user.role === "kader") {
-      return res.status(400).json({
-        success: false,
-        message: "Pemeriksaan tidak dapat diubah karena sesi Posyandu sudah ditutup.",
-      });
-    }
+    if (req.user.role === "kader") await assertKaderCanMutateSession(pemeriksaan.kunjungan?.sesiPosyandu);
 
     if (kategori_sasaran && !VALID_KATEGORI.includes(kategori_sasaran)) {
       return res.status(400).json({
@@ -515,12 +506,7 @@ const deletePemeriksaan = async (req, res, next) => {
       });
     }
 
-    if (pemeriksaan.kunjungan?.sesiPosyandu?.status === "closed" && req.user.role === "kader") {
-      return res.status(400).json({
-        success: false,
-        message: "Tidak dapat menghapus pemeriksaan karena sesi Posyandu sudah ditutup.",
-      });
-    }
+    if (req.user.role === "kader") await assertKaderCanMutateSession(pemeriksaan.kunjungan?.sesiPosyandu);
 
     await pemeriksaan.destroy();
 

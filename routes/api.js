@@ -3,6 +3,7 @@ const express = require("express");
 const authController = require("../controllers/authController");
 const kunjunganController = require("../controllers/kunjunganController");
 const pemeriksaanController = require("../controllers/pemeriksaanController");
+const sesiPosyanduController = require("../controllers/sesiPosyanduController");
 const posyanduController = require("../controllers/posyanduController");
 const wargaController = require("../controllers/wargaController");
 const kehamilanController = require("../controllers/kehamilanController");
@@ -15,11 +16,13 @@ const posyanduValidators = require("../middleware/validators/posyanduValidators"
 const wargaValidators = require("../middleware/validators/wargaValidators");
 const kunjunganValidators = require("../middleware/validators/kunjunganValidators");
 const pemeriksaanValidators = require("../middleware/validators/pemeriksaanValidators");
+const sesiPosyanduValidators = require("../middleware/validators/sesiPosyanduValidators");
 const kehamilanValidator = require("../middleware/validators/kehamilanValidator");
 const userValidators = require("../middleware/validators/userValidators");
 
 const api = express.Router();
 const authenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin")];
+const sesiAuthenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin")];
 
 // Authentication routes
 api.post("/auth/register", authValidators.register, validateResult, authController.register);
@@ -42,6 +45,13 @@ api.get("/warga/:id", authenticated, wargaValidators.getWargaById, validateResul
 api.post("/warga", authenticated, wargaValidators.createWarga, validateResult, wargaController.createWarga);
 api.put("/warga/:id", authenticated, wargaValidators.getWargaById, wargaValidators.updateWarga, validateResult, wargaController.updateWarga);
 api.patch("/warga/:id/status-domisili", authenticated, wargaValidators.getWargaById, wargaValidators.updateStatusDomisili, validateResult, wargaController.updateStatusDomisili);
+
+// Sesi Posyandu routes
+api.get("/sesi-posyandu", sesiAuthenticated, sesiPosyanduValidators.list, validateResult, sesiPosyanduController.getSesiPosyandu);
+api.get("/sesi-posyandu/:id", sesiAuthenticated, sesiPosyanduValidators.id, validateResult, sesiPosyanduController.getSesiPosyanduById);
+api.post("/sesi-posyandu", sesiAuthenticated, sesiPosyanduValidators.create, validateResult, sesiPosyanduController.createSesiPosyandu);
+api.put("/sesi-posyandu/:id", sesiAuthenticated, sesiPosyanduValidators.update, validateResult, sesiPosyanduController.updateSesiPosyandu);
+api.patch("/sesi-posyandu/:id/status", sesiAuthenticated, sesiPosyanduValidators.updateStatus, validateResult, sesiPosyanduController.updateSesiPosyanduStatus);
 
 // User administration routes
 api.patch("/users/:id/verify", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.verifyUser, validateResult, userController.verifyUser);
