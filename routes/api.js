@@ -5,6 +5,7 @@ const kunjunganController = require("../controllers/kunjunganController");
 const pemeriksaanController = require("../controllers/pemeriksaanController");
 const posyanduController = require("../controllers/posyanduController");
 const wargaController = require("../controllers/wargaController");
+const kehamilanController = require("../controllers/kehamilanController");
 const { authenticateToken, authorize } = require("../middleware/authMiddleware");
 const validateResult = require("../middleware/validationReporter");
 const authValidators = require("../middleware/validators/authValidators");
@@ -12,6 +13,7 @@ const posyanduValidators = require("../middleware/validators/posyanduValidators"
 const wargaValidators = require("../middleware/validators/wargaValidators");
 const kunjunganValidators = require("../middleware/validators/kunjunganValidators");
 const pemeriksaanValidators = require("../middleware/validators/pemeriksaanValidators");
+const kehamilanValidator = require("../middleware/validators/kehamilanValidator");
 
 const api = express.Router();
 const authenticated = [authenticateToken, authorize("kader", "puskesmas", "dinkes")];
@@ -37,6 +39,13 @@ api.get("/warga/:id", authenticated, wargaValidators.getWargaById, validateResul
 api.post("/warga", authenticated, wargaValidators.createWarga, validateResult, wargaController.createWarga);
 api.put("/warga/:id", authenticated, wargaValidators.getWargaById, wargaValidators.updateWarga, validateResult, wargaController.updateWarga);
 api.patch("/warga/:id/status-domisili", authenticated, wargaValidators.getWargaById, wargaValidators.updateStatusDomisili, validateResult, wargaController.updateStatusDomisili);
+
+// Kehamilan routes
+api.get("/kehamilan/warga/:warga_id", authenticated, kehamilanValidator.getKehamilanByWarga, validateResult, kehamilanController.getKehamilanByWarga);
+api.get("/kehamilan/:id", authenticated, kehamilanValidator.getKehamilanById, validateResult, kehamilanController.getKehamilanById);
+api.post("/kehamilan", authenticated, kehamilanValidator.createKehamilan, validateResult, kehamilanController.createKehamilan);
+api.put("/kehamilan/:id", authenticated, kehamilanValidator.updateKehamilan, validateResult, kehamilanController.updateKehamilan);
+api.patch("/kehamilan/:id/status", authenticated, kehamilanValidator.updateStatusKehamilan, validateResult, kehamilanController.updateStatusKehamilan);
 
 // Kunjungan routes
 api.post("/kunjungan", authenticated, kunjunganValidators.createKunjungan, validateResult, kunjunganController.createKunjungan);
