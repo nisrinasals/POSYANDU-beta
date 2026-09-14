@@ -6,6 +6,8 @@ const pemeriksaanController = require("../controllers/pemeriksaanController");
 const posyanduController = require("../controllers/posyanduController");
 const wargaController = require("../controllers/wargaController");
 const kehamilanController = require("../controllers/kehamilanController");
+const userController = require("../controllers/userController");
+const uploadProfilePicture = require("../middleware/uploadProfilePicture");
 const { authenticateToken, authorize } = require("../middleware/authMiddleware");
 const validateResult = require("../middleware/validationReporter");
 const authValidators = require("../middleware/validators/authValidators");
@@ -14,9 +16,10 @@ const wargaValidators = require("../middleware/validators/wargaValidators");
 const kunjunganValidators = require("../middleware/validators/kunjunganValidators");
 const pemeriksaanValidators = require("../middleware/validators/pemeriksaanValidators");
 const kehamilanValidator = require("../middleware/validators/kehamilanValidator");
+const userValidators = require("../middleware/validators/userValidators");
 
 const api = express.Router();
-const authenticated = [authenticateToken, authorize("kader", "puskesmas", "dinkes")];
+const authenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin")];
 
 // Authentication routes
 api.post("/auth/register", authValidators.register, validateResult, authController.register);
@@ -39,6 +42,18 @@ api.get("/warga/:id", authenticated, wargaValidators.getWargaById, validateResul
 api.post("/warga", authenticated, wargaValidators.createWarga, validateResult, wargaController.createWarga);
 api.put("/warga/:id", authenticated, wargaValidators.getWargaById, wargaValidators.updateWarga, validateResult, wargaController.updateWarga);
 api.patch("/warga/:id/status-domisili", authenticated, wargaValidators.getWargaById, wargaValidators.updateStatusDomisili, validateResult, wargaController.updateStatusDomisili);
+
+// User administration routes
+api.patch("/users/:id/verify", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.verifyUser, validateResult, userController.verifyUser);
+api.patch("/users/:id/deactivate", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.deactivateUser, validateResult, userController.deactivateUser);
+api.put("/users/:id/puskesmas-admin", authenticateToken, authorize("dinkesAdmin"), userValidators.replacePuskesmasAdmin, validateResult, userController.replacePuskesmasAdmin);
+api.get("/users/me", authenticateToken, userController.getMyProfile);
+api.patch("/users/me", authenticateToken, userValidators.updateMyProfile, validateResult, userController.updateMyProfile);
+api.post("/users/me/profile-picture", authenticateToken, uploadProfilePicture, userController.uploadProfilePicture);
+api.get("/users", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.getUsers, validateResult, userController.getUsers);
+api.get("/users/:id", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.getUserById, validateResult, userController.getUserById);
+api.patch("/users/:id/role", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.changeUserRole, validateResult, userController.changeUserRole);
+api.patch("/users/:id/status", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.changeUserStatus, validateResult, userController.changeUserStatus);
 
 // Kehamilan routes
 api.get("/kehamilan/warga/:warga_id", authenticated, kehamilanValidator.getKehamilanByWarga, validateResult, kehamilanController.getKehamilanByWarga);
