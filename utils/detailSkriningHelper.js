@@ -270,7 +270,34 @@ const formatDetailSkrining = (kategoriSasaran, inputSkrining = {}, isTahunan = f
   return formatted;
 };
 
+const validateDetailSkrining = (kategoriSasaran, inputSkrining) => {
+  if (inputSkrining === undefined) return null;
+  if (!inputSkrining || typeof inputSkrining !== "object" || Array.isArray(inputSkrining)) return "detail_skrining harus berupa objek JSON.";
+
+  const schema = SKEMA_SKRINING[kategoriSasaran];
+  if (!schema) return `Kategori screening tidak valid: ${kategoriSasaran}.`;
+
+  const validateNode = (nodeSchema, nodeInput, path) => {
+    if (!nodeInput || typeof nodeInput !== "object" || Array.isArray(nodeInput)) return `${path} harus berupa objek JSON.`;
+
+    for (const [key, value] of Object.entries(nodeInput)) {
+      if (!Object.prototype.hasOwnProperty.call(nodeSchema, key)) return `${path}.${key} tidak dikenali.`;
+      const expected = nodeSchema[key];
+      if (expected && typeof expected === "object") {
+        const nestedError = validateNode(expected, value, `${path}.${key}`);
+        if (nestedError) return nestedError;
+      } else if (typeof expected !== typeof value || (typeof value === "number" && !Number.isFinite(value))) {
+        return `${path}.${key} memiliki tipe data tidak valid.`;
+      }
+    }
+    return null;
+  };
+
+  return validateNode(schema, inputSkrining, "detail_skrining");
+};
+
 module.exports = {
   SKEMA_SKRINING,
   formatDetailSkrining,
+  validateDetailSkrining,
 };

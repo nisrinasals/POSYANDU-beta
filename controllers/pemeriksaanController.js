@@ -1,7 +1,7 @@
 const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan } = require("../models");
 const { Op } = require("sequelize");
 const { tentukanKategoriAktif, tentukanPeriodePemeriksaan, getLatestPregnancyProfile, hitungUmur } = require("../utils/kategoriHelper");
-const { formatDetailSkrining } = require("../utils/detailSkriningHelper");
+const { formatDetailSkrining, validateDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
 const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
@@ -9,6 +9,27 @@ const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
+const MEASUREMENT_LIMITS = {
+  bb_kg: 999.99,
+  tb_cm: 999.99,
+  lingkar_kepala_cm: 99.99,
+  lila_cm: 99.99,
+  lingkar_perut_cm: 999.99,
+  td_sistole: 300,
+  td_diastole: 300,
+  kadar_gula: 9999,
+};
+
+const getMeasurementError = (payload) => {
+  for (const [field, max] of Object.entries(MEASUREMENT_LIMITS)) {
+    if (payload[field] === undefined || payload[field] === null || payload[field] === "") continue;
+    const value = Number(payload[field]);
+    if (!Number.isFinite(value) || value <= 0 || value > max) return `${field} harus berupa angka lebih dari 0 dan maksimal ${max}.`;
+  }
+  return null;
+};
+
+const getScreeningError = (kategori, detailSkrining) => validateDetailSkrining(kategori, detailSkrining);
 
 /**
  * HELPER INTERNAL: Get or Create Record Pemeriksaan
@@ -21,6 +42,7 @@ const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = 
       {
         model: Warga,
         as: "warga",
+        required: true,
         include: [{ model: ProfileKehamilan, as: "profileKehamilan", required: false }],
       },
     ],
@@ -332,6 +354,13 @@ const createPemeriksaan = async (req, res, next) => {
       is_perlu_rujukan,
     } = req.body;
 
+    if (kategoriInput !== undefined && !VALID_KATEGORI.includes(kategoriInput)) {
+      return res.status(400).json({ success: false, message: `Kategori tidak valid. Harus salah satu dari: ${VALID_KATEGORI.join(", ")}` });
+    }
+
+    const measurementError = getMeasurementError(req.body);
+    if (measurementError) return res.status(400).json({ success: false, message: measurementError });
+
     const { kunjungan, pemeriksaan, tglPemeriksaan, totalMonths, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user, tanggal);
 
     const kategoriAkhir = kategoriFix;
@@ -348,6 +377,8 @@ const createPemeriksaan = async (req, res, next) => {
     }
 
     // Format & Sanitasi Payload JSONB detail_skrining
+    const screeningError = getScreeningError(kategoriAkhir, detail_skrining);
+    if (screeningError) return res.status(400).json({ success: false, message: screeningError });
     const formattedSkrining = formatDetailSkrining(kategoriAkhir, detail_skrining, isTahunanFix);
 
     // Update Data Pemeriksaan ke DB (Upsert Safe)
@@ -392,6 +423,9 @@ const saveStep2 = async (req, res, next) => {
   try {
     const { kunjungan_id, bb_kg, tb_cm, lingkar_kepala_cm, lila_cm, lingkar_perut_cm, td_sistole, td_diastole, kadar_gula } = req.body;
 
+    const measurementError = getMeasurementError(req.body);
+    if (measurementError) return res.status(400).json({ success: false, message: measurementError });
+
     const { kunjungan, pemeriksaan } = await preparePemeriksaanContext(kunjungan_id, req.user);
 
     await pemeriksaan.update({
@@ -431,6 +465,9 @@ const saveStep4 = async (req, res, next) => {
     const { kunjungan_id, detail_skrining, is_skrining_tahunan, profile_kehamilan_id } = req.body;
 
     const { kunjungan, pemeriksaan, tglPemeriksaan, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user);
+
+    const screeningError = getScreeningError(kategoriFix, detail_skrining);
+    if (screeningError) return res.status(400).json({ success: false, message: screeningError });
 
     // Pengecekan Skrining Tahunan
     let isTahunanFix = false;
@@ -548,6 +585,8 @@ const updatePemeriksaan = async (req, res, next) => {
     // Recalculate usia_bulan jika tanggal pemeriksaan diubah
     let updatedUsiaBulan = pemeriksaan.usia_bulan;
     const targetTanggal = tanggal || pemeriksaan.tanggal;
+    const measurementError = getMeasurementError(req.body);
+    if (measurementError) return res.status(400).json({ success: false, message: measurementError });
     if (tanggal && pemeriksaan.kunjungan?.warga?.tanggal_lahir) {
       const { totalMonths } = hitungUmur(pemeriksaan.kunjungan.warga.tanggal_lahir, targetTanggal);
       updatedUsiaBulan = totalMonths;
@@ -558,6 +597,8 @@ const updatePemeriksaan = async (req, res, next) => {
     // Format ulang detail_skrining jika ada update payload JSONB
     let updatedDetailSkrining = pemeriksaan.detail_skrining;
     if (detail_skrining !== undefined) {
+      const screeningError = getScreeningError(kategoriAktif, detail_skrining);
+      if (screeningError) return res.status(400).json({ success: false, message: screeningError });
       const isTahunan = is_skrining_tahunan !== undefined ? is_skrining_tahunan : pemeriksaan.detail_skrining?.is_skrining_tahunan || false;
 
       updatedDetailSkrining = formatDetailSkrining(kategoriAktif, detail_skrining, isTahunan);

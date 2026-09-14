@@ -5,13 +5,13 @@ const { positiveId, pagination, optionalDate } = require("./common");
 
 const kategori = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 const numericFields = [
-  ["bb_kg", 0, 999.99],
-  ["tb_cm", 0, 999.99],
-  ["lingkar_kepala_cm", 0, 999.99],
-  ["lila_cm", 0, 999.99],
-  ["lingkar_perut_cm", 0, 999.99],
-  ["td_sistole", 0, 999],
-  ["td_diastole", 0, 999],
+  ["bb_kg", 0.01, 999.99],
+  ["tb_cm", 0.01, 999.99],
+  ["lingkar_kepala_cm", 0.01, 99.99],
+  ["lila_cm", 0.01, 99.99],
+  ["lingkar_perut_cm", 0.01, 999.99],
+  ["td_sistole", 1, 300],
+  ["td_diastole", 1, 300],
   ["kadar_gula", 0, 9999],
 ];
 
