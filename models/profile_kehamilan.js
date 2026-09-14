@@ -37,6 +37,9 @@ module.exports = (sequelize, DataTypes) => {
       },
       status_kehamilan: {
         type: DataTypes.STRING(20),
+        validate: {
+          isIn: [["hamil", "nifas", "menyusui", "selesai"]],
+        },
       },
       is_menyusui: {
         type: DataTypes.BOOLEAN,
