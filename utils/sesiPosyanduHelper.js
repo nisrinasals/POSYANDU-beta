@@ -14,6 +14,14 @@ const dateDifferenceInDays = (startDate, endDate) => {
   return Math.floor((end - start) / 86400000);
 };
 
+const assertSessionManager = (user) => {
+  if (!user || !["kader", "sa"].includes(user.role)) {
+    const error = new Error("Hanya kader yang dapat mengisi atau mengubah sesi Posyandu.");
+    error.statusCode = 403;
+    throw error;
+  }
+};
+
 const assertKaderCanMutateSessionOnDate = (session, today) => {
   if (!session) {
     const error = new Error("Sesi Posyandu tidak ditemukan.");
@@ -42,4 +50,4 @@ const assertKaderCanMutateSession = async (session) => {
   assertKaderCanMutateSessionOnDate(session, await getDatabaseDate());
 };
 
-module.exports = { getDatabaseDate, dateDifferenceInDays, assertKaderCanMutateSessionOnDate, assertKaderCanMutateSession };
+module.exports = { getDatabaseDate, dateDifferenceInDays, assertSessionManager, assertKaderCanMutateSessionOnDate, assertKaderCanMutateSession };
