@@ -21,7 +21,7 @@ const listFilters = [
   query("rw").optional().trim().isLength({ max: 5 }).withMessage("RW maksimal 5 karakter."),
 ];
 
-const makeFields = () => [
+const makeFields = (includePosyandu = true) => [
   body("nik")
     .trim()
     .matches(/^\d{16}$/)
@@ -38,14 +38,14 @@ const makeFields = () => [
   body("status_perkawinan").optional().isIn(["menikah", "tidak_menikah"]).withMessage("status_perkawinan tidak valid."),
   body("pekerjaan").optional().trim().isLength({ max: 50 }).withMessage("Pekerjaan maksimal 50 karakter."),
   body("pekerjaan_lainnya").optional().trim().isLength({ max: 100 }).withMessage("Pekerjaan lainnya maksimal 100 karakter."),
-  body("posyandu_id").optional().isInt({ min: 1 }).withMessage("posyandu_id harus berupa ID positif.").toInt(),
+  ...(includePosyandu ? [body("posyandu_id").optional().isInt({ min: 1 }).withMessage("posyandu_id harus berupa ID positif.").toInt()] : []),
   body("bb_lahir_kg").optional().isFloat({ min: 0, max: 99.99 }).withMessage("bb_lahir_kg harus berupa angka 0 sampai 99.99.").toFloat(),
   body("tb_lahir_cm").optional().isFloat({ min: 0, max: 999.99 }).withMessage("tb_lahir_cm harus berupa angka valid.").toFloat(),
   body("status_domisili").optional().isIn(statusDomisili).withMessage("status_domisili tidak valid."),
 ];
 
 const createWarga = makeFields();
-const updateWarga = makeFields().map((validator) => validator.optional());
+const updateWarga = makeFields(false).map((validator) => validator.optional());
 const getWargaById = [positiveId()];
 const updateStatusDomisili = [body("status_domisili").isIn(statusDomisili).withMessage("status_domisili tidak valid.")];
 const verifyMutasi = [
@@ -56,6 +56,14 @@ const verifyMutasi = [
   body("nama_lengkap").trim().isLength({ min: 2, max: 100 }).withMessage("Nama lengkap harus 2 sampai 100 karakter."),
   body("nama_ibu").trim().isLength({ min: 2, max: 100 }).withMessage("Nama ibu harus 2 sampai 100 karakter."),
 ];
-const confirmMutasi = [body("warga_id").isInt({ min: 1 }).withMessage("warga_id harus berupa ID positif.").toInt()];
+const confirmMutasi = [
+  body("warga_id").isInt({ min: 1 }).withMessage("warga_id harus berupa ID positif.").toInt(),
+  body("nik")
+    .trim()
+    .matches(/^\d{16}$/)
+    .withMessage("NIK harus terdiri dari 16 digit angka."),
+  body("nama_lengkap").trim().isLength({ min: 2, max: 100 }).withMessage("Nama lengkap harus 2 sampai 100 karakter."),
+  body("nama_ibu").trim().isLength({ min: 2, max: 100 }).withMessage("Nama ibu harus 2 sampai 100 karakter."),
+];
 
 module.exports = { listFilters, getWargaById, createWarga, updateWarga, updateStatusDomisili, verifyMutasi, confirmMutasi };

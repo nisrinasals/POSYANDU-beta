@@ -10,6 +10,8 @@ const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_1
 const VALID_STATUS_DOMISILI = ["aktif", "pindah", "meninggal"];
 const VALID_JENIS_KELAMIN = ["L", "P"];
 const VALID_STATUS_PERKAWINAN = ["menikah", "tidak_menikah"];
+const isValidNik = (nik) => /^\d{16}$/.test(String(nik || ""));
+const isUniqueConstraintError = (error) => error?.name === "SequelizeUniqueConstraintError";
 
 const assertKaderMutationTarget = async (req, res) => {
   if (req.user?.role !== "kader" || !req.user.posyandu_id) {
@@ -63,10 +65,20 @@ const confirmMutasiWarga = async (req, res, next) => {
       return;
     }
 
-    const warga = await Warga.findByPk(req.body.warga_id, { transaction, lock: transaction.LOCK.UPDATE });
+    const { warga_id, nik, nama_lengkap, nama_ibu } = req.body;
+    const warga = await Warga.findOne({
+      where: {
+        id: warga_id,
+        nik,
+        nama_lengkap: { [Op.iLike]: nama_lengkap },
+        nama_ibu: { [Op.iLike]: nama_ibu },
+      },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
     if (!warga) {
       await transaction.rollback();
-      return res.status(404).json({ success: false, message: "Data warga tidak ditemukan." });
+      return res.status(404).json({ success: false, message: "Data warga tidak cocok dengan NIK, nama lengkap, dan nama ibu." });
     }
 
     const previousPosyanduId = warga.posyandu_id;
@@ -301,6 +313,10 @@ const createWarga = async (req, res, next) => {
       });
     }
 
+    if (!isValidNik(nik)) {
+      return res.status(400).json({ success: false, message: "NIK harus terdiri dari 16 digit angka." });
+    }
+
     if (!VALID_JENIS_KELAMIN.includes(jenis_kelamin) || !VALID_STATUS_PERKAWINAN.includes(status_perkawinan || "tidak_menikah") || !VALID_STATUS_DOMISILI.includes(status_domisili)) {
       return res.status(400).json({
         success: false,
@@ -318,7 +334,7 @@ const createWarga = async (req, res, next) => {
 
     const nikEksis = await Warga.findOne({ where: { nik } });
     if (nikEksis) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message: `NIK [${nik}] sudah terdaftar atas nama ${nikEksis.nama_lengkap}.`,
       });
@@ -356,6 +372,7 @@ const createWarga = async (req, res, next) => {
       },
     });
   } catch (error) {
+    if (isUniqueConstraintError(error)) return res.status(409).json({ success: false, message: "NIK sudah terdaftar." });
     next(error);
   }
 };
@@ -390,12 +407,16 @@ const updateWarga = async (req, res, next) => {
       });
     }
 
-    const { nik, nama_lengkap, jenis_kelamin, tanggal_lahir, alamat, rt, rw, telepon, nama_ibu, nama_ayah, status_perkawinan, pekerjaan, pekerjaan_lainnya, posyandu_id, bb_lahir_kg, tb_lahir_cm, status_domisili } = req.body;
+    const { nik, nama_lengkap, jenis_kelamin, tanggal_lahir, alamat, rt, rw, telepon, nama_ibu, nama_ayah, status_perkawinan, pekerjaan, pekerjaan_lainnya, bb_lahir_kg, tb_lahir_cm, status_domisili } = req.body;
+
+    if (nik !== undefined && !isValidNik(nik)) {
+      return res.status(400).json({ success: false, message: "NIK harus terdiri dari 16 digit angka." });
+    }
 
     if (nik && nik !== warga.nik) {
       const nikEksis = await Warga.findOne({ where: { nik } });
       if (nikEksis) {
-        return res.status(400).json({
+        return res.status(409).json({
           success: false,
           message: `NIK [${nik}] sudah digunakan oleh warga lain.`,
         });
@@ -413,10 +434,6 @@ const updateWarga = async (req, res, next) => {
       });
     }
 
-    if (posyandu_id !== undefined && !canAccessPosyandu(req.user, await Posyandu.findByPk(posyandu_id))) {
-      return res.status(403).json({ success: false, message: "Posyandu tujuan berada di luar scope Anda." });
-    }
-
     await warga.update({
       nik: nik ?? warga.nik,
       nama_lengkap: nama_lengkap ?? warga.nama_lengkap,
@@ -431,7 +448,6 @@ const updateWarga = async (req, res, next) => {
       status_perkawinan: status_perkawinan ?? warga.status_perkawinan,
       pekerjaan: pekerjaan ?? warga.pekerjaan,
       pekerjaan_lainnya: pekerjaan_lainnya ?? warga.pekerjaan_lainnya,
-      posyandu_id: role === "kader" ? warga.posyandu_id : (posyandu_id ?? warga.posyandu_id),
       bb_lahir_kg: bb_lahir_kg ?? warga.bb_lahir_kg,
       tb_lahir_cm: tb_lahir_cm ?? warga.tb_lahir_cm,
       status_domisili: status_domisili ?? warga.status_domisili,
@@ -443,6 +459,7 @@ const updateWarga = async (req, res, next) => {
       data: warga,
     });
   } catch (error) {
+    if (isUniqueConstraintError(error)) return res.status(409).json({ success: false, message: "NIK sudah digunakan oleh warga lain." });
     next(error);
   }
 };
