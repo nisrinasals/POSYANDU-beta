@@ -21,8 +21,7 @@ const kehamilanValidator = require("../middleware/validators/kehamilanValidator"
 const userValidators = require("../middleware/validators/userValidators");
 
 const api = express.Router();
-const authenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin")];
-const sesiAuthenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin")];
+const authenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin", "sa")];
 
 // Authentication routes
 api.post("/auth/register", authValidators.register, validateResult, authController.register);
@@ -49,11 +48,11 @@ api.post("/warga/mutasi/verify", authenticated, wargaValidators.verifyMutasi, va
 api.patch("/warga/mutasi/confirm", authenticated, wargaValidators.confirmMutasi, validateResult, wargaController.confirmMutasiWarga);
 
 // Sesi Posyandu routes
-api.get("/sesi-posyandu", sesiAuthenticated, sesiPosyanduValidators.list, validateResult, sesiPosyanduController.getSesiPosyandu);
-api.get("/sesi-posyandu/:id", sesiAuthenticated, sesiPosyanduValidators.id, validateResult, sesiPosyanduController.getSesiPosyanduById);
-api.post("/sesi-posyandu", sesiAuthenticated, sesiPosyanduValidators.create, validateResult, sesiPosyanduController.createSesiPosyandu);
-api.put("/sesi-posyandu/:id", sesiAuthenticated, sesiPosyanduValidators.update, validateResult, sesiPosyanduController.updateSesiPosyandu);
-api.patch("/sesi-posyandu/:id/status", sesiAuthenticated, sesiPosyanduValidators.updateStatus, validateResult, sesiPosyanduController.updateSesiPosyanduStatus);
+api.get("/sesi-posyandu", authenticated, sesiPosyanduValidators.list, validateResult, sesiPosyanduController.getSesiPosyandu);
+api.get("/sesi-posyandu/:id", authenticated, sesiPosyanduValidators.id, validateResult, sesiPosyanduController.getSesiPosyanduById);
+api.post("/sesi-posyandu", authenticated, sesiPosyanduValidators.create, validateResult, sesiPosyanduController.createSesiPosyandu);
+api.put("/sesi-posyandu/:id", authenticated, sesiPosyanduValidators.update, validateResult, sesiPosyanduController.updateSesiPosyandu);
+api.patch("/sesi-posyandu/:id/status", authenticated, sesiPosyanduValidators.updateStatus, validateResult, sesiPosyanduController.updateSesiPosyanduStatus);
 
 // User administration routes
 api.patch("/users/:id/verify", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin"), userValidators.verifyUser, validateResult, userController.verifyUser);
