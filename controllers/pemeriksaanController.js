@@ -389,7 +389,7 @@ const createPemeriksaan = async (req, res, next) => {
     let isTahunanFix = false;
     if (["dewasa", "lansia"].includes(kategoriAkhir)) {
       const targetYear = new Date(tglPemeriksaan).getFullYear();
-      const sudahSkriningTahunIni = await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear);
+      const sudahSkriningTahunIni = await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear, pemeriksaan.id);
 
       if (is_skrining_tahunan && !sudahSkriningTahunIni) {
         isTahunanFix = true;
@@ -399,11 +399,12 @@ const createPemeriksaan = async (req, res, next) => {
     // Format & Sanitasi Payload JSONB detail_skrining
     const screeningError = getScreeningError(kategoriAkhir, detail_skrining);
     if (screeningError) return res.status(400).json({ success: false, message: screeningError });
-    const formattedSkrining = formatDetailSkrining(kategoriAkhir, detail_skrining, isTahunanFix);
+    const formattedSkrining = formatDetailSkrining(kategoriAkhir, detail_skrining, isTahunanFix, pemeriksaan.detail_skrining);
     const scoredSkrining = finalizeScreeningScores(kategoriAkhir, formattedSkrining, kunjungan.warga, {
       pumaProvided: Boolean(detail_skrining?.skrining_ppok_puma),
       aksProvided: Boolean(detail_skrining?.aks_aktifitas_harian),
       skilasProvided: Boolean(detail_skrining?.skilas),
+      jiwaProvided: Boolean(detail_skrining?.skrining_kesehatan_jiwa),
     });
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
 
@@ -509,27 +510,25 @@ const saveStep4 = async (req, res, next) => {
     let isTahunanFix = false;
     if (["dewasa", "lansia"].includes(kategoriFix)) {
       const targetYear = new Date(tglPemeriksaan).getFullYear();
-      const sudahSkriningTahunIni = await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear);
+      const sudahSkriningTahunIni = await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear, pemeriksaan.id);
 
       if (is_skrining_tahunan && !sudahSkriningTahunIni) {
         isTahunanFix = true;
       }
     }
 
-    const formattedSkrining = formatDetailSkrining(kategoriFix, detail_skrining, isTahunanFix);
+    const formattedSkrining = formatDetailSkrining(kategoriFix, detail_skrining, isTahunanFix, pemeriksaan.detail_skrining);
     const scoredSkrining = finalizeScreeningScores(kategoriFix, formattedSkrining, kunjungan.warga, {
       pumaProvided: Boolean(detail_skrining?.skrining_ppok_puma),
       aksProvided: Boolean(detail_skrining?.aks_aktifitas_harian),
       skilasProvided: Boolean(detail_skrining?.skilas),
+      jiwaProvided: Boolean(detail_skrining?.skrining_kesehatan_jiwa),
     });
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
 
     await pemeriksaan.update({
       profile_kehamilan_id: profile_kehamilan_id !== undefined ? profile_kehamilan_id : pemeriksaan.profile_kehamilan_id,
-      detail_skrining: {
-        ...(pemeriksaan.detail_skrining || {}),
-        ...scoredSkrining.detail,
-      },
+      detail_skrining: scoredSkrining.detail,
     });
 
     // Update status ke langkah 4 jika belum mencapai langkah 5
@@ -645,15 +644,16 @@ const updatePemeriksaan = async (req, res, next) => {
       let isTahunan = false;
       if (["dewasa", "lansia"].includes(kategoriAktif) && (is_skrining_tahunan ?? pemeriksaan.detail_skrining?.is_skrining_tahunan)) {
         const targetYear = new Date(targetTanggal).getFullYear();
-        const sudahSkriningTahunIni = await checkSudahSkriningTahunan(pemeriksaan.kunjungan.warga_id, targetYear);
+        const sudahSkriningTahunIni = await checkSudahSkriningTahunan(pemeriksaan.kunjungan.warga_id, targetYear, pemeriksaan.id);
         isTahunan = !sudahSkriningTahunIni;
       }
 
-      updatedDetailSkrining = formatDetailSkrining(kategoriAktif, screeningInput, isTahunan);
+      updatedDetailSkrining = formatDetailSkrining(kategoriAktif, screeningInput, isTahunan, pemeriksaan.detail_skrining);
       const scoredSkrining = finalizeScreeningScores(kategoriAktif, updatedDetailSkrining, pemeriksaan.kunjungan.warga, {
         pumaProvided: Boolean(screeningInput?.skrining_ppok_puma),
         aksProvided: Boolean(screeningInput?.aks_aktifitas_harian),
         skilasProvided: Boolean(screeningInput?.skilas),
+        jiwaProvided: Boolean(screeningInput?.skrining_kesehatan_jiwa),
       });
       if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
       updatedDetailSkrining = scoredSkrining.detail;

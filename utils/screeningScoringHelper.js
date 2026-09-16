@@ -20,6 +20,13 @@ const AKS_COMPONENTS = {
   mandi_skor: { min: 0, max: 1 },
 };
 
+// Kategori dengan tbc="true" (>=1 gejala) diklasifikasikan RISIKO, sisanya RUJUKAN
+const TBC_RISIKO_CATEGORIES = ["bumil", "busui", "dewasa", "lansia"];
+const TBC_RUJUKAN_CATEGORIES = ["bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18"];
+const TBC_COMPUTED_KEYS = ["is_tbc_terindikasi", "status_tbc"];
+
+const JIWA_QUESTIONS = ["kurang_bersemangat", "murung_tertekan_putus_asa", "gugup_cemas_gelisah", "sulit_kendalikan_khawatir"];
+
 const getPumaRisk = (total) => {
   if (total < 6) return "risiko_rendah";
   if (total > 6) return "risiko_tinggi";
@@ -92,32 +99,125 @@ const calculateAgeYears = (birthDate, referenceDate = new Date()) => {
   return years;
 };
 
+// Kumpulkan seluruh nilai boolean di dalam node TBC (termasuk gejala_tambahan bersarang), abaikan field hasil komputasi sebelumnya
+const flattenTbcBooleans = (node) => {
+  if (typeof node === "boolean") return [node];
+  if (node && typeof node === "object") {
+    return Object.entries(node)
+      .filter(([key]) => !TBC_COMPUTED_KEYS.includes(key))
+      .flatMap(([, value]) => flattenTbcBooleans(value));
+  }
+  return [];
+};
+
+/**
+ * TBC terindikasi jika minimal 1 pertanyaan boolean bernilai true.
+ * Outcome per kategori: bumil/busui/dewasa/lansia -> risiko, sisanya -> rujukan.
+ */
+const calculateTbc = (category, tbcInput) => {
+  if (!tbcInput || typeof tbcInput !== "object") return null;
+  let outcome = null;
+  if (TBC_RISIKO_CATEGORIES.includes(category)) outcome = "risiko";
+  else if (TBC_RUJUKAN_CATEGORIES.includes(category)) outcome = "rujukan";
+  if (!outcome) return null;
+
+  const isTerindikasi = flattenTbcBooleans(tbcInput).some(Boolean);
+  return {
+    is_tbc_terindikasi: isTerindikasi,
+    status_tbc: isTerindikasi ? outcome : "tidak_terindikasi",
+  };
+};
+
+// Skrining jiwa hanya berlaku untuk dewasa (semua gender) dan uskrem_6_14/uskrem_15_18 perempuan
+const isJiwaEligible = (category, warga) => {
+  if (category === "dewasa") return true;
+  if (["uskrem_6_14", "uskrem_15_18"].includes(category)) return warga?.jenis_kelamin === "P";
+  return false;
+};
+
+/**
+ * Skor per pertanyaan 0-3. Group1=Q1+Q2, Group2=Q3+Q4. Rujukan jika salah satu group >= 3.
+ * Total 4 pertanyaan TIDAK dipakai sebagai threshold rujukan, hanya sebagai informasi total.
+ */
+const calculateJiwa = (input) => {
+  const jawaban = input?.jawaban_skor || {};
+  const errors = [];
+  const scores = {};
+  for (const question of JIWA_QUESTIONS) {
+    const value = jawaban[question];
+    if (!Number.isInteger(value) || value < 0 || value > 3) errors.push(`jawaban_skor.${question} harus berupa bilangan bulat 0-3.`);
+    else scores[question] = value;
+  }
+  if (errors.length) return { errors };
+
+  const group1 = scores.kurang_bersemangat + scores.murung_tertekan_putus_asa;
+  const group2 = scores.gugup_cemas_gelisah + scores.sulit_kendalikan_khawatir;
+  return {
+    scores,
+    total_skor_jiwa: group1 + group2,
+    group1_skor_jiwa: group1,
+    group2_skor_jiwa: group2,
+    is_rujukan_jiwa: group1 >= 3 || group2 >= 3,
+  };
+};
+
 const finalizeScreeningScores = (category, detail, warga, options = {}) => {
-  if (!detail || !["dewasa", "lansia"].includes(category)) return { detail, errors: [] };
+  if (!detail) return { detail, errors: [] };
   const result = { detail: { ...detail }, errors: [] };
-  const puma = detail.skrining_ppok_puma;
-  if (puma && options.pumaProvided !== false) {
-    const calculated = calculatePuma(puma, warga);
-    if (calculated.errors) result.errors.push(...calculated.errors);
-    else {
-      result.detail.skrining_ppok_puma = {
-        ...puma,
-        jenis_kelamin_skor: calculated.scores.jenis_kelamin_skor,
-        usia_skor: calculated.scores.usia_skor,
-        total_skor_puma: calculated.total_skor_puma,
-        status_risiko_puma: calculated.status_risiko_puma,
-      };
+
+  if (detail.tbc) {
+    const tbcResult = calculateTbc(category, detail.tbc);
+    if (tbcResult) {
+      result.detail.tbc = { ...detail.tbc, is_tbc_terindikasi: tbcResult.is_tbc_terindikasi, status_tbc: tbcResult.status_tbc };
     }
   }
-  const aks = detail.aks_aktifitas_harian;
-  if (aks && options.aksProvided !== false) {
-    const calculated = calculateAks(aks);
-    if (calculated.errors) result.errors.push(...calculated.errors);
-    else result.detail.aks_aktifitas_harian = { ...aks, ...calculated.scores, total_skor_aks: calculated.total_skor_aks, status_aks: calculated.status_aks, kode_aks: calculated.kode_aks, is_rujukan_aks: calculated.is_rujukan_aks };
+
+  if (["dewasa", "lansia"].includes(category)) {
+    const puma = detail.skrining_ppok_puma;
+    if (puma && options.pumaProvided !== false) {
+      const calculated = calculatePuma(puma, warga);
+      if (calculated.errors) result.errors.push(...calculated.errors);
+      else {
+        result.detail.skrining_ppok_puma = {
+          ...puma,
+          jenis_kelamin_skor: calculated.scores.jenis_kelamin_skor,
+          usia_skor: calculated.scores.usia_skor,
+          total_skor_puma: calculated.total_skor_puma,
+          status_risiko_puma: calculated.status_risiko_puma,
+        };
+      }
+    }
+    const aks = detail.aks_aktifitas_harian;
+    if (aks && options.aksProvided !== false) {
+      const calculated = calculateAks(aks);
+      if (calculated.errors) result.errors.push(...calculated.errors);
+      else result.detail.aks_aktifitas_harian = { ...aks, ...calculated.scores, total_skor_aks: calculated.total_skor_aks, status_aks: calculated.status_aks, kode_aks: calculated.kode_aks, is_rujukan_aks: calculated.is_rujukan_aks };
+    }
+    const skilas = detail.skilas;
+    if (skilas && options.skilasProvided !== false) result.detail.skilas = { ...skilas };
   }
-  const skilas = detail.skilas;
-  if (skilas && options.skilasProvided !== false) result.detail.skilas = { ...skilas };
+
+  const jiwa = detail.skrining_kesehatan_jiwa;
+  if (jiwa && options.jiwaProvided !== false) {
+    if (!isJiwaEligible(category, warga)) {
+      result.errors.push("Skrining kesehatan jiwa hanya berlaku untuk kategori dewasa, atau uskrem_6_14/uskrem_15_18 dengan jenis kelamin perempuan.");
+    } else {
+      const calculated = calculateJiwa(jiwa);
+      if (calculated.errors) result.errors.push(...calculated.errors);
+      else {
+        result.detail.skrining_kesehatan_jiwa = {
+          ...jiwa,
+          jawaban_skor: { ...jiwa.jawaban_skor, ...calculated.scores },
+          total_skor_jiwa: calculated.total_skor_jiwa,
+          group1_skor_jiwa: calculated.group1_skor_jiwa,
+          group2_skor_jiwa: calculated.group2_skor_jiwa,
+          is_rujukan_jiwa: calculated.is_rujukan_jiwa,
+        };
+      }
+    }
+  }
+
   return result;
 };
 
-module.exports = { PUMA_COMPONENTS, AKS_COMPONENTS, calculateAgeYears, calculatePuma, calculateAks, finalizeScreeningScores };
+module.exports = { PUMA_COMPONENTS, AKS_COMPONENTS, calculateAgeYears, calculatePuma, calculateAks, calculateTbc, calculateJiwa, isJiwaEligible, finalizeScreeningScores };

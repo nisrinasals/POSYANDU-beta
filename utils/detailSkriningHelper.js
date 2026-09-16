@@ -5,6 +5,8 @@ const SKEMA_SKRINING = {
       has_demam_2_minggu: false,
       has_bb_tetap_atau_turun_2_bulan: false,
       has_kontak_pasien_tbc: false,
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
     pelayanan_kesehatan: {
       is_vit_a_given: false,
@@ -20,6 +22,8 @@ const SKEMA_SKRINING = {
       has_demam_2_minggu: false,
       has_bb_tetap_atau_turun_2_bulan: false,
       has_kontak_pasien_tbc: false,
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
     pelayanan_kesehatan: {
       jumlah_ttd_given: 0,
@@ -45,6 +49,8 @@ const SKEMA_SKRINING = {
       has_demam_2_minggu: false,
       has_bb_tetap_atau_turun_2_bulan: false,
       has_lesu_malaise: false,
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
   },
   balita: {
@@ -62,6 +68,8 @@ const SKEMA_SKRINING = {
       has_demam_2_minggu: false,
       has_bb_tetap_atau_turun_2_bulan: false,
       has_lesu_malaise: false,
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
   },
   apras: {
@@ -73,6 +81,8 @@ const SKEMA_SKRINING = {
       has_demam_2_minggu: false,
       has_bb_tetap_atau_turun_2_bulan: false,
       has_lesu_malaise: false,
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
   },
   uskrem_6_14: {
@@ -90,11 +100,26 @@ const SKEMA_SKRINING = {
       is_skrining_jiwa: false,
       is_periksa_hb: false,
     },
+    skrining_kesehatan_jiwa: {
+      bulan_pemeriksaan: "",
+      jawaban_skor: {
+        kurang_bersemangat: 0,
+        murung_tertekan_putus_asa: 0,
+        gugup_cemas_gelisah: 0,
+        sulit_kendalikan_khawatir: 0,
+      },
+      total_skor_jiwa: 0,
+      group1_skor_jiwa: 0,
+      group2_skor_jiwa: 0,
+      is_rujukan_jiwa: false,
+    },
     tbc: {
       has_batuk_2_minggu: false,
       has_demam_2_minggu: false,
       has_bb_tetap_atau_turun_2_bulan: false,
       has_lesu_malaise: false,
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
   },
   uskrem_15_18: {
@@ -112,11 +137,26 @@ const SKEMA_SKRINING = {
       is_skrining_jiwa: false,
       is_periksa_hb: false,
     },
+    skrining_kesehatan_jiwa: {
+      bulan_pemeriksaan: "",
+      jawaban_skor: {
+        kurang_bersemangat: 0,
+        murung_tertekan_putus_asa: 0,
+        gugup_cemas_gelisah: 0,
+        sulit_kendalikan_khawatir: 0,
+      },
+      total_skor_jiwa: 0,
+      group1_skor_jiwa: 0,
+      group2_skor_jiwa: 0,
+      is_rujukan_jiwa: false,
+    },
     tbc: {
       has_batuk_2_minggu: false,
       has_demam_2_minggu: false,
       has_bb_tetap_atau_turun_2_bulan: false,
       has_lesu_malaise: false,
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
   },
   dewasa: {
@@ -136,6 +176,8 @@ const SKEMA_SKRINING = {
         has_batuk_darah: false,
         has_sesak_nafas: false,
       },
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
     pemeriksaan_6_bulanan: {
       tes_penglihatan_hitung_jari: {
@@ -166,6 +208,9 @@ const SKEMA_SKRINING = {
         sulit_kendalikan_khawatir: 0,
       },
       total_skor_jiwa: 0,
+      group1_skor_jiwa: 0,
+      group2_skor_jiwa: 0,
+      is_rujukan_jiwa: false,
     },
   },
   lansia: {
@@ -184,6 +229,8 @@ const SKEMA_SKRINING = {
         has_batuk_darah: false,
         has_sesak_nafas: false,
       },
+      is_tbc_terindikasi: false,
+      status_tbc: "tidak_terindikasi",
     },
     pemeriksaan_6_bulanan: {
       tes_penglihatan_hitung_jari: {
@@ -256,12 +303,14 @@ const mergeWithSchema = (schema, input) => {
   return input === undefined ? schema : input;
 };
 
-const formatDetailSkrining = (kategoriSasaran, inputSkrining = {}, isTahunan = false) => {
+const formatDetailSkrining = (kategoriSasaran, inputSkrining = {}, isTahunan = false, existingSkrining = {}) => {
   const schemaDefault = SKEMA_SKRINING[kategoriSasaran];
 
   if (!schemaDefault) return inputSkrining || {};
 
-  const formatted = mergeWithSchema(schemaDefault, inputSkrining);
+  // Deep-merge terhadap data existing dulu (bukan hanya schema default) agar partial update tidak menimpa field lain yang sudah tersimpan
+  const baseline = mergeWithSchema(schemaDefault, existingSkrining || {});
+  const formatted = mergeWithSchema(baseline, inputSkrining);
 
   if (["dewasa", "lansia"].includes(kategoriSasaran)) {
     formatted.is_skrining_tahunan = Boolean(isTahunan);
@@ -295,8 +344,9 @@ const validateDetailSkrining = (kategoriSasaran, inputSkrining) => {
       if (!Object.prototype.hasOwnProperty.call(nodeSchema, key)) return `${path}.${key} tidak dikenali.`;
       if (key === "status_risiko_puma" && !["risiko_rendah", "risiko_tinggi", "ambigu_skor_6"].includes(value)) return `${path}.${key} tidak valid.`;
       if (key === "status_aks" && !["mandiri", "ketergantungan_ringan", "ketergantungan_sedang", "ketergantungan_berat", "ketergantungan_total"].includes(value)) return `${path}.${key} tidak valid.`;
-      if (["is_rujukan_aks"].includes(key) && typeof value !== "boolean") return `${path}.${key} memiliki tipe data tidak valid.`;
+      if (["is_rujukan_aks", "is_tbc_terindikasi", "is_rujukan_jiwa"].includes(key) && typeof value !== "boolean") return `${path}.${key} memiliki tipe data tidak valid.`;
       if (key === "kode_aks" && !["M", "R", "S", "B", "T"].includes(value)) return `${path}.${key} tidak valid.`;
+      if (key === "status_tbc" && !["risiko", "rujukan", "tidak_terindikasi"].includes(value)) return `${path}.${key} tidak valid.`;
       const expected = nodeSchema[key];
       if (expected && typeof expected === "object") {
         const nestedError = validateNode(expected, value, `${path}.${key}`);

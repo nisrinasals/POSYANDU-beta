@@ -14,6 +14,8 @@ const VALID_STATUS_PERKAWINAN = ["menikah", "tidak_menikah"];
 const isValidNik = (nik) => /^\d{16}$/.test(String(nik || ""));
 const isUniqueConstraintError = (error) => error?.name === "SequelizeUniqueConstraintError";
 
+const READ_ONLY_WARGA_ROLES = ["puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin"];
+
 const assertKaderMutationTarget = async (req, res) => {
   if (req.user?.role !== "kader" || !req.user.posyandu_id) {
     res.status(403).json({ success: false, message: "Hanya kader dengan Posyandu tujuan yang dapat melakukan mutasi warga." });
@@ -289,7 +291,7 @@ const createWarga = async (req, res, next) => {
   try {
     const { role, user } = getRoleScope(req);
 
-    if (role === "puskesmas" || role === "dinkes") {
+    if (READ_ONLY_WARGA_ROLES.includes(role)) {
       return res.status(403).json({
         success: false,
         message: "Akses ditolak. Role Puskesmas dan Dinkes hanya memiliki akses Read-Only.",
@@ -406,7 +408,7 @@ const updateWarga = async (req, res, next) => {
     const { id } = req.params;
     const { role, user } = getRoleScope(req);
 
-    if (role === "puskesmas" || role === "dinkes") {
+    if (READ_ONLY_WARGA_ROLES.includes(role)) {
       return res.status(403).json({
         success: false,
         message: "Akses ditolak. Role Puskesmas dan Dinkes hanya memiliki akses Read-Only.",
@@ -541,7 +543,7 @@ const updateStatusDomisili = async (req, res, next) => {
     const { status_domisili } = req.body;
     const { role, user } = getRoleScope(req);
 
-    if (role === "puskesmas" || role === "dinkes") {
+    if (READ_ONLY_WARGA_ROLES.includes(role)) {
       return res.status(403).json({
         success: false,
         message: "Akses ditolak. Puskesmas dan Dinkes tidak dapat mengubah status warga.",
