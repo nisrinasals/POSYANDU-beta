@@ -10,7 +10,7 @@ Backend REST API untuk pengelolaan data Posyandu ILP menggunakan Node.js, Expres
    npm install
    ```
 
-2. Siapkan `.env` untuk database, `JWT_SECRET`, dan konfigurasi email.
+2. Salin `.env.example` menjadi `.env`, lalu isi database, JWT, SMTP, dan `CORS_ORIGIN` sesuai environment. Jangan gunakan placeholder pada production; `JWT_SECRET`, koneksi database, SMTP, dan `CORS_ORIGIN` wajib tersedia saat `NODE_ENV=production`.
 3. Jalankan migration:
 
    ```bash
@@ -24,6 +24,8 @@ Backend REST API untuk pengelolaan data Posyandu ILP menggunakan Node.js, Expres
    ```
 
 API tersedia di `http://localhost:3000/api`. Health check tersedia di `/health`.
+
+`CORS_ORIGIN` menerima satu atau beberapa origin yang dipisahkan koma. Pada development, nilai kosong mengizinkan request browser dari origin mana pun dan tetap menerima request tanpa header `Origin`; pada production origin harus ditentukan secara eksplisit. `OTP_EXPIRES_MINUTES` dan `OTP_RESEND_COOLDOWN_MINUTES` mengatur masa berlaku serta jeda pengiriman ulang OTP.
 
 ## Fitur
 

@@ -320,6 +320,10 @@ const formatDetailSkrining = (kategoriSasaran, inputSkrining = {}, isTahunan = f
     }
   }
 
+  if (kategoriSasaran === "lansia" && !Object.prototype.hasOwnProperty.call(inputSkrining || {}, "aks_aktifitas_harian") && !Object.prototype.hasOwnProperty.call(existingSkrining || {}, "aks_aktifitas_harian")) {
+    delete formatted.aks_aktifitas_harian;
+  }
+
   return formatted;
 };
 

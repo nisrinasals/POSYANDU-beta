@@ -633,8 +633,8 @@ module.exports = {
     await queryInterface.dropTable("kunjungan_posyandu");
     await queryInterface.dropTable("sesi_posyandu");
     await queryInterface.dropTable("profile_kehamilan");
-    await queryInterface.dropTable("users");
     await queryInterface.dropTable("warga");
+    await queryInterface.dropTable("users");
     await queryInterface.dropTable("posyandu");
     await queryInterface.dropTable("puskesmas");
   },

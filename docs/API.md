@@ -13,6 +13,13 @@ Source of truth: `routes/api.js`, the referenced controllers, validators, and mi
 - Unexpected controller errors are forwarded to the server error handler and return `500` with `{ success: false, message: "Terjadi kesalahan pada server." }`.
 - Dates use strict ISO-8601 input where a validator is attached. IDs must be positive integers.
 
+## Runtime configuration
+
+- Copy `.env.example` to `.env` for local setup. The template documents every environment variable read by the application.
+- `CORS_ORIGIN` accepts comma-separated browser origins. Development may leave it empty; production must set explicit origins and cannot use `*`. Requests without an `Origin` header remain supported for health checks and server-to-server calls.
+- `OTP_EXPIRES_MINUTES` controls OTP validity and `OTP_RESEND_COOLDOWN_MINUTES` controls the resend window. OTP codes remain six digits, matching the auth validators.
+- Production startup fails closed when database, JWT, SMTP, or CORS configuration is missing. Unexpected errors return a generic `500` response; details are written to server logs only.
+
 ## Scope and authorization
 
 `getPosyanduInclude` scopes relation queries as follows: `kader` is restricted to `user.posyandu_id`; `puskesmas` and `puskesmasAdmin` to `user.puskesmas_id`; `dinkes`, `dinkesAdmin`, and `sa` have global Posyandu scope. Some mutation controllers apply stricter rules described per endpoint.

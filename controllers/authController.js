@@ -4,6 +4,7 @@ const { Op } = require("sequelize");
 const { User, EmailOtp, Puskesmas, Posyandu } = require("../models");
 const sendEmail = require("../utils/mailer");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
+const { getOtpDurationMs, getOtpCooldownMs } = require("../utils/runtimeConfig");
 
 const REGISTERABLE_ROLES = ["dinkes", "puskesmas", "kader"];
 
@@ -59,7 +60,7 @@ const register = async (req, res, next) => {
 
     // Generate OTP untuk Verifikasi Email
     const otpCode = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // Berlaku 10 menit
+    const expiresAt = new Date(Date.now() + getOtpDurationMs());
 
     await EmailOtp.create({
       email,
@@ -181,7 +182,7 @@ const resendOtp = async (req, res, next) => {
       order: [["id", "DESC"]],
     });
 
-    if (lastOtp && new Date() < new Date(lastOtp.expires_at.getTime() - 9 * 60 * 1000)) {
+    if (lastOtp && new Date() < new Date(lastOtp.expires_at.getTime() - getOtpDurationMs() + getOtpCooldownMs())) {
       return res.status(429).json({
         success: false,
         message: "Silakan tunggu 1 menit sebelum meminta kode OTP baru.",
@@ -189,7 +190,7 @@ const resendOtp = async (req, res, next) => {
     }
 
     const otpCode = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + getOtpDurationMs());
 
     await EmailOtp.create({
       email,
@@ -338,7 +339,7 @@ const requestResetPassword = async (req, res, next) => {
     }
 
     const otpCode = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 menit
+    const expiresAt = new Date(Date.now() + getOtpDurationMs());
 
     await EmailOtp.create({
       email,
