@@ -8,6 +8,7 @@ const posyanduController = require("../controllers/posyanduController");
 const wargaController = require("../controllers/wargaController");
 const kehamilanController = require("../controllers/kehamilanController");
 const userController = require("../controllers/userController");
+const imunisasiController = require("../controllers/imunisasiController");
 
 const uploadProfilePicture = require("../middleware/uploadProfilePicture");
 const { authenticateToken, authorize } = require("../middleware/authMiddleware");
@@ -49,6 +50,15 @@ api.put("/warga/:id", authenticated, validator.warga.getWargaById, validator.war
 api.patch("/warga/:id/status-domisili", authenticated, validator.warga.getWargaById, validator.warga.updateStatusDomisili, validateResult, wargaController.updateStatusDomisili);
 api.post("/warga/mutasi/verify", authenticated, validator.warga.verifyMutasi, validateResult, wargaController.verifyMutasiWarga);
 api.patch("/warga/mutasi/confirm", authenticated, validator.warga.confirmMutasi, validateResult, wargaController.confirmMutasiWarga);
+
+// ======================================================
+// Imunisasi routes
+// ======================================================
+
+api.get("/imunisasi/warga/:warga_id", authenticated, validator.imunisasi.wargaParam, validateResult, imunisasiController.getImunisasiByWarga);
+api.get("/imunisasi/:id", authenticated, validator.imunisasi.id, validateResult, imunisasiController.getImunisasiById);
+api.post("/imunisasi", authenticated, validator.imunisasi.create, validateResult, imunisasiController.createImunisasi);
+api.put("/imunisasi/:id", authenticated, validator.imunisasi.update, validateResult, imunisasiController.updateImunisasi);
 
 // ======================================================
 // Sesi Posyandu routes
