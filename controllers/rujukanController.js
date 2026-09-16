@@ -1,6 +1,7 @@
 "use strict";
 
 const { Op } = require("sequelize");
+const PDFDocument = require("pdfkit");
 const { Rujukan, Warga, Posyandu, Pemeriksaan, Puskesmas, User } = require("../models");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 
@@ -68,4 +69,38 @@ const getRujukanById = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllRujukan, getRujukanById };
+const exportRujukanPdf = async (req, res, next) => {
+  try {
+    const data = await Rujukan.findByPk(req.params.id, { include: getIncludes(req) });
+    if (!data) return res.status(404).json({ success: false, message: "Data rujukan tidak ditemukan atau Anda tidak memiliki hak akses." });
+
+    const referral = data.get ? data.get({ plain: true }) : data;
+    const document = new PDFDocument({ margin: 50 });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Rujukan_${referral.id}.pdf`);
+
+    document.pipe(res);
+    document.fontSize(18).text("SURAT RUJUKAN POSYANDU", { align: "center" });
+    document.moveDown();
+    document.fontSize(11);
+    document.text(`Nomor Rujukan: ${referral.id}`);
+    document.text(`Tanggal Rujukan: ${referral.tanggal_rujukan}`);
+    document.moveDown();
+    document.text(`Warga: ${referral.warga?.nama_lengkap || "-"}`);
+    document.text(`NIK: ${referral.warga?.nik || "-"}`);
+    document.text(`Puskesmas: ${referral.puskesmas?.nama_puskesmas || "-"}`);
+    document.text(`Kader: ${referral.kader?.nama_lengkap || "-"}`);
+    document.moveDown();
+    document.text(`Alasan Rujukan: ${referral.alasan_rujukan}`);
+    document.moveDown();
+    document.text("Pemeriksaan Terkait", { underline: true });
+    document.text(`ID Pemeriksaan: ${referral.pemeriksaan?.id || "-"}`);
+    document.text(`Tanggal Pemeriksaan: ${referral.pemeriksaan?.tanggal || "-"}`);
+    document.text(`Kategori Sasaran: ${referral.pemeriksaan?.kategori_sasaran || "-"}`);
+    document.end();
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getAllRujukan, getRujukanById, exportRujukanPdf };

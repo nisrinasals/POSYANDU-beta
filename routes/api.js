@@ -119,6 +119,7 @@ api.get("/pemeriksaan", authenticated, validator.pemeriksaan.listFilters, valida
 // ======================================================
 
 api.get("/rujukan", authenticated, validator.rujukan.listFilters, validateResult, rujukanController.getAllRujukan);
+api.get("/rujukan/:id/export", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.exportRujukanPdf);
 api.get("/rujukan/:id", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.getRujukanById);
 
 api.get("/pemeriksaan/:id/step-3", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getStep3Pemeriksaan);

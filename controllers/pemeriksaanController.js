@@ -52,6 +52,19 @@ const pemeriksaanAuditSnapshot = (p) => ({
   is_perlu_rujukan: p.is_perlu_rujukan,
 });
 
+const rujukanAuditSnapshot = (rujukan) =>
+  rujukan
+    ? {
+        id: rujukan.id,
+        warga_id: rujukan.warga_id,
+        pemeriksaan_id: rujukan.pemeriksaan_id,
+        puskesmas_id: rujukan.puskesmas_id,
+        kader_id: rujukan.kader_id,
+        tanggal_rujukan: rujukan.tanggal_rujukan,
+        alasan_rujukan: rujukan.alasan_rujukan,
+      }
+    : null;
+
 /**
  * HELPER INTERNAL: Get or Create Record Pemeriksaan
  * Memastikan Kunjungan & Sesi valid (status 'open'), serta menghitung usia_bulan & kategori.
@@ -567,6 +580,7 @@ const saveStep5 = async (req, res, next) => {
     const { kunjungan, pemeriksaan } = await preparePemeriksaanContext(kunjungan_id, req.user, null, transaction);
     const screeningReasons = getScreeningReferralReasons(pemeriksaan.detail_skrining);
     const keputusanRujukan = is_perlu_rujukan !== undefined ? is_perlu_rujukan : screeningReasons.length > 0;
+    const oldReferral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
     let referral = null;
 
     if (keputusanRujukan) {
@@ -584,7 +598,7 @@ const saveStep5 = async (req, res, next) => {
         return res.status(400).json({ success: false, message: "Puskesmas warga tidak ditemukan." });
       }
 
-      referral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
+      referral = oldReferral;
       const referralPayload = {
         warga_id: kunjungan.warga_id,
         pemeriksaan_id: pemeriksaan.id,
@@ -596,8 +610,11 @@ const saveStep5 = async (req, res, next) => {
       if (referral) await referral.update(referralPayload, { transaction });
       else referral = await Rujukan.create(referralPayload, { transaction });
     } else {
-      referral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
-      if (referral) await referral.destroy({ transaction });
+      referral = oldReferral;
+      if (referral) {
+        await referral.destroy({ transaction });
+        referral = null;
+      }
     }
 
     await pemeriksaan.update(
@@ -613,6 +630,14 @@ const saveStep5 = async (req, res, next) => {
 
     await transaction.commit();
     transaction = null;
+
+    if (!oldReferral && referral) {
+      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_CREATE, tableName: "rujukan", recordId: referral.id, oldValue: null, newValue: rujukanAuditSnapshot(referral) });
+    } else if (oldReferral && referral) {
+      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_UPDATE, tableName: "rujukan", recordId: referral.id, oldValue: rujukanAuditSnapshot(oldReferral), newValue: rujukanAuditSnapshot(referral) });
+    } else if (oldReferral && !referral) {
+      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_DELETE, tableName: "rujukan", recordId: oldReferral.id, oldValue: rujukanAuditSnapshot(oldReferral), newValue: null });
+    }
 
     return res.status(200).json({
       success: true,
@@ -633,12 +658,31 @@ const saveStep5 = async (req, res, next) => {
  * 7. UPDATE PEMERIKSAAN
  */
 const updatePemeriksaan = async (req, res, next) => {
+  let transaction = null;
   try {
     const { id } = req.params;
-    const { kategori_sasaran, tanggal, is_skrining_tahunan, bb_kg, tb_cm, lingkar_kepala_cm, lila_cm, lingkar_perut_cm, td_sistole, td_diastole, kadar_gula, detail_skrining, topik_penyuluhan, is_perlu_rujukan, profile_kehamilan_id } =
-      req.body;
+    const {
+      kategori_sasaran,
+      tanggal,
+      is_skrining_tahunan,
+      bb_kg,
+      tb_cm,
+      lingkar_kepala_cm,
+      lila_cm,
+      lingkar_perut_cm,
+      td_sistole,
+      td_diastole,
+      kadar_gula,
+      detail_skrining,
+      topik_penyuluhan,
+      is_perlu_rujukan,
+      alasan_rujukan,
+      profile_kehamilan_id,
+    } = req.body;
 
+    transaction = await Pemeriksaan.sequelize.transaction();
     const pemeriksaan = await Pemeriksaan.findByPk(id, {
+      transaction,
       include: [
         {
           model: KunjunganPosyandu,
@@ -649,7 +693,10 @@ const updatePemeriksaan = async (req, res, next) => {
             {
               model: Warga,
               as: "warga",
-              include: [{ model: ProfileKehamilan, as: "profileKehamilan", required: false }],
+              include: [
+                { model: ProfileKehamilan, as: "profileKehamilan", required: false },
+                { model: Posyandu, as: "posyandu", required: true, attributes: ["id", "puskesmas_id"] },
+              ],
             },
           ],
         },
@@ -710,24 +757,64 @@ const updatePemeriksaan = async (req, res, next) => {
     }
 
     const oldValue = pemeriksaanAuditSnapshot(pemeriksaan);
+    const oldReferral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
+    const referralDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : pemeriksaan.is_perlu_rujukan;
+    let referral = oldReferral;
 
-    await pemeriksaan.update({
-      kategori_sasaran: kategoriAktif,
-      tanggal: targetTanggal,
-      usia_bulan: updatedUsiaBulan,
-      profile_kehamilan_id: profile_kehamilan_id !== undefined ? profile_kehamilan_id : pemeriksaan.profile_kehamilan_id,
-      bb_kg: bb_kg !== undefined ? bb_kg : pemeriksaan.bb_kg,
-      tb_cm: tb_cm !== undefined ? tb_cm : pemeriksaan.tb_cm,
-      lingkar_kepala_cm: lingkar_kepala_cm !== undefined ? lingkar_kepala_cm : pemeriksaan.lingkar_kepala_cm,
-      lila_cm: lila_cm !== undefined ? lila_cm : pemeriksaan.lila_cm,
-      lingkar_perut_cm: lingkar_perut_cm !== undefined ? lingkar_perut_cm : pemeriksaan.lingkar_perut_cm,
-      td_sistole: td_sistole !== undefined ? td_sistole : pemeriksaan.td_sistole,
-      td_diastole: td_diastole !== undefined ? td_diastole : pemeriksaan.td_diastole,
-      kadar_gula: kadar_gula !== undefined ? kadar_gula : pemeriksaan.kadar_gula,
-      detail_skrining: updatedDetailSkrining,
-      topik_penyuluhan: topik_penyuluhan !== undefined ? topik_penyuluhan : pemeriksaan.topik_penyuluhan,
-      is_perlu_rujukan: is_perlu_rujukan !== undefined ? is_perlu_rujukan : pemeriksaan.is_perlu_rujukan,
-    });
+    await pemeriksaan.update(
+      {
+        kategori_sasaran: kategoriAktif,
+        tanggal: targetTanggal,
+        usia_bulan: updatedUsiaBulan,
+        profile_kehamilan_id: profile_kehamilan_id !== undefined ? profile_kehamilan_id : pemeriksaan.profile_kehamilan_id,
+        bb_kg: bb_kg !== undefined ? bb_kg : pemeriksaan.bb_kg,
+        tb_cm: tb_cm !== undefined ? tb_cm : pemeriksaan.tb_cm,
+        lingkar_kepala_cm: lingkar_kepala_cm !== undefined ? lingkar_kepala_cm : pemeriksaan.lingkar_kepala_cm,
+        lila_cm: lila_cm !== undefined ? lila_cm : pemeriksaan.lila_cm,
+        lingkar_perut_cm: lingkar_perut_cm !== undefined ? lingkar_perut_cm : pemeriksaan.lingkar_perut_cm,
+        td_sistole: td_sistole !== undefined ? td_sistole : pemeriksaan.td_sistole,
+        td_diastole: td_diastole !== undefined ? td_diastole : pemeriksaan.td_diastole,
+        kadar_gula: kadar_gula !== undefined ? kadar_gula : pemeriksaan.kadar_gula,
+        detail_skrining: updatedDetailSkrining,
+        topik_penyuluhan: topik_penyuluhan !== undefined ? topik_penyuluhan : pemeriksaan.topik_penyuluhan,
+        is_perlu_rujukan: referralDecision,
+      },
+      { transaction },
+    );
+
+    if (referralDecision) {
+      const screeningReasons = getScreeningReferralReasons(updatedDetailSkrining);
+      const referralReason = screeningReasons.length > 0 ? screeningReasons.join("; ") : String(alasan_rujukan || oldReferral?.alasan_rujukan || "").trim();
+      if (!referralReason) {
+        const error = new Error("alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening.");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const puskesmasId = pemeriksaan.kunjungan?.warga?.posyandu?.puskesmas_id;
+      if (!puskesmasId) {
+        const error = new Error("Puskesmas warga tidak ditemukan.");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const referralPayload = {
+        warga_id: pemeriksaan.kunjungan.warga_id,
+        pemeriksaan_id: pemeriksaan.id,
+        puskesmas_id: puskesmasId,
+        kader_id: req.user?.id,
+        tanggal_rujukan: oldReferral?.tanggal_rujukan || new Date(),
+        alasan_rujukan: referralReason,
+      };
+      if (referral) await referral.update(referralPayload, { transaction });
+      else referral = await Rujukan.create(referralPayload, { transaction });
+    } else if (referral) {
+      await referral.destroy({ transaction });
+      referral = null;
+    }
+
+    await transaction.commit();
+    transaction = null;
 
     await createAuditLog({
       userId: req.user?.id ?? null,
@@ -738,12 +825,21 @@ const updatePemeriksaan = async (req, res, next) => {
       newValue: pemeriksaanAuditSnapshot(pemeriksaan),
     });
 
+    if (!oldReferral && referral) {
+      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_CREATE, tableName: "rujukan", recordId: referral.id, oldValue: null, newValue: rujukanAuditSnapshot(referral) });
+    } else if (oldReferral && referral) {
+      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_UPDATE, tableName: "rujukan", recordId: referral.id, oldValue: rujukanAuditSnapshot(oldReferral), newValue: rujukanAuditSnapshot(referral) });
+    } else if (oldReferral && !referral) {
+      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_DELETE, tableName: "rujukan", recordId: oldReferral.id, oldValue: rujukanAuditSnapshot(oldReferral), newValue: null });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Data pemeriksaan berhasil diperbarui.",
       data: pemeriksaan,
     });
   } catch (error) {
+    if (transaction) await transaction.rollback();
     next(error);
   }
 };
