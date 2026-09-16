@@ -3,6 +3,7 @@ const { Op } = require("sequelize");
 const { tentukanKategoriAktif, tentukanPeriodePemeriksaan, getLatestPregnancyProfile, hitungUmur } = require("../utils/kategoriHelper");
 const { formatDetailSkrining, validateDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
+const { finalizeScreeningScores } = require("../utils/screeningScoringHelper");
 const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
@@ -380,6 +381,12 @@ const createPemeriksaan = async (req, res, next) => {
     const screeningError = getScreeningError(kategoriAkhir, detail_skrining);
     if (screeningError) return res.status(400).json({ success: false, message: screeningError });
     const formattedSkrining = formatDetailSkrining(kategoriAkhir, detail_skrining, isTahunanFix);
+    const scoredSkrining = finalizeScreeningScores(kategoriAkhir, formattedSkrining, kunjungan.warga, {
+      pumaProvided: Boolean(detail_skrining?.skrining_ppok_puma),
+      aksProvided: Boolean(detail_skrining?.aks_aktifitas_harian),
+      skilasProvided: Boolean(detail_skrining?.skilas),
+    });
+    if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
 
     // Update Data Pemeriksaan ke DB (Upsert Safe)
     await pemeriksaan.update({
@@ -395,7 +402,7 @@ const createPemeriksaan = async (req, res, next) => {
       td_sistole: td_sistole ?? null,
       td_diastole: td_diastole ?? null,
       kadar_gula: kadar_gula ?? null,
-      detail_skrining: formattedSkrining,
+      detail_skrining: scoredSkrining.detail,
       topik_penyuluhan: topik_penyuluhan || null,
       is_perlu_rujukan: is_perlu_rujukan ?? false,
     });
@@ -481,12 +488,18 @@ const saveStep4 = async (req, res, next) => {
     }
 
     const formattedSkrining = formatDetailSkrining(kategoriFix, detail_skrining, isTahunanFix);
+    const scoredSkrining = finalizeScreeningScores(kategoriFix, formattedSkrining, kunjungan.warga, {
+      pumaProvided: Boolean(detail_skrining?.skrining_ppok_puma),
+      aksProvided: Boolean(detail_skrining?.aks_aktifitas_harian),
+      skilasProvided: Boolean(detail_skrining?.skilas),
+    });
+    if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
 
     await pemeriksaan.update({
       profile_kehamilan_id: profile_kehamilan_id !== undefined ? profile_kehamilan_id : pemeriksaan.profile_kehamilan_id,
       detail_skrining: {
         ...(pemeriksaan.detail_skrining || {}),
-        ...formattedSkrining,
+        ...scoredSkrining.detail,
       },
     });
 
@@ -596,12 +609,25 @@ const updatePemeriksaan = async (req, res, next) => {
 
     // Format ulang detail_skrining jika ada update payload JSONB
     let updatedDetailSkrining = pemeriksaan.detail_skrining;
-    if (detail_skrining !== undefined) {
-      const screeningError = getScreeningError(kategoriAktif, detail_skrining);
+    if (detail_skrining !== undefined || is_skrining_tahunan !== undefined) {
+      const screeningInput = detail_skrining !== undefined ? detail_skrining : pemeriksaan.detail_skrining || {};
+      const screeningError = getScreeningError(kategoriAktif, screeningInput);
       if (screeningError) return res.status(400).json({ success: false, message: screeningError });
-      const isTahunan = is_skrining_tahunan !== undefined ? is_skrining_tahunan : pemeriksaan.detail_skrining?.is_skrining_tahunan || false;
+      let isTahunan = false;
+      if (["dewasa", "lansia"].includes(kategoriAktif) && (is_skrining_tahunan ?? pemeriksaan.detail_skrining?.is_skrining_tahunan)) {
+        const targetYear = new Date(targetTanggal).getFullYear();
+        const sudahSkriningTahunIni = await checkSudahSkriningTahunan(pemeriksaan.kunjungan.warga_id, targetYear);
+        isTahunan = !sudahSkriningTahunIni;
+      }
 
-      updatedDetailSkrining = formatDetailSkrining(kategoriAktif, detail_skrining, isTahunan);
+      updatedDetailSkrining = formatDetailSkrining(kategoriAktif, screeningInput, isTahunan);
+      const scoredSkrining = finalizeScreeningScores(kategoriAktif, updatedDetailSkrining, pemeriksaan.kunjungan.warga, {
+        pumaProvided: Boolean(screeningInput?.skrining_ppok_puma),
+        aksProvided: Boolean(screeningInput?.aks_aktifitas_harian),
+        skilasProvided: Boolean(screeningInput?.skilas),
+      });
+      if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
+      updatedDetailSkrining = scoredSkrining.detail;
     }
 
     await pemeriksaan.update({

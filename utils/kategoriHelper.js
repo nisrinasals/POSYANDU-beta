@@ -4,16 +4,9 @@
 const hitungUmur = (tanggal_lahir, tanggal = new Date()) => {
   const birth = new Date(tanggal_lahir);
   const check = new Date(tanggal);
-
-  let years = check.getFullYear() - birth.getFullYear();
-  let months = check.getMonth() - birth.getMonth();
-
-  if (months < 0 || (months === 0 && check.getDate() < birth.getDate())) {
-    years--;
-    months += 12;
-  }
-
-  const totalMonths = years * 12 + months;
+  let totalMonths = (check.getFullYear() - birth.getFullYear()) * 12 + check.getMonth() - birth.getMonth();
+  if (check.getDate() < birth.getDate()) totalMonths--;
+  const years = Math.floor(totalMonths / 12);
   return { years, totalMonths };
 };
 

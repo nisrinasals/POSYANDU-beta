@@ -155,6 +155,7 @@ const SKEMA_SKRINING = {
       dahak_paru_skor: 0,
       batuk_atau_spirometri_skor: 0,
       total_skor_puma: 0,
+      status_risiko_puma: "risiko_rendah",
     },
     skrining_kesehatan_jiwa: {
       bulan_pemeriksaan: "",
@@ -206,6 +207,9 @@ const SKEMA_SKRINING = {
       naik_turun_tangga_skor: 0,
       mandi_skor: 0,
       total_skor_aks: 0,
+      status_aks: "ketergantungan_total",
+      kode_aks: "T",
+      is_rujukan_aks: true,
     },
     skilas: {
       kognitif_dan_mobilisasi: {
@@ -277,11 +281,22 @@ const validateDetailSkrining = (kategoriSasaran, inputSkrining) => {
   const schema = SKEMA_SKRINING[kategoriSasaran];
   if (!schema) return `Kategori screening tidak valid: ${kategoriSasaran}.`;
 
+  const screeningInput = { ...inputSkrining };
+  if (Object.prototype.hasOwnProperty.call(screeningInput, "is_skrining_tahunan")) {
+    if (!["dewasa", "lansia"].includes(kategoriSasaran)) return "is_skrining_tahunan hanya berlaku untuk kategori dewasa atau lansia.";
+    if (typeof screeningInput.is_skrining_tahunan !== "boolean") return "is_skrining_tahunan harus berupa boolean.";
+    delete screeningInput.is_skrining_tahunan;
+  }
+
   const validateNode = (nodeSchema, nodeInput, path) => {
     if (!nodeInput || typeof nodeInput !== "object" || Array.isArray(nodeInput)) return `${path} harus berupa objek JSON.`;
 
     for (const [key, value] of Object.entries(nodeInput)) {
       if (!Object.prototype.hasOwnProperty.call(nodeSchema, key)) return `${path}.${key} tidak dikenali.`;
+      if (key === "status_risiko_puma" && !["risiko_rendah", "risiko_tinggi", "ambigu_skor_6"].includes(value)) return `${path}.${key} tidak valid.`;
+      if (key === "status_aks" && !["mandiri", "ketergantungan_ringan", "ketergantungan_sedang", "ketergantungan_berat", "ketergantungan_total"].includes(value)) return `${path}.${key} tidak valid.`;
+      if (["is_rujukan_aks"].includes(key) && typeof value !== "boolean") return `${path}.${key} memiliki tipe data tidak valid.`;
+      if (key === "kode_aks" && !["M", "R", "S", "B", "T"].includes(value)) return `${path}.${key} tidak valid.`;
       const expected = nodeSchema[key];
       if (expected && typeof expected === "object") {
         const nestedError = validateNode(expected, value, `${path}.${key}`);
@@ -293,7 +308,7 @@ const validateDetailSkrining = (kategoriSasaran, inputSkrining) => {
     return null;
   };
 
-  return validateNode(schema, inputSkrining, "detail_skrining");
+  return validateNode(schema, screeningInput, "detail_skrining");
 };
 
 module.exports = {
