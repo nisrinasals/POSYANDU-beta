@@ -1,4 +1,4 @@
-const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan } = require("../models");
+const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan, Rujukan } = require("../models");
 const { Op } = require("sequelize");
 const { tentukanKategoriAktif, tentukanPeriodePemeriksaan, getLatestPregnancyProfile, hitungUmur } = require("../utils/kategoriHelper");
 const { formatDetailSkrining, validateDetailSkrining } = require("../utils/detailSkriningHelper");
@@ -8,6 +8,7 @@ const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
+const { getScreeningReferralReasons } = require("../utils/rujukanHelper");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -55,15 +56,19 @@ const pemeriksaanAuditSnapshot = (p) => ({
  * HELPER INTERNAL: Get or Create Record Pemeriksaan
  * Memastikan Kunjungan & Sesi valid (status 'open'), serta menghitung usia_bulan & kategori.
  */
-const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = null) => {
+const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = null, transaction = null) => {
   const kunjungan = await KunjunganPosyandu.findByPk(kunjungan_id, {
+    ...(transaction ? { transaction } : {}),
     include: [
       { model: SesiPosyandu, as: "sesiPosyandu", required: true, include: [getPosyanduInclude(reqUser)] },
       {
         model: Warga,
         as: "warga",
         required: true,
-        include: [{ model: ProfileKehamilan, as: "profileKehamilan", required: false }],
+        include: [
+          { model: ProfileKehamilan, as: "profileKehamilan", required: false },
+          { model: Posyandu, as: "posyandu", required: true, attributes: ["id", "puskesmas_id"] },
+        ],
       },
     ],
   });
@@ -553,25 +558,70 @@ const saveStep4 = async (req, res, next) => {
  * 6. SAVE STEP 5: EDUKASI DAN RUJUKAN (SELESAI)
  */
 const saveStep5 = async (req, res, next) => {
+  let transaction = null;
   try {
-    const { kunjungan_id, topik_penyuluhan, is_perlu_rujukan } = req.body;
+    const { kunjungan_id, topik_penyuluhan, is_perlu_rujukan, alasan_rujukan } = req.body;
 
-    const { kunjungan, pemeriksaan } = await preparePemeriksaanContext(kunjungan_id, req.user);
+    transaction = await Pemeriksaan.sequelize.transaction();
 
-    await pemeriksaan.update({
-      topik_penyuluhan: topik_penyuluhan !== undefined ? topik_penyuluhan : pemeriksaan.topik_penyuluhan,
-      is_perlu_rujukan: is_perlu_rujukan !== undefined ? is_perlu_rujukan : pemeriksaan.is_perlu_rujukan,
-    });
+    const { kunjungan, pemeriksaan } = await preparePemeriksaanContext(kunjungan_id, req.user, null, transaction);
+    const screeningReasons = getScreeningReferralReasons(pemeriksaan.detail_skrining);
+    const keputusanRujukan = is_perlu_rujukan !== undefined ? is_perlu_rujukan : screeningReasons.length > 0;
+    let referral = null;
+
+    if (keputusanRujukan) {
+      const alasan = screeningReasons.length > 0 ? screeningReasons.join("; ") : String(alasan_rujukan || "").trim();
+      if (!alasan) {
+        await transaction.rollback();
+        transaction = null;
+        return res.status(400).json({ success: false, message: "alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening." });
+      }
+
+      const puskesmasId = kunjungan.warga?.posyandu?.puskesmas_id;
+      if (!puskesmasId) {
+        await transaction.rollback();
+        transaction = null;
+        return res.status(400).json({ success: false, message: "Puskesmas warga tidak ditemukan." });
+      }
+
+      referral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
+      const referralPayload = {
+        warga_id: kunjungan.warga_id,
+        pemeriksaan_id: pemeriksaan.id,
+        puskesmas_id: puskesmasId,
+        kader_id: req.user?.id,
+        tanggal_rujukan: new Date(),
+        alasan_rujukan: alasan,
+      };
+      if (referral) await referral.update(referralPayload, { transaction });
+      else referral = await Rujukan.create(referralPayload, { transaction });
+    } else {
+      referral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
+      if (referral) await referral.destroy({ transaction });
+    }
+
+    await pemeriksaan.update(
+      {
+        topik_penyuluhan: topik_penyuluhan !== undefined ? topik_penyuluhan : pemeriksaan.topik_penyuluhan,
+        is_perlu_rujukan: keputusanRujukan,
+      },
+      { transaction },
+    );
 
     // Tandai status pemeriksaan kunjungan selesai
-    await kunjungan.update({ status_langkah: "langkah_5" });
+    await kunjungan.update({ status_langkah: "langkah_5" }, { transaction });
+
+    await transaction.commit();
+    transaction = null;
 
     return res.status(200).json({
       success: true,
       message: "Data edukasi & rujukan (Step 5) berhasil disimpan. Pemeriksaan Selesai.",
       data: pemeriksaan,
+      rujukan: referral,
     });
   } catch (error) {
+    if (transaction) await transaction.rollback();
     if (error.statusCode) {
       return res.status(error.statusCode).json({ success: false, message: error.message });
     }

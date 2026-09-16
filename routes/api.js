@@ -9,6 +9,7 @@ const wargaController = require("../controllers/wargaController");
 const kehamilanController = require("../controllers/kehamilanController");
 const userController = require("../controllers/userController");
 const imunisasiController = require("../controllers/imunisasiController");
+const rujukanController = require("../controllers/rujukanController");
 
 const uploadProfilePicture = require("../middleware/uploadProfilePicture");
 const { authenticateToken, authorize } = require("../middleware/authMiddleware");
@@ -112,6 +113,14 @@ api.delete("/kunjungan/:id", authenticated, validator.kunjungan.idOnly, validate
 // ======================================================
 
 api.get("/pemeriksaan", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.getAllPemeriksaan);
+
+// ======================================================
+// Rujukan routes
+// ======================================================
+
+api.get("/rujukan", authenticated, validator.rujukan.listFilters, validateResult, rujukanController.getAllRujukan);
+api.get("/rujukan/:id", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.getRujukanById);
+
 api.get("/pemeriksaan/:id/step-3", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getStep3Pemeriksaan);
 api.get("/pemeriksaan/:id", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getPemeriksaanById);
 api.post("/pemeriksaan", authenticated, validator.pemeriksaan.createPemeriksaan, validateResult, pemeriksaanController.createPemeriksaan);

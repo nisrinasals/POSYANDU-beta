@@ -25,6 +25,7 @@ const screeningFields = [
 const outputFields = [
   body("topik_penyuluhan").optional({ nullable: true }).isString().isLength({ max: 500 }).withMessage("topik_penyuluhan maksimal 500 karakter."),
   body("is_perlu_rujukan").optional().isBoolean().withMessage("is_perlu_rujukan harus berupa boolean.").toBoolean(),
+  body("alasan_rujukan").optional({ nullable: true }).isString().trim().isLength({ max: 1000 }).withMessage("alasan_rujukan maksimal 1000 karakter."),
 ];
 
 const listFilters = [

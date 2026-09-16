@@ -46,6 +46,10 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: "puskesmas_id",
       as: "users",
     });
+    Puskesmas.hasMany(models.Rujukan, {
+      foreignKey: "puskesmas_id",
+      as: "rujukan",
+    });
   };
 
   return Puskesmas;

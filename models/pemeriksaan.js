@@ -85,6 +85,10 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: "profile_kehamilan_id",
       as: "profileKehamilan",
     });
+    Pemeriksaan.hasOne(models.Rujukan, {
+      foreignKey: "pemeriksaan_id",
+      as: "rujukan",
+    });
   };
 
   return Pemeriksaan;
