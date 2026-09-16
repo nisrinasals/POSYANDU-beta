@@ -33,6 +33,7 @@ const getMeasurementError = (payload) => {
 };
 
 const getScreeningError = (kategori, detailSkrining) => validateDetailSkrining(kategori, detailSkrining);
+const createPemeriksaanError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 
 // Ringkasan field non-sensitif untuk audit log (detail_skrining sengaja dikecualikan karena besar)
 const pemeriksaanAuditSnapshot = (p) => ({
@@ -255,10 +256,7 @@ const getPemeriksaanById = async (req, res, next) => {
     });
 
     if (!pemeriksaan) {
-      return res.status(404).json({
-        success: false,
-        message: "Data pemeriksaan tidak ditemukan.",
-      });
+      throw createPemeriksaanError(404, "Data pemeriksaan tidak ditemukan.");
     }
 
     return res.status(200).json({
@@ -714,17 +712,14 @@ const updatePemeriksaan = async (req, res, next) => {
     if (req.user.role === "kader") await assertKaderCanMutateSession(pemeriksaan.kunjungan?.sesiPosyandu);
 
     if (kategori_sasaran && !VALID_KATEGORI.includes(kategori_sasaran)) {
-      return res.status(400).json({
-        success: false,
-        message: `Kategori tidak valid. Harus salah satu dari: ${VALID_KATEGORI.join(", ")}`,
-      });
+      throw createPemeriksaanError(400, `Kategori tidak valid. Harus salah satu dari: ${VALID_KATEGORI.join(", ")}`);
     }
 
     // Recalculate usia_bulan jika tanggal pemeriksaan diubah
     let updatedUsiaBulan = pemeriksaan.usia_bulan;
     const targetTanggal = tanggal || pemeriksaan.tanggal;
     const measurementError = getMeasurementError(req.body);
-    if (measurementError) return res.status(400).json({ success: false, message: measurementError });
+    if (measurementError) throw createPemeriksaanError(400, measurementError);
     if (tanggal && pemeriksaan.kunjungan?.warga?.tanggal_lahir) {
       const { totalMonths } = hitungUmur(pemeriksaan.kunjungan.warga.tanggal_lahir, targetTanggal);
       updatedUsiaBulan = totalMonths;
@@ -737,7 +732,7 @@ const updatePemeriksaan = async (req, res, next) => {
     if (detail_skrining !== undefined || is_skrining_tahunan !== undefined) {
       const screeningInput = detail_skrining !== undefined ? detail_skrining : pemeriksaan.detail_skrining || {};
       const screeningError = getScreeningError(kategoriAktif, screeningInput);
-      if (screeningError) return res.status(400).json({ success: false, message: screeningError });
+      if (screeningError) throw createPemeriksaanError(400, screeningError);
       let isTahunan = false;
       if (["dewasa", "lansia"].includes(kategoriAktif) && (is_skrining_tahunan ?? pemeriksaan.detail_skrining?.is_skrining_tahunan)) {
         const targetYear = new Date(targetTanggal).getFullYear();
@@ -752,7 +747,7 @@ const updatePemeriksaan = async (req, res, next) => {
         skilasProvided: Boolean(screeningInput?.skilas),
         jiwaProvided: Boolean(screeningInput?.skrining_kesehatan_jiwa),
       });
-      if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
+      if (scoredSkrining.errors.length) throw createPemeriksaanError(400, scoredSkrining.errors.join(" "));
       updatedDetailSkrining = scoredSkrining.detail;
     }
 
