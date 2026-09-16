@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { User } = require("../models");
 const { Op } = require("sequelize");
+const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 
 const SA_ASSIGNABLE_ROLES = ["dinkesAdmin", "dinkes", "puskesmasAdmin", "puskesmas", "kader"];
 
@@ -90,7 +91,16 @@ const changeUserRole = async (req, res, next) => {
     if (rejectSelf(req, req.params.id, res)) return;
     const target = await User.findByPk(req.params.id);
     if (!target || !canChangeUserRole(req.user, target, req.body.role)) return res.status(403).json({ success: false, message: "Hanya SA yang dapat mengubah role ke role di bawahnya." });
+    const oldValue = { id: target.id, role: target.role, status: target.status };
     await target.update({ role: req.body.role, token_version: target.token_version + 1 });
+    await createAuditLog({
+      userId: req.user.id,
+      action: AUDIT_ACTIONS.USER_ROLE_UPDATE,
+      tableName: "users",
+      recordId: target.id,
+      oldValue,
+      newValue: { id: target.id, role: target.role, status: target.status },
+    });
     return res.status(200).json({ success: true, message: "Role user berhasil diubah.", data: target });
   } catch (error) {
     next(error);
@@ -102,7 +112,16 @@ const changeUserStatus = async (req, res, next) => {
     if (rejectSelf(req, req.params.id, res)) return;
     const target = await User.findByPk(req.params.id);
     if (!target || !canDeactivateUser(req.user, target)) return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk menonaktifkan user ini." });
+    const oldValue = { id: target.id, status: target.status };
     await target.update({ status: req.body.status, token_version: target.token_version + 1 });
+    await createAuditLog({
+      userId: req.user.id,
+      action: AUDIT_ACTIONS.USER_STATUS_UPDATE,
+      tableName: "users",
+      recordId: target.id,
+      oldValue,
+      newValue: { id: target.id, status: target.status },
+    });
     return res.status(200).json({ success: true, message: "Status user berhasil diubah.", data: target });
   } catch (error) {
     next(error);
@@ -153,7 +172,16 @@ const verifyUser = async (req, res, next) => {
     if (!canVerifyUser(req.user, target)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk memverifikasi akun ini." });
     }
+    const oldValue = { id: target.id, status: target.status };
     await target.update({ status: "active", verified_by: req.user.id, verified_at: new Date(), token_version: target.token_version + 1 });
+    await createAuditLog({
+      userId: req.user.id,
+      action: AUDIT_ACTIONS.USER_STATUS_UPDATE,
+      tableName: "users",
+      recordId: target.id,
+      oldValue,
+      newValue: { id: target.id, status: target.status, verified_by: target.verified_by },
+    });
     return res.status(200).json({ success: true, message: "Akun berhasil diverifikasi.", data: target });
   } catch (error) {
     next(error);
@@ -220,7 +248,16 @@ const deactivateUser = async (req, res, next) => {
     if (!canDeactivateUser(req.user, target)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk menonaktifkan akun ini." });
     }
+    const oldValue = { id: target.id, status: target.status };
     await target.update({ status: "inactive", token_version: target.token_version + 1 });
+    await createAuditLog({
+      userId: req.user.id,
+      action: AUDIT_ACTIONS.USER_STATUS_UPDATE,
+      tableName: "users",
+      recordId: target.id,
+      oldValue,
+      newValue: { id: target.id, status: target.status },
+    });
     return res.status(200).json({ success: true, message: "User berhasil dinonaktifkan.", data: target });
   } catch (error) {
     next(error);

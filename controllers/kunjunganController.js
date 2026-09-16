@@ -1,6 +1,7 @@
 const { KunjunganPosyandu, SesiPosyandu, Warga, Posyandu, Pemeriksaan } = require("../models");
 const { Op } = require("sequelize");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
+const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 
 /**
  * 1. STEP 1: PENDAFTARAN / PRESENSI WARGA DATANG
@@ -65,6 +66,15 @@ const createKunjungan = async (req, res, next) => {
       sesi_posyandu_id,
       nomor_antrean: nomorAntreanFormatted,
       status_langkah: "langkah_1",
+    });
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.KUNJUNGAN_CREATE,
+      tableName: "kunjungan_posyandu",
+      recordId: newKunjungan.id,
+      oldValue: null,
+      newValue: { id: newKunjungan.id, warga_id, sesi_posyandu_id, nomor_antrean: newKunjungan.nomor_antrean, status_langkah: newKunjungan.status_langkah },
     });
 
     return res.status(201).json({
@@ -297,7 +307,17 @@ const updateStatusLangkah = async (req, res, next) => {
       });
     }
 
+    const oldStatusLangkah = kunjungan.status_langkah;
     await kunjungan.update({ status_langkah });
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.KUNJUNGAN_UPDATE,
+      tableName: "kunjungan_posyandu",
+      recordId: kunjungan.id,
+      oldValue: { status_langkah: oldStatusLangkah },
+      newValue: { status_langkah: kunjungan.status_langkah },
+    });
 
     return res.status(200).json({
       success: true,
@@ -336,7 +356,17 @@ const deleteKunjungan = async (req, res, next) => {
       });
     }
 
+    const oldValue = kunjungan.toJSON();
     await kunjungan.destroy();
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.KUNJUNGAN_DELETE,
+      tableName: "kunjungan_posyandu",
+      recordId: id,
+      oldValue,
+      newValue: null,
+    });
 
     return res.status(200).json({
       success: true,

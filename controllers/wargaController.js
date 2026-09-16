@@ -3,6 +3,7 @@ const { Op } = require("sequelize");
 const ExcelJS = require("exceljs");
 const { tentukanKategori, tentukanKategoriAktif, hitungUmur, hitungRekapSasaran } = require("../utils/kategoriHelper");
 const { canAccessPosyandu, getPosyanduInclude } = require("../utils/posyanduAccessHelper");
+const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 
 // 9 Kategori Sasaran Resmi ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -84,6 +85,17 @@ const confirmMutasiWarga = async (req, res, next) => {
     const previousPosyanduId = warga.posyandu_id;
     if (Number(previousPosyanduId) !== Number(destination.id)) await warga.update({ posyandu_id: destination.id }, { transaction });
     await transaction.commit();
+
+    if (Number(previousPosyanduId) !== Number(destination.id)) {
+      await createAuditLog({
+        userId: req.user?.id ?? null,
+        action: AUDIT_ACTIONS.WARGA_MUTATION,
+        tableName: "warga",
+        recordId: warga.id,
+        oldValue: { posyandu_id: previousPosyanduId },
+        newValue: { posyandu_id: destination.id },
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -362,6 +374,15 @@ const createWarga = async (req, res, next) => {
 
     const { umurText } = hitungUmur(tanggal_lahir);
 
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.WARGA_CREATE,
+      tableName: "warga",
+      recordId: newWarga.id,
+      oldValue: null,
+      newValue: newWarga.toJSON(),
+    });
+
     return res.status(201).json({
       success: true,
       message: `Berhasil menambahkan data warga [${nama_lengkap}].`,
@@ -434,6 +455,25 @@ const updateWarga = async (req, res, next) => {
       });
     }
 
+    const oldValue = {
+      nik: warga.nik,
+      nama_lengkap: warga.nama_lengkap,
+      jenis_kelamin: warga.jenis_kelamin,
+      tanggal_lahir: warga.tanggal_lahir,
+      alamat: warga.alamat,
+      rt: warga.rt,
+      rw: warga.rw,
+      telepon: warga.telepon,
+      nama_ibu: warga.nama_ibu,
+      nama_ayah: warga.nama_ayah,
+      status_perkawinan: warga.status_perkawinan,
+      pekerjaan: warga.pekerjaan,
+      pekerjaan_lainnya: warga.pekerjaan_lainnya,
+      bb_lahir_kg: warga.bb_lahir_kg,
+      tb_lahir_cm: warga.tb_lahir_cm,
+      status_domisili: warga.status_domisili,
+    };
+
     await warga.update({
       nik: nik ?? warga.nik,
       nama_lengkap: nama_lengkap ?? warga.nama_lengkap,
@@ -451,6 +491,32 @@ const updateWarga = async (req, res, next) => {
       bb_lahir_kg: bb_lahir_kg ?? warga.bb_lahir_kg,
       tb_lahir_cm: tb_lahir_cm ?? warga.tb_lahir_cm,
       status_domisili: status_domisili ?? warga.status_domisili,
+    });
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.WARGA_UPDATE,
+      tableName: "warga",
+      recordId: warga.id,
+      oldValue,
+      newValue: {
+        nik: warga.nik,
+        nama_lengkap: warga.nama_lengkap,
+        jenis_kelamin: warga.jenis_kelamin,
+        tanggal_lahir: warga.tanggal_lahir,
+        alamat: warga.alamat,
+        rt: warga.rt,
+        rw: warga.rw,
+        telepon: warga.telepon,
+        nama_ibu: warga.nama_ibu,
+        nama_ayah: warga.nama_ayah,
+        status_perkawinan: warga.status_perkawinan,
+        pekerjaan: warga.pekerjaan,
+        pekerjaan_lainnya: warga.pekerjaan_lainnya,
+        bb_lahir_kg: warga.bb_lahir_kg,
+        tb_lahir_cm: warga.tb_lahir_cm,
+        status_domisili: warga.status_domisili,
+      },
     });
 
     return res.status(200).json({
@@ -504,7 +570,17 @@ const updateStatusDomisili = async (req, res, next) => {
       });
     }
 
+    const oldStatusDomisili = warga.status_domisili;
     await warga.update({ status_domisili });
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.WARGA_STATUS_UPDATE,
+      tableName: "warga",
+      recordId: warga.id,
+      oldValue: { status_domisili: oldStatusDomisili },
+      newValue: { status_domisili: warga.status_domisili },
+    });
 
     return res.status(200).json({
       success: true,

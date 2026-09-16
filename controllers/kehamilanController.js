@@ -2,6 +2,7 @@
 
 const { ProfileKehamilan, Warga, Posyandu } = require("../models");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
+const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 
 const VALID_STATUS = ["hamil", "nifas", "menyusui", "selesai"];
 
@@ -86,6 +87,15 @@ const createKehamilan = async (req, res, next) => {
     if (combinationError) return res.status(400).json({ success: false, message: combinationError });
     const data = await ProfileKehamilan.create({ warga_id, ...payloadWithDefault });
 
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.KEHAMILAN_CREATE,
+      tableName: "profile_kehamilan",
+      recordId: data.id,
+      oldValue: null,
+      newValue: typeof data.toJSON === "function" ? data.toJSON() : data,
+    });
+
     return res.status(201).json({ success: true, message: "Data kehamilan berhasil ditambahkan.", data });
   } catch (error) {
     next(error);
@@ -103,7 +113,17 @@ const updateKehamilan = async (req, res, next) => {
     const payload = Object.fromEntries(Object.entries(req.body).filter(([field]) => allowedFields.includes(field)));
     const combinationError = validatePregnancyCombination(payload, data);
     if (combinationError) return res.status(400).json({ success: false, message: combinationError });
+    const oldValue = allowedFields.reduce((acc, field) => ({ ...acc, [field]: data[field] }), {});
     await data.update(payload);
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.KEHAMILAN_UPDATE,
+      tableName: "profile_kehamilan",
+      recordId: data.id,
+      oldValue,
+      newValue: allowedFields.reduce((acc, field) => ({ ...acc, [field]: data[field] }), {}),
+    });
 
     return res.status(200).json({ success: true, message: "Data kehamilan berhasil diperbarui.", data });
   } catch (error) {
@@ -123,7 +143,18 @@ const updateStatusKehamilan = async (req, res, next) => {
     if (req.body.tanggal_persalinan !== undefined) payload.tanggal_persalinan = req.body.tanggal_persalinan;
     const combinationError = validatePregnancyCombination(payload, data);
     if (combinationError) return res.status(400).json({ success: false, message: combinationError });
+    const oldValue = { status_kehamilan: data.status_kehamilan, is_menyusui: data.is_menyusui, tanggal_persalinan: data.tanggal_persalinan };
     await data.update(payload);
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.KEHAMILAN_STATUS_UPDATE,
+      tableName: "profile_kehamilan",
+      recordId: data.id,
+      oldValue,
+      newValue: { status_kehamilan: data.status_kehamilan, is_menyusui: data.is_menyusui, tanggal_persalinan: data.tanggal_persalinan },
+    });
+
     return res.status(200).json({ success: true, message: "Status kehamilan berhasil diperbarui.", data });
   } catch (error) {
     next(error);

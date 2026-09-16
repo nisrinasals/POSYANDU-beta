@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
 const { User, EmailOtp, Puskesmas, Posyandu } = require("../models");
 const sendEmail = require("../utils/mailer");
+const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 
 const REGISTERABLE_ROLES = ["dinkes", "puskesmas", "kader"];
 
@@ -82,6 +83,15 @@ const register = async (req, res, next) => {
       `,
     });
 
+    await createAuditLog({
+      userId: null,
+      action: AUDIT_ACTIONS.AUTH_REGISTER,
+      tableName: "users",
+      recordId: newUser.id,
+      oldValue: null,
+      newValue: { id: newUser.id, email: newUser.email, role: newUser.role, status: newUser.status },
+    });
+
     return res.status(201).json({
       success: true,
       message: "Registrasi berhasil. Silakan cek email kamu untuk verifikasi kode OTP.",
@@ -124,6 +134,16 @@ const verifyOtp = async (req, res, next) => {
 
     // Tandai OTP telah digunakan
     await otpRecord.update({ is_used: true });
+
+    const verifiedUser = await User.findOne({ where: { email } });
+    await createAuditLog({
+      userId: verifiedUser?.id ?? null,
+      action: AUDIT_ACTIONS.AUTH_VERIFY,
+      tableName: "users",
+      recordId: verifiedUser?.id ?? null,
+      oldValue: null,
+      newValue: { email, purpose },
+    });
 
     if (purpose === "register") {
       return res.status(200).json({
@@ -188,6 +208,15 @@ const resendOtp = async (req, res, next) => {
           <p>Berlaku selama 10 menit.</p>
         </div>
       `,
+    });
+
+    await createAuditLog({
+      userId: null,
+      action: AUDIT_ACTIONS.AUTH_RESEND_OTP,
+      tableName: "email_otp",
+      recordId: null,
+      oldValue: null,
+      newValue: { email, purpose },
     });
 
     return res.status(200).json({
@@ -259,6 +288,15 @@ const login = async (req, res, next) => {
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: AUDIT_ACTIONS.AUTH_LOGIN,
+      tableName: "users",
+      recordId: user.id,
+      oldValue: null,
+      newValue: { id: user.id, email: user.email, role: user.role },
     });
 
     return res.status(200).json({
@@ -377,6 +415,15 @@ const resetPassword = async (req, res, next) => {
     // Tandai OTP telah digunakan
     await otpRecord.update({ is_used: true });
 
+    await createAuditLog({
+      userId: user.id,
+      action: AUDIT_ACTIONS.AUTH_RESET_PASSWORD,
+      tableName: "users",
+      recordId: user.id,
+      oldValue: null,
+      newValue: { id: user.id, email: user.email },
+    });
+
     return res.status(200).json({
       success: true,
       message: "Password berhasil diperbarui. Silakan login kembali dengan password baru.",
@@ -393,6 +440,15 @@ const logout = async (req, res, next) => {
   try {
     // Increment token_version milik user yang sedang terautentikasi
     await User.increment("token_version", { where: { id: req.user.id } });
+
+    await createAuditLog({
+      userId: req.user.id,
+      action: AUDIT_ACTIONS.AUTH_LOGOUT,
+      tableName: "users",
+      recordId: req.user.id,
+      oldValue: null,
+      newValue: null,
+    });
 
     return res.status(200).json({
       success: true,

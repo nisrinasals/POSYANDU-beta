@@ -7,6 +7,7 @@ const { finalizeScreeningScores } = require("../utils/screeningScoringHelper");
 const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
+const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -31,6 +32,24 @@ const getMeasurementError = (payload) => {
 };
 
 const getScreeningError = (kategori, detailSkrining) => validateDetailSkrining(kategori, detailSkrining);
+
+// Ringkasan field non-sensitif untuk audit log (detail_skrining sengaja dikecualikan karena besar)
+const pemeriksaanAuditSnapshot = (p) => ({
+  id: p.id,
+  kunjungan_id: p.kunjungan_id,
+  tanggal: p.tanggal,
+  kategori_sasaran: p.kategori_sasaran,
+  bb_kg: p.bb_kg,
+  tb_cm: p.tb_cm,
+  lingkar_kepala_cm: p.lingkar_kepala_cm,
+  lila_cm: p.lila_cm,
+  lingkar_perut_cm: p.lingkar_perut_cm,
+  td_sistole: p.td_sistole,
+  td_diastole: p.td_diastole,
+  kadar_gula: p.kadar_gula,
+  topik_penyuluhan: p.topik_penyuluhan,
+  is_perlu_rujukan: p.is_perlu_rujukan,
+});
 
 /**
  * HELPER INTERNAL: Get or Create Record Pemeriksaan
@@ -62,7 +81,7 @@ const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = 
   const kategoriFix = tentukanKategoriAktif(kunjungan.warga.tanggal_lahir, kunjungan.warga.profileKehamilan, tglPemeriksaan);
 
   // Cari atau Buat Record Pemeriksaan
-  let [pemeriksaan] = await Pemeriksaan.findOrCreate({
+  let [pemeriksaan, created] = await Pemeriksaan.findOrCreate({
     where: { kunjungan_id },
     defaults: {
       kunjungan_id,
@@ -74,7 +93,7 @@ const preparePemeriksaanContext = async (kunjungan_id, reqUser, targetTanggal = 
     },
   });
 
-  return { kunjungan, pemeriksaan, tglPemeriksaan, totalMonths, kategoriFix };
+  return { kunjungan, pemeriksaan, created, tglPemeriksaan, totalMonths, kategoriFix };
 };
 
 /**
@@ -362,7 +381,7 @@ const createPemeriksaan = async (req, res, next) => {
     const measurementError = getMeasurementError(req.body);
     if (measurementError) return res.status(400).json({ success: false, message: measurementError });
 
-    const { kunjungan, pemeriksaan, tglPemeriksaan, totalMonths, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user, tanggal);
+    const { kunjungan, pemeriksaan, created, tglPemeriksaan, totalMonths, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user, tanggal);
 
     const kategoriAkhir = kategoriFix;
 
@@ -389,6 +408,7 @@ const createPemeriksaan = async (req, res, next) => {
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
 
     // Update Data Pemeriksaan ke DB (Upsert Safe)
+    const oldValue = created ? null : pemeriksaanAuditSnapshot(pemeriksaan);
     await pemeriksaan.update({
       profile_kehamilan_id: profile_kehamilan_id || null,
       tanggal: tglPemeriksaan,
@@ -409,6 +429,15 @@ const createPemeriksaan = async (req, res, next) => {
 
     // Update status kunjungan ke langkah 5 (Selesai)
     await kunjungan.update({ status_langkah: "langkah_5" });
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: created ? AUDIT_ACTIONS.PEMERIKSAAN_CREATE : AUDIT_ACTIONS.PEMERIKSAAN_UPDATE,
+      tableName: "pemeriksaan",
+      recordId: pemeriksaan.id,
+      oldValue,
+      newValue: pemeriksaanAuditSnapshot(pemeriksaan),
+    });
 
     return res.status(200).json({
       success: true,
@@ -630,6 +659,8 @@ const updatePemeriksaan = async (req, res, next) => {
       updatedDetailSkrining = scoredSkrining.detail;
     }
 
+    const oldValue = pemeriksaanAuditSnapshot(pemeriksaan);
+
     await pemeriksaan.update({
       kategori_sasaran: kategoriAktif,
       tanggal: targetTanggal,
@@ -646,6 +677,15 @@ const updatePemeriksaan = async (req, res, next) => {
       detail_skrining: updatedDetailSkrining,
       topik_penyuluhan: topik_penyuluhan !== undefined ? topik_penyuluhan : pemeriksaan.topik_penyuluhan,
       is_perlu_rujukan: is_perlu_rujukan !== undefined ? is_perlu_rujukan : pemeriksaan.is_perlu_rujukan,
+    });
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.PEMERIKSAAN_UPDATE,
+      tableName: "pemeriksaan",
+      recordId: pemeriksaan.id,
+      oldValue,
+      newValue: pemeriksaanAuditSnapshot(pemeriksaan),
     });
 
     return res.status(200).json({
@@ -678,7 +718,17 @@ const deletePemeriksaan = async (req, res, next) => {
 
     if (req.user.role === "kader") await assertKaderCanMutateSession(pemeriksaan.kunjungan?.sesiPosyandu);
 
+    const oldValue = pemeriksaanAuditSnapshot(pemeriksaan);
     await pemeriksaan.destroy();
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.PEMERIKSAAN_DELETE,
+      tableName: "pemeriksaan",
+      recordId: id,
+      oldValue,
+      newValue: null,
+    });
 
     return res.status(200).json({
       success: true,

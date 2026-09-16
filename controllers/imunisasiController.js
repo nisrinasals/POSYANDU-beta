@@ -2,6 +2,7 @@
 
 const { Imunisasi, Warga } = require("../models");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
+const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 
 const getScopedWarga = (req, wargaId) =>
   Warga.findOne({
@@ -49,6 +50,14 @@ const createImunisasi = async (req, res, next) => {
       jenis_imunisasi: req.body.jenis_imunisasi,
       tanggal_imunisasi: req.body.tanggal_imunisasi,
     });
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.IMUNISASI_CREATE,
+      tableName: "imunisasi",
+      recordId: data.id,
+      oldValue: null,
+      newValue: { id: data.id, warga_id: data.warga_id, jenis_imunisasi: data.jenis_imunisasi, tanggal_imunisasi: data.tanggal_imunisasi },
+    });
     return res.status(201).json({ success: true, message: "Data imunisasi berhasil ditambahkan.", data });
   } catch (error) {
     next(error);
@@ -65,7 +74,16 @@ const updateImunisasi = async (req, res, next) => {
     const payload = {};
     if (req.body.jenis_imunisasi !== undefined) payload.jenis_imunisasi = req.body.jenis_imunisasi;
     if (req.body.tanggal_imunisasi !== undefined) payload.tanggal_imunisasi = req.body.tanggal_imunisasi;
+    const oldValue = { jenis_imunisasi: data.jenis_imunisasi, tanggal_imunisasi: data.tanggal_imunisasi };
     await data.update(payload);
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.IMUNISASI_UPDATE,
+      tableName: "imunisasi",
+      recordId: data.id,
+      oldValue,
+      newValue: { jenis_imunisasi: data.jenis_imunisasi, tanggal_imunisasi: data.tanggal_imunisasi },
+    });
     return res.status(200).json({ success: true, message: "Data imunisasi berhasil diperbarui.", data });
   } catch (error) {
     next(error);
