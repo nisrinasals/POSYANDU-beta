@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const uploadProfilePicture = multer({
+const upload = multer({
   storage,
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (req, file, callback) => {
@@ -24,5 +24,20 @@ const uploadProfilePicture = multer({
     callback(null, true);
   },
 }).single("profile_picture");
+
+const uploadProfilePicture = (req, res, next) => {
+  upload(req, res, (error) => {
+    if (!error) return next();
+
+    if (!(error instanceof multer.MulterError)) return next(error);
+
+    const response = {
+      success: false,
+      message: error.code === "LIMIT_FILE_SIZE" ? "Ukuran foto profil melebihi batas maksimum 2 MB." : error.code === "LIMIT_UNEXPECTED_FILE" ? "Field upload tidak diizinkan." : "Upload file tidak valid.",
+    };
+
+    return res.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json(response);
+  });
+};
 
 module.exports = uploadProfilePicture;

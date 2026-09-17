@@ -7,6 +7,8 @@ const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 const { getOtpDurationMs, getOtpCooldownMs } = require("../utils/runtimeConfig");
 
 const REGISTERABLE_ROLES = ["dinkes", "puskesmas", "kader"];
+const getOtpDurationMinutes = () => getOtpDurationMs() / (60 * 1000);
+const getOtpCooldownMinutes = () => getOtpCooldownMs() / (60 * 1000);
 
 /**
  * Helper untuk membuat 6 digit angka OTP
@@ -79,7 +81,7 @@ const register = async (req, res, next) => {
           <p>Terima kasih telah mendaftar di Sistem Informasi Posyandu.</p>
           <p>Kode OTP verifikasi email kamu adalah:</p>
           <h1 style="color: #2b6cb0; letter-spacing: 4px;">${otpCode}</h1>
-          <p>Kode ini berlaku selama 10 menit. Jangan berikan kode ini kepada siapa pun.</p>
+          <p>Kode ini berlaku selama ${getOtpDurationMinutes()} menit. Jangan berikan kode ini kepada siapa pun.</p>
         </div>
       `,
     });
@@ -176,7 +178,7 @@ const resendOtp = async (req, res, next) => {
       });
     }
 
-    // Mencegah spam kirim OTP (minimal jeda 1 menit)
+    // Mencegah spam kirim OTP sesuai jeda konfigurasi
     const lastOtp = await EmailOtp.findOne({
       where: { email, purpose, is_used: false },
       order: [["id", "DESC"]],
@@ -185,7 +187,7 @@ const resendOtp = async (req, res, next) => {
     if (lastOtp && new Date() < new Date(lastOtp.expires_at.getTime() - getOtpDurationMs() + getOtpCooldownMs())) {
       return res.status(429).json({
         success: false,
-        message: "Silakan tunggu 1 menit sebelum meminta kode OTP baru.",
+        message: `Silakan tunggu ${getOtpCooldownMinutes()} menit sebelum meminta kode OTP baru.`,
       });
     }
 
@@ -206,7 +208,7 @@ const resendOtp = async (req, res, next) => {
         <div style="font-family: Arial, sans-serif; padding: 20px;">
           <p>Kode OTP baru kamu adalah:</p>
           <h1 style="color: #2b6cb0; letter-spacing: 4px;">${otpCode}</h1>
-          <p>Berlaku selama 10 menit.</p>
+          <p>Berlaku selama ${getOtpDurationMinutes()} menit.</p>
         </div>
       `,
     });
@@ -357,7 +359,7 @@ const requestResetPassword = async (req, res, next) => {
           <h3>Permintaan Reset Password</h3>
           <p>Kami menerima permintaan untuk mereset password akun kamu. Kode OTP kamu adalah:</p>
           <h1 style="color: #e53e3e; letter-spacing: 4px;">${otpCode}</h1>
-          <p>Kode ini berlaku selama 10 menit. Jika kamu tidak merasa melakukan permintaan ini, abaikan email ini.</p>
+          <p>Kode ini berlaku selama ${getOtpDurationMinutes()} menit. Jika kamu tidak merasa melakukan permintaan ini, abaikan email ini.</p>
         </div>
       `,
     });
