@@ -113,15 +113,7 @@ api.delete("/kunjungan/:id", authenticated, validator.kunjungan.idOnly, validate
 // ======================================================
 
 api.get("/pemeriksaan", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.getAllPemeriksaan);
-
-// ======================================================
-// Rujukan routes
-// ======================================================
-
-api.get("/rujukan", authenticated, validator.rujukan.listFilters, validateResult, rujukanController.getAllRujukan);
-api.get("/rujukan/:id/export", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.exportRujukanPdf);
-api.get("/rujukan/:id", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.getRujukanById);
-
+api.get("/pemeriksaan/export", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.exportPemeriksaanExcel);
 api.get("/pemeriksaan/:id/step-3", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getStep3Pemeriksaan);
 api.get("/pemeriksaan/:id", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getPemeriksaanById);
 api.post("/pemeriksaan", authenticated, validator.pemeriksaan.createPemeriksaan, validateResult, pemeriksaanController.createPemeriksaan);
@@ -130,5 +122,13 @@ api.post("/pemeriksaan/step-4", authenticated, validator.pemeriksaan.saveStep4, 
 api.post("/pemeriksaan/step-5", authenticated, validator.pemeriksaan.saveStep5, validateResult, pemeriksaanController.saveStep5);
 api.put("/pemeriksaan/:id", authenticated, validator.pemeriksaan.updatePemeriksaan, validateResult, pemeriksaanController.updatePemeriksaan);
 api.delete("/pemeriksaan/:id", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.deletePemeriksaan);
+
+// ======================================================
+// Rujukan routes
+// ======================================================
+
+api.get("/rujukan", authenticated, validator.rujukan.listFilters, validateResult, rujukanController.getAllRujukan);
+api.get("/rujukan/:id/export", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.exportRujukanPdf);
+api.get("/rujukan/:id", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.getRujukanById);
 
 module.exports = api;

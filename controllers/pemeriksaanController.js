@@ -1,5 +1,6 @@
-const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan, Rujukan } = require("../models");
+const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan, Rujukan, Imunisasi } = require("../models");
 const { Op } = require("sequelize");
+const ExcelJS = require("exceljs");
 const { tentukanKategoriAktif, tentukanPeriodePemeriksaan, getLatestPregnancyProfile, hitungUmur } = require("../utils/kategoriHelper");
 const { formatDetailSkrining, validateDetailSkrining } = require("../utils/detailSkriningHelper");
 const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
@@ -9,6 +10,7 @@ const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 const { getScreeningReferralReasons } = require("../utils/rujukanHelper");
+const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../utils/export/rekapExportHelper");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -206,6 +208,75 @@ const getAllPemeriksaan = async (req, res, next) => {
         items_per_page: parseInt(limit, 10),
       },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const exportPemeriksaanExcel = async (req, res, next) => {
+  try {
+    const { page, limit, search, kategori_sasaran, sesi_posyandu_id, posyandu_id, start_date, end_date } = req.query;
+    const pemeriksaanWhere = {};
+    const sesiWhere = {};
+    const wargaWhere = {};
+
+    if (kategori_sasaran) pemeriksaanWhere.kategori_sasaran = kategori_sasaran;
+    if (start_date && end_date) pemeriksaanWhere.tanggal = { [Op.between]: [new Date(start_date), new Date(end_date)] };
+    if (sesi_posyandu_id) sesiWhere.id = sesi_posyandu_id;
+    if (posyandu_id) wargaWhere.posyandu_id = posyandu_id;
+    if (search) wargaWhere[Op.or] = [{ nama_lengkap: { [Op.iLike]: `%${search}%` } }, { nik: { [Op.iLike]: `%${search}%` } }];
+
+    const rows = await Pemeriksaan.findAll({
+      where: pemeriksaanWhere,
+      order: [
+        ["tanggal", "ASC"],
+        ["id", "ASC"],
+      ],
+      include: [
+        {
+          model: KunjunganPosyandu,
+          as: "kunjungan",
+          required: true,
+          attributes: ["id", "warga_id", "sesi_posyandu_id"],
+          include: [
+            {
+              model: Warga,
+              as: "warga",
+              required: true,
+              where: Object.keys(wargaWhere).length ? wargaWhere : undefined,
+              include: [
+                { model: ProfileKehamilan, as: "profileKehamilan", required: false },
+                { model: Imunisasi, as: "imunisasi", required: false },
+              ],
+            },
+            {
+              model: SesiPosyandu,
+              as: "sesiPosyandu",
+              required: true,
+              where: Object.keys(sesiWhere).length ? sesiWhere : undefined,
+              include: [getPosyanduInclude(req.user)],
+            },
+          ],
+        },
+        { model: Rujukan, as: "rujukan", required: false },
+      ],
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    for (const group of Object.keys(REKAP_GROUPS)) {
+      const worksheet = workbook.addWorksheet(group);
+      const columns = REKAP_EXPORT_COLUMNS[group];
+      worksheet.columns = columns.map(({ key, label }) => ({ header: label, key, width: Math.min(Math.max(label.length + 2, 14), 32) }));
+      worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFF" } };
+      worksheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "1E40AF" } };
+      const plainRows = rows.map((row) => (typeof row.get === "function" ? row.get({ plain: true }) : row));
+      worksheet.addRows(aggregateRekapRows(plainRows, group));
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename=Rekap_Pemeriksaan_${new Date().toISOString().split("T")[0]}.xlsx`);
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (error) {
     next(error);
   }
@@ -882,6 +953,7 @@ const deletePemeriksaan = async (req, res, next) => {
 
 module.exports = {
   getAllPemeriksaan,
+  exportPemeriksaanExcel,
   getPemeriksaanById,
   getStep3Pemeriksaan,
   createPemeriksaan,

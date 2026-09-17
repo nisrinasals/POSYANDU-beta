@@ -4,6 +4,7 @@ const ExcelJS = require("exceljs");
 const { tentukanKategori, tentukanKategoriAktif, hitungUmur, hitungRekapSasaran } = require("../utils/kategoriHelper");
 const { canAccessPosyandu, getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
+const { SASARAN_EXPORT_COLUMNS, formatSasaranRow } = require("../utils/export/sasaranExportHelper");
 
 // 9 Kategori Sasaran Resmi ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -659,19 +660,9 @@ const exportWargaExcel = async (req, res, next) => {
     const worksheet = workbook.addWorksheet("Data Sasaran Warga");
 
     worksheet.columns = [
-      { header: "No", key: "no", width: 5 },
-      { header: "NIK", key: "nik", width: 20 },
-      { header: "Nama Lengkap", key: "nama_lengkap", width: 25 },
-      { header: "JK", key: "jenis_kelamin", width: 8 },
-      { header: "Tanggal Lahir", key: "tanggal_lahir", width: 15 },
-      { header: "Usia", key: "umur_text", width: 18 },
-      { header: "Kategori ILP", key: "kategori_sasaran", width: 18 },
-      { header: "Telepon", key: "telepon", width: 15 },
-      { header: "Pekerjaan", key: "pekerjaan", width: 15 },
-      { header: "Status Perkawinan", key: "status_perkawinan", width: 18 },
+      ...SASARAN_EXPORT_COLUMNS.map(({ key, label }) => ({ header: label, key, width: key === "nama_lengkap" ? 25 : key === "alamat" ? 30 : 18 })),
       { header: "Posyandu", key: "nama_posyandu", width: 20 },
       { header: "RT / RW", key: "rtrw", width: 12 },
-      { header: "Status Domisili", key: "status_domisili", width: 15 },
     ];
 
     worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFF" } };
@@ -682,20 +673,15 @@ const exportWargaExcel = async (req, res, next) => {
     };
 
     formattedData.forEach((item, index) => {
+      const exportRow = formatSasaranRow(item, index, new Date());
       worksheet.addRow({
-        no: index + 1,
-        nik: item.nik,
-        nama_lengkap: item.nama_lengkap,
+        ...exportRow,
         jenis_kelamin: item.jenis_kelamin === "L" ? "Laki-laki" : "Perempuan",
-        tanggal_lahir: new Date(item.tanggal_lahir).toLocaleDateString("id-ID"),
-        umur_text: item.umur_text,
-        kategori_sasaran: item.kategori_sasaran.toUpperCase(),
-        telepon: item.telepon || "-",
-        pekerjaan: item.pekerjaan === "lainnya" ? item.pekerjaan_lainnya : item.pekerjaan || "-",
-        status_perkawinan: item.status_perkawinan || "-",
+        tanggal_lahir: item.tanggal_lahir ? new Date(item.tanggal_lahir).toLocaleDateString("id-ID") : "",
+        kategori: exportRow.kategori.toUpperCase(),
+        status_domisili: exportRow.status_domisili ? exportRow.status_domisili.toUpperCase() : "",
         nama_posyandu: item.posyandu?.nama_posyandu || "-",
         rtrw: `${item.rt || "-"}/${item.rw || "-"}`,
-        status_domisili: item.status_domisili.toUpperCase(),
       });
     });
 
