@@ -92,6 +92,7 @@ const exportRujukanPdf = async (req, res, next) => {
     document.text(`Kader: ${referral.kader?.nama_lengkap || "-"}`);
     document.moveDown();
     document.text(`Alasan Rujukan: ${referral.alasan_rujukan}`);
+    document.text(`Kehadiran Rujukan: ${referral.status_kehadiran_rujukan || "Belum diketahui"}`);
     document.moveDown();
     document.text("Pemeriksaan Terkait", { underline: true });
     document.text(`ID Pemeriksaan: ${referral.pemeriksaan?.id || "-"}`);

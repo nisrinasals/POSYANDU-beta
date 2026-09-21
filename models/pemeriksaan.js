@@ -54,9 +54,20 @@ module.exports = (sequelize, DataTypes) => {
       kadar_gula: {
         type: DataTypes.INTEGER,
       },
+      zscore_bbu: { type: DataTypes.DECIMAL(8, 4) },
+      zscore_pbu: { type: DataTypes.DECIMAL(8, 4) },
+      zscore_tbu: { type: DataTypes.DECIMAL(8, 4) },
+      zscore_bbpb: { type: DataTypes.DECIMAL(8, 4) },
+      zscore_bbtb: { type: DataTypes.DECIMAL(8, 4) },
+      zscore_imtu: { type: DataTypes.DECIMAL(8, 4) },
       detail_skrining: {
         type: DataTypes.JSONB,
         defaultValue: {},
+      },
+      screening_history: {
+        type: DataTypes.JSONB,
+        allowNull: false,
+        defaultValue: [],
       },
       topik_penyuluhan: {
         type: DataTypes.TEXT,

@@ -1,5 +1,7 @@
 "use strict";
 
+const { getScreeningEligibility } = require("../screeningEligibilityHelper");
+
 const REKAP_GROUPS = Object.freeze({
   bumil_nifas_menyusui: ["bumil", "busui"],
   bayi_balita_apras: ["bayi", "balita", "apras"],
@@ -224,9 +226,9 @@ const mapChildRow = (records, period) => {
   }
   row.bergejala_tbc = countTrue(records, tbcTriggered);
   row.mendapatkan_edukasi = countTrue(records, educationGiven);
-  row.asi_eksklusif = countTrue(records, (record) => getDetail(record, "pelayanan_kesehatan.is_asi_eksklusif") === true);
-  row.mpasi = countTrue(records, (record) => getDetail(record, "pelayanan_kesehatan.is_mp_asi") === true);
-  row.vitamin_a = countTrue(records, (record) => getDetail(record, "pelayanan_kesehatan.is_vit_a_given") === true);
+  row.asi_eksklusif = countTrue(records, (record) => getScreeningEligibility(record.kunjungan?.warga?.tanggal_lahir, record.tanggal).is_asi_eksklusif_active && getDetail(record, "pelayanan_kesehatan.is_asi_eksklusif") === true);
+  row.mpasi = countTrue(records, (record) => getScreeningEligibility(record.kunjungan?.warga?.tanggal_lahir, record.tanggal).is_mpasi_active && getDetail(record, "pelayanan_kesehatan.is_mp_asi") === true);
+  row.vitamin_a = countTrue(records, (record) => getScreeningEligibility(record.kunjungan?.warga?.tanggal_lahir, record.tanggal).is_vitamin_a_active && getDetail(record, "pelayanan_kesehatan.is_vit_a_given") === true);
   row.obat_cacing = countTrue(records, (record) => getDetail(record, "pelayanan_kesehatan.is_obat_cacing_given") === true);
   row.pmt_pangan_lokal = countTrue(records, (record) => getDetail(record, "pelayanan_kesehatan.is_pmt_lokal_pemulihan") === true);
   row.imunisasi = countTrue(records, (record) => hasImmunizationInPeriod(record, period));

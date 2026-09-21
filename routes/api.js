@@ -12,12 +12,13 @@ const imunisasiController = require("../controllers/imunisasiController");
 const rujukanController = require("../controllers/rujukanController");
 
 const uploadProfilePicture = require("../middleware/uploadProfilePicture");
-const { authenticateToken, authorize } = require("../middleware/authMiddleware");
+const { authenticateToken, authorize, denyDinkesPersonalData } = require("../middleware/authMiddleware");
 const { validator, validateResult } = require("../middleware/validationReporter");
 
 const api = express.Router();
 
 const authenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin", "sa")];
+const personalAuthenticated = [...authenticated, denyDinkesPersonalData];
 
 // ======================================================
 // Authentication routes
@@ -42,24 +43,24 @@ api.get("/posyandu/:id", authenticated, validator.posyandu.getPosyanduById, vali
 // Warga routes
 // ======================================================
 
-api.get("/warga", authenticated, validator.warga.listFilters, validateResult, wargaController.getAllWarga);
-api.get("/warga/export", authenticated, validator.warga.listFilters, validateResult, wargaController.exportWargaExcel);
+api.get("/warga", personalAuthenticated, validator.warga.listFilters, validateResult, wargaController.getAllWarga);
+api.get("/warga/export", personalAuthenticated, validator.warga.listFilters, validateResult, wargaController.exportWargaExcel);
 api.get("/warga/statistik-sasaran", authenticated, wargaController.getStatistikSasaran);
-api.get("/warga/:id", authenticated, validator.warga.getWargaById, validateResult, wargaController.getWargaById);
-api.post("/warga", authenticated, validator.warga.createWarga, validateResult, wargaController.createWarga);
-api.put("/warga/:id", authenticated, validator.warga.getWargaById, validator.warga.updateWarga, validateResult, wargaController.updateWarga);
-api.patch("/warga/:id/status-domisili", authenticated, validator.warga.getWargaById, validator.warga.updateStatusDomisili, validateResult, wargaController.updateStatusDomisili);
-api.post("/warga/mutasi/verify", authenticated, validator.warga.verifyMutasi, validateResult, wargaController.verifyMutasiWarga);
-api.patch("/warga/mutasi/confirm", authenticated, validator.warga.confirmMutasi, validateResult, wargaController.confirmMutasiWarga);
+api.get("/warga/:id", personalAuthenticated, validator.warga.getWargaById, validateResult, wargaController.getWargaById);
+api.post("/warga", personalAuthenticated, validator.warga.createWarga, validateResult, wargaController.createWarga);
+api.put("/warga/:id", personalAuthenticated, validator.warga.getWargaById, validator.warga.updateWarga, validateResult, wargaController.updateWarga);
+api.patch("/warga/:id/status-domisili", personalAuthenticated, validator.warga.getWargaById, validator.warga.updateStatusDomisili, validateResult, wargaController.updateStatusDomisili);
+api.post("/warga/mutasi/verify", personalAuthenticated, validator.warga.verifyMutasi, validateResult, wargaController.verifyMutasiWarga);
+api.patch("/warga/mutasi/confirm", personalAuthenticated, validator.warga.confirmMutasi, validateResult, wargaController.confirmMutasiWarga);
 
 // ======================================================
 // Imunisasi routes
 // ======================================================
 
-api.get("/imunisasi/warga/:warga_id", authenticated, validator.imunisasi.wargaParam, validateResult, imunisasiController.getImunisasiByWarga);
-api.get("/imunisasi/:id", authenticated, validator.imunisasi.id, validateResult, imunisasiController.getImunisasiById);
-api.post("/imunisasi", authenticated, validator.imunisasi.create, validateResult, imunisasiController.createImunisasi);
-api.put("/imunisasi/:id", authenticated, validator.imunisasi.update, validateResult, imunisasiController.updateImunisasi);
+api.get("/imunisasi/warga/:warga_id", personalAuthenticated, validator.imunisasi.wargaParam, validateResult, imunisasiController.getImunisasiByWarga);
+api.get("/imunisasi/:id", personalAuthenticated, validator.imunisasi.id, validateResult, imunisasiController.getImunisasiById);
+api.post("/imunisasi", personalAuthenticated, validator.imunisasi.create, validateResult, imunisasiController.createImunisasi);
+api.put("/imunisasi/:id", personalAuthenticated, validator.imunisasi.update, validateResult, imunisasiController.updateImunisasi);
 
 // ======================================================
 // Sesi Posyandu routes
@@ -91,44 +92,45 @@ api.patch("/users/:id/status", authenticateToken, authorize("puskesmasAdmin", "d
 // Kehamilan routes
 // ======================================================
 
-api.get("/kehamilan/warga/:warga_id", authenticated, validator.kehamilan.getKehamilanByWarga, validateResult, kehamilanController.getKehamilanByWarga);
-api.get("/kehamilan/:id", authenticated, validator.kehamilan.getKehamilanById, validateResult, kehamilanController.getKehamilanById);
-api.post("/kehamilan", authenticated, validator.kehamilan.createKehamilan, validateResult, kehamilanController.createKehamilan);
-api.put("/kehamilan/:id", authenticated, validator.kehamilan.updateKehamilan, validateResult, kehamilanController.updateKehamilan);
-api.patch("/kehamilan/:id/status", authenticated, validator.kehamilan.updateStatusKehamilan, validateResult, kehamilanController.updateStatusKehamilan);
+api.get("/kehamilan/warga/:warga_id", personalAuthenticated, validator.kehamilan.getKehamilanByWarga, validateResult, kehamilanController.getKehamilanByWarga);
+api.get("/kehamilan/:id", personalAuthenticated, validator.kehamilan.getKehamilanById, validateResult, kehamilanController.getKehamilanById);
+api.post("/kehamilan", personalAuthenticated, validator.kehamilan.createKehamilan, validateResult, kehamilanController.createKehamilan);
+api.put("/kehamilan/:id", personalAuthenticated, validator.kehamilan.updateKehamilan, validateResult, kehamilanController.updateKehamilan);
+api.patch("/kehamilan/:id/status", personalAuthenticated, validator.kehamilan.updateStatusKehamilan, validateResult, kehamilanController.updateStatusKehamilan);
 
 // ======================================================
 // Kunjungan routes
 // ======================================================
 
-api.post("/kunjungan", authenticated, validator.kunjungan.createKunjungan, validateResult, kunjunganController.createKunjungan);
-api.get("/kunjungan/antrean-hari-ini", authenticated, validator.kunjungan.antreanHariIni, validateResult, kunjunganController.getAntreanHariIni);
-api.get("/kunjungan", authenticated, validator.kunjungan.listFilters, validateResult, kunjunganController.getAllKunjungan);
-api.get("/kunjungan/:id", authenticated, validator.kunjungan.idOnly, validateResult, kunjunganController.getKunjunganById);
-api.patch("/kunjungan/:id/status-langkah", authenticated, validator.kunjungan.updateStatusLangkah, validateResult, kunjunganController.updateStatusLangkah);
-api.delete("/kunjungan/:id", authenticated, validator.kunjungan.idOnly, validateResult, kunjunganController.deleteKunjungan);
+api.post("/kunjungan", personalAuthenticated, validator.kunjungan.createKunjungan, validateResult, kunjunganController.createKunjungan);
+api.get("/kunjungan/antrean-hari-ini", personalAuthenticated, validator.kunjungan.antreanHariIni, validateResult, kunjunganController.getAntreanHariIni);
+api.get("/kunjungan", personalAuthenticated, validator.kunjungan.listFilters, validateResult, kunjunganController.getAllKunjungan);
+api.get("/kunjungan/:id", personalAuthenticated, validator.kunjungan.idOnly, validateResult, kunjunganController.getKunjunganById);
+api.patch("/kunjungan/:id/status-langkah", personalAuthenticated, validator.kunjungan.updateStatusLangkah, validateResult, kunjunganController.updateStatusLangkah);
+api.delete("/kunjungan/:id", personalAuthenticated, validator.kunjungan.idOnly, validateResult, kunjunganController.deleteKunjungan);
 
 // ======================================================
 // Pemeriksaan routes
 // ======================================================
 
-api.get("/pemeriksaan", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.getAllPemeriksaan);
+api.get("/pemeriksaan", personalAuthenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.getAllPemeriksaan);
 api.get("/pemeriksaan/export", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.exportPemeriksaanExcel);
-api.get("/pemeriksaan/:id/step-3", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getStep3Pemeriksaan);
-api.get("/pemeriksaan/:id", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getPemeriksaanById);
-api.post("/pemeriksaan", authenticated, validator.pemeriksaan.createPemeriksaan, validateResult, pemeriksaanController.createPemeriksaan);
-api.post("/pemeriksaan/step-2", authenticated, validator.pemeriksaan.saveStep2, validateResult, pemeriksaanController.saveStep2);
-api.post("/pemeriksaan/step-4", authenticated, validator.pemeriksaan.saveStep4, validateResult, pemeriksaanController.saveStep4);
-api.post("/pemeriksaan/step-5", authenticated, validator.pemeriksaan.saveStep5, validateResult, pemeriksaanController.saveStep5);
-api.put("/pemeriksaan/:id", authenticated, validator.pemeriksaan.updatePemeriksaan, validateResult, pemeriksaanController.updatePemeriksaan);
-api.delete("/pemeriksaan/:id", authenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.deletePemeriksaan);
+api.get("/pemeriksaan/:id/step-3", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getStep3Pemeriksaan);
+api.get("/pemeriksaan/:id/screening-history", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getScreeningHistory);
+api.get("/pemeriksaan/:id", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getPemeriksaanById);
+api.post("/pemeriksaan", personalAuthenticated, validator.pemeriksaan.createPemeriksaan, validateResult, pemeriksaanController.createPemeriksaan);
+api.post("/pemeriksaan/step-2", personalAuthenticated, validator.pemeriksaan.saveStep2, validateResult, pemeriksaanController.saveStep2);
+api.post("/pemeriksaan/step-4", personalAuthenticated, validator.pemeriksaan.saveStep4, validateResult, pemeriksaanController.saveStep4);
+api.post("/pemeriksaan/step-5", personalAuthenticated, validator.pemeriksaan.saveStep5, validateResult, pemeriksaanController.saveStep5);
+api.put("/pemeriksaan/:id", personalAuthenticated, validator.pemeriksaan.updatePemeriksaan, validateResult, pemeriksaanController.updatePemeriksaan);
+api.delete("/pemeriksaan/:id", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.deletePemeriksaan);
 
 // ======================================================
 // Rujukan routes
 // ======================================================
 
-api.get("/rujukan", authenticated, validator.rujukan.listFilters, validateResult, rujukanController.getAllRujukan);
-api.get("/rujukan/:id/export", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.exportRujukanPdf);
-api.get("/rujukan/:id", authenticated, validator.rujukan.idOnly, validateResult, rujukanController.getRujukanById);
+api.get("/rujukan", personalAuthenticated, validator.rujukan.listFilters, validateResult, rujukanController.getAllRujukan);
+api.get("/rujukan/:id/export", personalAuthenticated, validator.rujukan.idOnly, validateResult, rujukanController.exportRujukanPdf);
+api.get("/rujukan/:id", personalAuthenticated, validator.rujukan.idOnly, validateResult, rujukanController.getRujukanById);
 
 module.exports = api;

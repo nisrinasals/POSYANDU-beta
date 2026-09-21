@@ -35,6 +35,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         allowNull: false,
       },
+      status_kehadiran_rujukan: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        validate: { isIn: [["hadir", "tidak_hadir"]] },
+      },
     },
     {
       tableName: "rujukan",

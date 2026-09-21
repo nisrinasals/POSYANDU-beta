@@ -3,6 +3,7 @@
 const { ProfileKehamilan, Warga, Posyandu } = require("../models");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
+const { validateHphtAgainstDate } = require("../utils/pregnancyHelper");
 
 const VALID_STATUS = ["hamil", "nifas", "menyusui", "selesai"];
 
@@ -18,6 +19,8 @@ const validatePregnancyCombination = (payload, current = {}) => {
   if (status === "menyusui" && !isMenyusui) return "is_menyusui harus bernilai true saat status kehamilan menyusui.";
   if (["nifas", "menyusui"].includes(status) && !tanggalPersalinan) return "tanggal_persalinan wajib diisi untuk status nifas atau menyusui.";
   if (status === "hamil" && tanggalPersalinan) return "tanggal_persalinan harus kosong saat status kehamilan hamil.";
+  const hphtError = validateHphtAgainstDate(hpht, payload.tanggal_pemeriksaan || new Date());
+  if (hphtError) return hphtError;
 
   if (hpht && hpl && new Date(hpl) < new Date(hpht)) return "hpl tidak boleh lebih awal dari hpht.";
   if (hpht && tanggalPersalinan && new Date(tanggalPersalinan) < new Date(hpht)) return "tanggal_persalinan tidak boleh lebih awal dari hpht.";
@@ -113,6 +116,9 @@ const updateKehamilan = async (req, res, next) => {
     const payload = Object.fromEntries(Object.entries(req.body).filter(([field]) => allowedFields.includes(field)));
     const combinationError = validatePregnancyCombination(payload, data);
     if (combinationError) return res.status(400).json({ success: false, message: combinationError });
+    if (["nifas", "menyusui", "selesai"].includes(data.status_kehamilan) && payload.status_kehamilan === "hamil") {
+      return res.status(400).json({ success: false, message: "Kehamilan baru harus dibuat sebagai profile kehamilan baru; history kehamilan lama tidak boleh ditimpa." });
+    }
     const oldValue = allowedFields.reduce((acc, field) => ({ ...acc, [field]: data[field] }), {});
     await data.update(payload);
 
@@ -143,6 +149,9 @@ const updateStatusKehamilan = async (req, res, next) => {
     if (req.body.tanggal_persalinan !== undefined) payload.tanggal_persalinan = req.body.tanggal_persalinan;
     const combinationError = validatePregnancyCombination(payload, data);
     if (combinationError) return res.status(400).json({ success: false, message: combinationError });
+    if (["nifas", "menyusui", "selesai"].includes(data.status_kehamilan) && payload.status_kehamilan === "hamil") {
+      return res.status(400).json({ success: false, message: "Kehamilan baru harus dibuat sebagai profile kehamilan baru; history kehamilan lama tidak boleh ditimpa." });
+    }
     const oldValue = { status_kehamilan: data.status_kehamilan, is_menyusui: data.is_menyusui, tanggal_persalinan: data.tanggal_persalinan };
     await data.update(payload);
 

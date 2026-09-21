@@ -493,6 +493,13 @@ All Pemeriksaan routes use role set A. Kader mutations are additionally checked 
 - **Success:** `200`, `{ success: true, message, data }` containing the stored measurements and plot/evaluation output.
 - **Errors:** `400` invalid ID; `404` missing/out-of-scope examination; `401/403/500`.
 - **Dependency:** Step 2 must have supplied the measurements used by this read-only calculation; this endpoint does not write them.
+- **Additional data:** `z_scores`, `growth_history`, `usia_kehamilan` (when HPHT exists), and `screening_eligibility` are included without removing existing fields.
+
+### `GET /pemeriksaan/:id/screening-history`
+
+- **Purpose:** Return repeated screening submissions for the examination's Warga.
+- **Success:** `200`, `{ success: true, data: { last_filled_at, latest, history } }`; history is sorted newest first.
+- **Scope:** Protected and scoped through the examination's session Posyandu.
 
 ### `POST /pemeriksaan`
 
@@ -520,11 +527,12 @@ All Pemeriksaan routes use role set A. Kader mutations are additionally checked 
 - **Success:** `200`, `{ success: true, message, data }`.
 - **Errors:** `400` invalid screening/category/scoring; `404` missing/out-of-scope visit; `401/403/500`.
 - **Dependency:** Uses the examination/category established by earlier steps. Its scored `detail_skrining` is read by Step 5 to derive referral reasons.
+- **History:** Repeated annual submissions are retained in `screening_history`; same-year submissions are not blocked or overwritten.
 
 ### `POST /pemeriksaan/step-5`
 
 - **Purpose:** Save education, finalize the examination, and create/update/delete its Rujukan.
-- **Body:** Required `kunjungan_id`. Optional `topik_penyuluhan` (max 500), `is_perlu_rujukan` boolean, `alasan_rujukan` (max 1000). Path/query: none.
+- **Body:** Required `kunjungan_id`. Optional `topik_penyuluhan` (max 500), `is_perlu_rujukan` boolean, `alasan_rujukan` (max 1000), `status_kehadiran_rujukan` (`hadir`/`tidak_hadir`). Path/query: none.
 - **Success:** `200`, `{ success: true, message, data, rujukan }`; visit status becomes `langkah_5`.
 - **Errors:** `400` missing manual reason when referral is explicitly true without a screening trigger, missing Warga Puskesmas, invalid body/session; `404` missing/out-of-scope visit; `401/403/500`.
 - **Dependency/transaction:** Requires the Step 4 screening state when referral reasons are derived. Known true screening triggers override a manual reason. The examination and Rujukan mutation run in one transaction; `true` creates/updates Rujukan, `false` deletes it.
