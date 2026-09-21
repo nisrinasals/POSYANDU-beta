@@ -13,6 +13,7 @@ const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../u
 const { calculateGrowthZScores } = require("../utils/growthZScoreHelper");
 const { calculatePregnancyAge, validateHphtAgainstDate } = require("../utils/pregnancyHelper");
 const { getScreeningEligibility, validateIrreversibleAsi } = require("../utils/screeningEligibilityHelper");
+const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -554,6 +555,7 @@ const createPemeriksaan = async (req, res, next) => {
       detail_skrining,
       topik_penyuluhan,
       is_perlu_rujukan,
+      alasan_rujukan,
     } = req.body;
 
     if (kategoriInput !== undefined && !VALID_KATEGORI.includes(kategoriInput)) {
@@ -564,12 +566,20 @@ const createPemeriksaan = async (req, res, next) => {
     if (measurementError) return res.status(400).json({ success: false, message: measurementError });
 
     const { kunjungan, pemeriksaan, created, tglPemeriksaan, totalMonths, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user, tanggal);
+    if (profile_kehamilan_id) {
+      const selectedProfile = await ProfileKehamilan.findOne({ where: { id: profile_kehamilan_id, warga_id: kunjungan.warga_id } });
+      if (!selectedProfile) return res.status(400).json({ success: false, message: "profile_kehamilan_id tidak dimiliki oleh warga pada pemeriksaan ini." });
+    }
 
     const kategoriAkhir = kategoriFix;
 
     // Pengecekan Skrining Tahunan (Khusus Dewasa & Lansia)
     let isTahunanFix = false;
     if (["dewasa", "lansia"].includes(kategoriAkhir)) {
+      const targetYear = new Date(tglPemeriksaan).getFullYear();
+      if (is_skrining_tahunan && (await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear, pemeriksaan.id))) {
+        return res.status(409).json({ success: false, message: "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut." });
+      }
       isTahunanFix = Boolean(is_skrining_tahunan);
     }
 
@@ -586,6 +596,9 @@ const createPemeriksaan = async (req, res, next) => {
       jiwaProvided: Boolean(detail_skrining?.skrining_kesehatan_jiwa),
     });
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
+    if (is_perlu_rujukan === true && getScreeningReferralReasons(scoredSkrining.detail).length === 0 && !String(alasan_rujukan || "").trim()) {
+      return res.status(400).json({ success: false, message: "alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening." });
+    }
 
     // Update Data Pemeriksaan ke DB (Upsert Safe)
     const oldValue = created ? null : pemeriksaanAuditSnapshot(pemeriksaan);
@@ -691,6 +704,10 @@ const saveStep4 = async (req, res, next) => {
     const { kunjungan_id, detail_skrining, is_skrining_tahunan, profile_kehamilan_id } = req.body;
 
     const { kunjungan, pemeriksaan, tglPemeriksaan, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user);
+    if (profile_kehamilan_id) {
+      const selectedProfile = await ProfileKehamilan.findOne({ where: { id: profile_kehamilan_id, warga_id: kunjungan.warga_id } });
+      if (!selectedProfile) return res.status(400).json({ success: false, message: "profile_kehamilan_id tidak dimiliki oleh warga pada pemeriksaan ini." });
+    }
 
     const screeningError = getScreeningError(kategoriFix, detail_skrining);
     if (screeningError) return res.status(400).json({ success: false, message: screeningError });
@@ -698,6 +715,10 @@ const saveStep4 = async (req, res, next) => {
     // Pengecekan Skrining Tahunan
     let isTahunanFix = false;
     if (["dewasa", "lansia"].includes(kategoriFix)) {
+      const targetYear = new Date(tglPemeriksaan).getFullYear();
+      if (is_skrining_tahunan && (await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear, pemeriksaan.id))) {
+        return res.status(409).json({ success: false, message: "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut." });
+      }
       isTahunanFix = Boolean(is_skrining_tahunan);
     }
 
@@ -902,6 +923,11 @@ const updatePemeriksaan = async (req, res, next) => {
     }
 
     const kategoriAktif = tentukanKategoriAktif(pemeriksaan.kunjungan.warga.tanggal_lahir, pemeriksaan.kunjungan.warga.profileKehamilan, targetTanggal);
+    const selectedProfile = profile_kehamilan_id ? await ProfileKehamilan.findOne({ where: { id: profile_kehamilan_id, warga_id: pemeriksaan.kunjungan.warga_id }, transaction }) : null;
+    if (profile_kehamilan_id && !selectedProfile) throw createPemeriksaanError(400, "profile_kehamilan_id tidak dimiliki oleh warga pada pemeriksaan ini.");
+    const profileForDate = selectedProfile || getLatestPregnancyProfile(pemeriksaan.kunjungan.warga.profileKehamilan || []);
+    const hphtError = validateHphtAgainstDate(profileForDate?.hpht, targetTanggal);
+    if (hphtError) throw createPemeriksaanError(400, hphtError);
 
     // Format ulang detail_skrining jika ada update payload JSONB
     let updatedDetailSkrining = pemeriksaan.detail_skrining;
@@ -911,6 +937,9 @@ const updatePemeriksaan = async (req, res, next) => {
       if (screeningError) throw createPemeriksaanError(400, screeningError);
       let isTahunan = false;
       if (["dewasa", "lansia"].includes(kategoriAktif)) isTahunan = Boolean(is_skrining_tahunan ?? pemeriksaan.detail_skrining?.is_skrining_tahunan);
+      if (isTahunan && (await checkSudahSkriningTahunan(pemeriksaan.kunjungan.warga_id, new Date(targetTanggal).getFullYear(), pemeriksaan.id))) {
+        throw createPemeriksaanError(409, "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut.");
+      }
 
       updatedDetailSkrining = formatDetailSkrining(kategoriAktif, screeningInput, isTahunan, pemeriksaan.detail_skrining);
       const scoredSkrining = finalizeScreeningScores(kategoriAktif, updatedDetailSkrining, pemeriksaan.kunjungan.warga, {
@@ -955,6 +984,7 @@ const updatePemeriksaan = async (req, res, next) => {
         ...growthScores,
         screening_history: detail_skrining !== undefined ? appendScreeningHistory(pemeriksaan, updatedDetailSkrining, targetTanggal) : pemeriksaan.screening_history,
         ...(detail_skrining !== undefined ? { step4_completed_at: new Date() } : {}),
+        ...(topik_penyuluhan !== undefined || is_perlu_rujukan !== undefined || alasan_rujukan !== undefined || status_kehadiran_rujukan !== undefined ? { step5_completed_at: new Date() } : {}),
       },
       { transaction },
     );

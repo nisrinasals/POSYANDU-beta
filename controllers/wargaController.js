@@ -4,7 +4,7 @@ const ExcelJS = require("exceljs");
 const { tentukanKategori, tentukanKategoriAktif, hitungUmur, hitungRekapSasaran } = require("../utils/kategoriHelper");
 const { canAccessPosyandu, getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
-const { SASARAN_EXPORT_COLUMNS, formatSasaranRow } = require("../utils/export/sasaranExportHelper");
+const { getSasaranExportColumns, formatSasaranRow } = require("../utils/export/sasaranExportHelper");
 
 // 9 Kategori Sasaran Resmi ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -667,7 +667,7 @@ const exportWargaExcel = async (req, res, next) => {
     const worksheet = workbook.addWorksheet("Data Sasaran Warga");
 
     worksheet.columns = [
-      ...SASARAN_EXPORT_COLUMNS.map(({ key, label }) => ({ header: label, key, width: key === "nama_lengkap" ? 25 : key === "alamat" ? 30 : 18 })),
+      ...getSasaranExportColumns(activeCategoryFilter).map(({ key, label }) => ({ header: label, key, width: key === "nama_lengkap" ? 25 : key === "alamat" ? 30 : 18 })),
       { header: "Posyandu", key: "nama_posyandu", width: 20 },
       { header: "RT / RW", key: "rtrw", width: 12 },
     ];

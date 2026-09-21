@@ -5,6 +5,8 @@ const referenceTable = require("./reference/referenceTableAdapter");
 const normalizeGender = (gender) => (gender === "L" || gender === "laki-laki" || gender === "male" ? "laki-laki" : "perempuan");
 const getTable = (index, gender, ageMonths) => {
   const candidates = referenceTable.tables.filter((table) => table.index === index && table.gender === normalizeGender(gender));
+  if (index === "IMT/U")
+    return candidates.find((table) => table.selectForAge?.(ageMonths) === table) || candidates.find((table) => table.age_range === (ageMonths < 24 ? "0-24 bulan" : ageMonths <= 60 ? "24-60 bulan" : "5-18 tahun")) || null;
   return candidates.find((table) => table.rows.some((row) => Number(row.age_months) === Number(ageMonths))) || candidates[0] || null;
 };
 const getRow = (index, gender, ageMonths, lookupKey = "age_months", lookupValue = ageMonths) => {

@@ -31,6 +31,25 @@ const SASARAN_EXPORT_COLUMNS = Object.freeze([
   { key: "status_domisili", label: "Status Domisili" },
 ]);
 
+const SASARAN_BASE_COLUMNS = new Set(["no", "nik", "nama_lengkap", "jenis_kelamin", "tanggal_lahir", "usia", "kategori", "alamat", "rt", "rw", "telepon", "nama_ibu", "nama_ayah", "status_perkawinan", "pekerjaan", "status_domisili"]);
+const CATEGORY_EXPORT_COLUMNS = Object.freeze({
+  bumil: new Set(["bumil"]),
+  busui: new Set(["menyusui"]),
+  bayi: new Set(["bayi"]),
+  balita: new Set(["balita"]),
+  apras: new Set(["apras"]),
+  uskrem_6_14: new Set(["usia_sekolah"]),
+  uskrem_15_18: new Set(["remaja"]),
+  dewasa: new Set(["dewasa"]),
+  lansia: new Set(["lansia"]),
+});
+
+const getSasaranExportColumns = (category) => {
+  if (!category || !CATEGORY_EXPORT_COLUMNS[category]) return SASARAN_EXPORT_COLUMNS;
+  const allowed = new Set([...SASARAN_BASE_COLUMNS, ...CATEGORY_EXPORT_COLUMNS[category]]);
+  return SASARAN_EXPORT_COLUMNS.filter(({ key }) => allowed.has(key));
+};
+
 const getLatestProfile = (profiles = []) => {
   if (!Array.isArray(profiles) || profiles.length === 0) return null;
   return [...profiles].sort((left, right) => Number(right.id || 0) - Number(left.id || 0))[0];
@@ -83,4 +102,4 @@ const formatSasaranRow = (warga = {}, index = 0, referenceDate = new Date()) => 
   };
 };
 
-module.exports = { SASARAN_EXPORT_COLUMNS, formatSasaranRow, getCategoryResult, getExportIndicators, getLatestProfile };
+module.exports = { SASARAN_EXPORT_COLUMNS, getSasaranExportColumns, formatSasaranRow, getCategoryResult, getExportIndicators, getLatestProfile };

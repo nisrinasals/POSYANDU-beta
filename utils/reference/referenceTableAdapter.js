@@ -45,11 +45,28 @@ const getRows = (sheet) => {
     });
 };
 
+const selectAgeTable = (candidates, index, ageMonths) => {
+  if (index !== "IMT/U") return candidates.find((table) => table.rows.some((row) => Number(row.age_months) === Number(ageMonths))) || candidates[0] || null;
+  if (ageMonths < 24) return candidates.find((table) => table.age_range === "0-24 bulan") || null;
+  if (ageMonths <= 60) return candidates.find((table) => table.age_range === "24-60 bulan") || null;
+  return candidates.find((table) => table.age_range === "5-18 tahun") || null;
+};
+
 const tables = source.sheets.map((sheet) => ({
   index: sheetToIndex(sheet.sheet_name),
   gender: getGender(sheet.sheet_name),
   age_range: getAgeRange(sheet.sheet_name),
   rows: getRows(sheet),
 }));
+
+const originalTables = tables.slice();
+tables.forEach((table) => {
+  table.selectForAge = (ageMonths) =>
+    selectAgeTable(
+      originalTables.filter((candidate) => candidate.index === table.index && candidate.gender === table.gender),
+      table.index,
+      ageMonths,
+    );
+});
 
 module.exports = { source, tables };
