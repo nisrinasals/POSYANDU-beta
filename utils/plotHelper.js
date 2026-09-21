@@ -3,7 +3,7 @@
  * File: utils/plotHelper.js
  */
 
-const referenceTable = require("./referenceTable.json");
+const referenceTable = require("./reference/referenceTableAdapter");
 
 // ----------------------------------------------------------------------
 // 1. DATA ACUAN STANDAR PLOT ILP POSYANDU PER KATEGORI SASARAN

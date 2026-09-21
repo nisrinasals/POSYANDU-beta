@@ -1,6 +1,7 @@
 const { KunjunganPosyandu, SesiPosyandu, Warga, Posyandu, Pemeriksaan } = require("../models");
 const { Op } = require("sequelize");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
+const { getDatabaseDate } = require("../utils/sesiPosyanduHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 const { isExaminationComplete } = require("../utils/examinationCompletionHelper");
 
@@ -113,18 +114,12 @@ const getAntreanHariIni = async (req, res, next) => {
   try {
     const { sesi_posyandu_id, search } = req.query;
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
     const whereCondition = {};
 
     if (sesi_posyandu_id) {
       whereCondition.sesi_posyandu_id = sesi_posyandu_id;
     } else {
-      whereCondition["$sesiPosyandu.tanggal_pelaksanaan$"] = new Date().toISOString().slice(0, 10);
+      whereCondition["$sesiPosyandu.tanggal_pelaksanaan$"] = await getDatabaseDate();
     }
 
     const wargaWhere = {};

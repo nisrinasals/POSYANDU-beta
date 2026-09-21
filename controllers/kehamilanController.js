@@ -88,6 +88,10 @@ const createKehamilan = async (req, res, next) => {
     const payloadWithDefault = { ...payload, status_kehamilan: payload.status_kehamilan || "hamil", is_menyusui: payload.is_menyusui ?? false };
     const combinationError = validatePregnancyCombination(payloadWithDefault);
     if (combinationError) return res.status(400).json({ success: false, message: combinationError });
+    if (payloadWithDefault.status_kehamilan === "hamil") {
+      const activePregnancy = await ProfileKehamilan.findOne({ where: { warga_id, status_kehamilan: "hamil" } });
+      if (activePregnancy) return res.status(409).json({ success: false, message: "Warga sudah memiliki profil kehamilan aktif." });
+    }
     const data = await ProfileKehamilan.create({ warga_id, ...payloadWithDefault });
 
     await createAuditLog({
@@ -101,6 +105,7 @@ const createKehamilan = async (req, res, next) => {
 
     return res.status(201).json({ success: true, message: "Data kehamilan berhasil ditambahkan.", data });
   } catch (error) {
+    if (error?.name === "SequelizeUniqueConstraintError") return res.status(409).json({ success: false, message: "Warga sudah memiliki profil kehamilan aktif." });
     next(error);
   }
 };

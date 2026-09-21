@@ -608,9 +608,6 @@ const createPemeriksaan = async (req, res, next) => {
       topik_penyuluhan: topik_penyuluhan || null,
       is_perlu_rujukan: is_perlu_rujukan ?? false,
       ...growthScores,
-      step2_completed_at: new Date(),
-      step4_completed_at: new Date(),
-      step5_completed_at: new Date(),
     });
 
     // Update status kunjungan ke langkah 5 (Selesai)

@@ -1,6 +1,6 @@
 "use strict";
 
-const referenceTable = require("./referenceTable.json");
+const referenceTable = require("./reference/referenceTableAdapter");
 
 const normalizeGender = (gender) => (gender === "L" || gender === "laki-laki" || gender === "male" ? "laki-laki" : "perempuan");
 const getTable = (index, gender, ageMonths) => {
