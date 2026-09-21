@@ -8,12 +8,12 @@ const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
-const { getScreeningReferralReasons } = require("../utils/rujukanHelper");
+const { getScreeningReferralReasons, getPlotReferralReasons, getCombinedReferralReasons } = require("../utils/rujukanHelper");
 const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../utils/export/rekapExportHelper");
 const { calculateGrowthZScores } = require("../utils/growthZScoreHelper");
 const { calculatePregnancyAge, validateHphtAgainstDate } = require("../utils/pregnancyHelper");
 const { getScreeningEligibility, validateIrreversibleAsi } = require("../utils/screeningEligibilityHelper");
-const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
+const { checkSudahSkriningTahunan, getPreviousAnnualScreening } = require("../utils/skriningChecker");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -231,6 +231,16 @@ const getAllPemeriksaan = async (req, res, next) => {
 const exportPemeriksaanExcel = async (req, res, next) => {
   try {
     const { page, limit, search, kategori_sasaran, sesi_posyandu_id, posyandu_id, start_date, end_date } = req.query;
+
+    if (["dinkes", "dinkesAdmin"].includes(req.user?.role)) {
+      if (search || req.query.warga_id) {
+        return res.status(400).json({
+          success: false,
+          message: "Role Dinkes tidak diizinkan menggunakan filter pencarian personal (search/warga_id).",
+        });
+      }
+    }
+
     const pemeriksaanWhere = {};
     const sesiWhere = {};
     const wargaWhere = {};
@@ -345,10 +355,20 @@ const getPemeriksaanById = async (req, res, next) => {
       throw createPemeriksaanError(404, "Data pemeriksaan tidak ditemukan.");
     }
 
+    const targetYear = new Date(pemeriksaan.tanggal).getFullYear();
+    const prevAnnual = pemeriksaan.kunjungan?.warga_id
+      ? await getPreviousAnnualScreening(pemeriksaan.kunjungan.warga_id, targetYear, pemeriksaan.id)
+      : null;
+    const isAnnualCompleted = Boolean(prevAnnual || pemeriksaan.detail_skrining?.is_skrining_tahunan === true);
+
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil detail data pemeriksaan.",
-      data: pemeriksaan,
+      data: {
+        ...pemeriksaan.toJSON(),
+        is_annual_screening_completed: isAnnualCompleted,
+        previous_annual_screening: prevAnnual ? { id: prevAnnual.id, tanggal: prevAnnual.tanggal, detail_skrining: prevAnnual.detail_skrining } : null,
+      },
     });
   } catch (error) {
     next(error);
@@ -358,7 +378,7 @@ const getPemeriksaanById = async (req, res, next) => {
 const getScreeningHistory = async (req, res, next) => {
   try {
     const current = await Pemeriksaan.findByPk(req.params.id, {
-      attributes: ["id", "tanggal", "screening_history"],
+      attributes: ["id", "tanggal", "screening_history", "detail_skrining"],
       include: [
         {
           model: KunjunganPosyandu,
@@ -371,10 +391,22 @@ const getScreeningHistory = async (req, res, next) => {
     });
     if (!current) return res.status(404).json({ success: false, message: "Data pemeriksaan tidak ditemukan." });
     const history = (Array.isArray(current.screening_history) ? current.screening_history : []).sort((left, right) => new Date(right.tanggal) - new Date(left.tanggal));
+    const targetYear = new Date(current.tanggal).getFullYear();
+    const prevAnnual = current.kunjungan?.warga_id
+      ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id)
+      : null;
+    const isAnnualCompleted = Boolean(prevAnnual || current.detail_skrining?.is_skrining_tahunan === true || history.some((h) => h.hasil?.is_skrining_tahunan === true));
+
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil history skrining.",
-      data: { last_filled_at: history[0]?.tanggal || null, latest: history[0]?.hasil || null, history },
+      data: {
+        last_filled_at: history[0]?.tanggal || null,
+        latest: history[0]?.hasil || null,
+        history,
+        is_annual_screening_completed: isAnnualCompleted,
+        previous_annual_screening: prevAnnual ? { id: prevAnnual.id, tanggal: prevAnnual.tanggal, detail_skrining: prevAnnual.detail_skrining } : null,
+      },
     });
   } catch (error) {
     next(error);
@@ -409,6 +441,7 @@ const getStep3Pemeriksaan = async (req, res, next) => {
         "zscore_bbtb",
         "zscore_imtu",
         "screening_history",
+        "detail_skrining",
       ],
       include: [
         {
@@ -494,9 +527,23 @@ const getStep3Pemeriksaan = async (req, res, next) => {
       jenis_kelamin: current.kunjungan.warga.jenis_kelamin,
       tanggal_lahir: current.kunjungan.warga.tanggal_lahir,
       tanggal_pemeriksaan: current.tanggal,
+      zscores: {
+        zscore_bbu: current.zscore_bbu,
+        zscore_pbu: current.zscore_pbu,
+        zscore_tbu: current.zscore_tbu,
+        zscore_bbpb: current.zscore_bbpb,
+        zscore_bbtb: current.zscore_bbtb,
+        zscore_imtu: current.zscore_imtu,
+      },
     });
     const periodeAcuan = current.profileKehamilan || getLatestPregnancyProfile(current.kunjungan.warga.profileKehamilan || []);
     const periode = tentukanPeriodePemeriksaan(current.kategori_sasaran, current.tanggal, periodeAcuan);
+
+    const targetYear = new Date(current.tanggal).getFullYear();
+    const prevAnnual = current.kunjungan?.warga_id
+      ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id)
+      : null;
+    const isAnnualCompleted = Boolean(prevAnnual || current.detail_skrining?.is_skrining_tahunan === true);
 
     return res.status(200).json({
       success: true,
@@ -523,6 +570,8 @@ const getStep3Pemeriksaan = async (req, res, next) => {
         growth_history: history,
         usia_kehamilan: calculatePregnancyAge(periodeAcuan?.hpht, current.tanggal),
         screening_eligibility: getScreeningEligibility(current.kunjungan.warga.tanggal_lahir, current.tanggal),
+        is_annual_screening_completed: isAnnualCompleted,
+        previous_annual_screening: prevAnnual ? { id: prevAnnual.id, tanggal: prevAnnual.tanggal, detail_skrining: prevAnnual.detail_skrining } : null,
       },
     });
   } catch (error) {
@@ -556,6 +605,7 @@ const createPemeriksaan = async (req, res, next) => {
       topik_penyuluhan,
       is_perlu_rujukan,
       alasan_rujukan,
+      status_kehadiran_rujukan,
     } = req.body;
 
     if (kategoriInput !== undefined && !VALID_KATEGORI.includes(kategoriInput)) {
@@ -596,13 +646,36 @@ const createPemeriksaan = async (req, res, next) => {
       jiwaProvided: Boolean(detail_skrining?.skrining_kesehatan_jiwa),
     });
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
-    if (is_perlu_rujukan === true && getScreeningReferralReasons(scoredSkrining.detail).length === 0 && !String(alasan_rujukan || "").trim()) {
-      return res.status(400).json({ success: false, message: "alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening." });
+
+    const growthScores = getGrowthZScores(kunjungan.warga, { tanggal: tglPemeriksaan, bb_kg, tb_cm });
+    const plotData = evaluasiPemeriksaan({
+      bb_kg,
+      tb_cm,
+      lingkar_kepala_cm,
+      lila_cm,
+      lingkar_perut_cm,
+      td_sistole,
+      td_diastole,
+      kadar_gula,
+      kategori_sasaran: kategoriAkhir,
+      jenis_kelamin: kunjungan.warga?.jenis_kelamin,
+      tanggal_lahir: kunjungan.warga?.tanggal_lahir,
+      tanggal_pemeriksaan: tglPemeriksaan,
+      zscores: growthScores,
+    });
+
+    const autoReasons = getCombinedReferralReasons(scoredSkrining.detail, plotData);
+    const isPerluRujukanDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true);
+
+    if (isPerluRujukanDecision) {
+      const referralReason = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || "").trim();
+      if (!referralReason) {
+        return res.status(400).json({ success: false, message: "alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening." });
+      }
     }
 
     // Update Data Pemeriksaan ke DB (Upsert Safe)
     const oldValue = created ? null : pemeriksaanAuditSnapshot(pemeriksaan);
-    const growthScores = getGrowthZScores(kunjungan.warga, { tanggal: tglPemeriksaan, bb_kg, tb_cm });
     await pemeriksaan.update({
       profile_kehamilan_id: profile_kehamilan_id || null,
       tanggal: tglPemeriksaan,
@@ -619,9 +692,34 @@ const createPemeriksaan = async (req, res, next) => {
       detail_skrining: scoredSkrining.detail,
       screening_history: detail_skrining !== undefined ? appendScreeningHistory(pemeriksaan, scoredSkrining.detail, tglPemeriksaan) : pemeriksaan.screening_history,
       topik_penyuluhan: topik_penyuluhan || null,
-      is_perlu_rujukan: is_perlu_rujukan ?? false,
+      is_perlu_rujukan: isPerluRujukanDecision,
+      step2_completed_at: pemeriksaan.step2_completed_at || new Date(),
+      step4_completed_at: pemeriksaan.step4_completed_at || new Date(),
+      step5_completed_at: new Date(),
       ...growthScores,
     });
+
+    if (isPerluRujukanDecision) {
+      const referralReason = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || "").trim();
+      const puskesmasId = kunjungan.warga?.posyandu?.puskesmas_id;
+      if (puskesmasId) {
+        const existingRef = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id } });
+        const refPayload = {
+          warga_id: kunjungan.warga_id,
+          pemeriksaan_id: pemeriksaan.id,
+          puskesmas_id: puskesmasId,
+          kader_id: req.user?.id || 1,
+          tanggal_rujukan: existingRef?.tanggal_rujukan || new Date(),
+          alasan_rujukan: referralReason,
+          status_kehadiran_rujukan: status_kehadiran_rujukan ?? existingRef?.status_kehadiran_rujukan ?? null,
+        };
+        if (existingRef) await existingRef.update(refPayload);
+        else await Rujukan.create(refPayload);
+      }
+    } else {
+      const existingRef = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id } });
+      if (existingRef) await existingRef.destroy();
+    }
 
     // Update status kunjungan ke langkah 5 (Selesai)
     await kunjungan.update({ status_langkah: "langkah_5" });
@@ -770,13 +868,36 @@ const saveStep5 = async (req, res, next) => {
     transaction = await Pemeriksaan.sequelize.transaction();
 
     const { kunjungan, pemeriksaan } = await preparePemeriksaanContext(kunjungan_id, req.user, null, transaction);
-    const screeningReasons = getScreeningReferralReasons(pemeriksaan.detail_skrining);
-    const keputusanRujukan = is_perlu_rujukan !== undefined ? is_perlu_rujukan : screeningReasons.length > 0;
+    const plotData = evaluasiPemeriksaan({
+      bb_kg: pemeriksaan.bb_kg,
+      tb_cm: pemeriksaan.tb_cm,
+      lingkar_kepala_cm: pemeriksaan.lingkar_kepala_cm,
+      lila_cm: pemeriksaan.lila_cm,
+      lingkar_perut_cm: pemeriksaan.lingkar_perut_cm,
+      td_sistole: pemeriksaan.td_sistole,
+      td_diastole: pemeriksaan.td_diastole,
+      kadar_gula: pemeriksaan.kadar_gula,
+      kategori_sasaran: pemeriksaan.kategori_sasaran,
+      jenis_kelamin: kunjungan.warga?.jenis_kelamin,
+      tanggal_lahir: kunjungan.warga?.tanggal_lahir,
+      tanggal_pemeriksaan: pemeriksaan.tanggal,
+      zscores: {
+        zscore_bbu: pemeriksaan.zscore_bbu,
+        zscore_pbu: pemeriksaan.zscore_pbu,
+        zscore_tbu: pemeriksaan.zscore_tbu,
+        zscore_bbpb: pemeriksaan.zscore_bbpb,
+        zscore_bbtb: pemeriksaan.zscore_bbtb,
+        zscore_imtu: pemeriksaan.zscore_imtu,
+      },
+    });
+
+    const autoReasons = getCombinedReferralReasons(pemeriksaan.detail_skrining, plotData);
+    const keputusanRujukan = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true);
     const oldReferral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
     let referral = null;
 
     if (keputusanRujukan) {
-      const alasan = screeningReasons.length > 0 ? screeningReasons.join("; ") : String(alasan_rujukan || "").trim();
+      const alasan = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || oldReferral?.alasan_rujukan || "").trim();
       if (!alasan) {
         await transaction.rollback();
         transaction = null;
@@ -795,7 +916,7 @@ const saveStep5 = async (req, res, next) => {
         warga_id: kunjungan.warga_id,
         pemeriksaan_id: pemeriksaan.id,
         puskesmas_id: puskesmasId,
-        kader_id: req.user?.id,
+        kader_id: req.user?.id || 1,
         tanggal_rujukan: new Date(),
         alasan_rujukan: alasan,
         status_kehadiran_rujukan: status_kehadiran_rujukan ?? oldReferral?.status_kehadiran_rujukan ?? null,
@@ -954,15 +1075,45 @@ const updatePemeriksaan = async (req, res, next) => {
       if (asiTransitionError) throw createPemeriksaanError(400, asiTransitionError);
     }
 
+    const isStep2Edited =
+      bb_kg !== undefined ||
+      tb_cm !== undefined ||
+      lingkar_kepala_cm !== undefined ||
+      lila_cm !== undefined ||
+      lingkar_perut_cm !== undefined ||
+      td_sistole !== undefined ||
+      td_diastole !== undefined ||
+      kadar_gula !== undefined;
+    const isStep4Edited = detail_skrining !== undefined || is_skrining_tahunan !== undefined;
+    const isStep5Edited = topik_penyuluhan !== undefined || is_perlu_rujukan !== undefined || alasan_rujukan !== undefined || status_kehadiran_rujukan !== undefined;
+
     const oldValue = pemeriksaanAuditSnapshot(pemeriksaan);
     const oldReferral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
-    const referralDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : pemeriksaan.is_perlu_rujukan;
     let referral = oldReferral;
     const growthScores = getGrowthZScores(pemeriksaan.kunjungan.warga, {
       tanggal: targetTanggal,
       bb_kg: bb_kg !== undefined ? bb_kg : pemeriksaan.bb_kg,
       tb_cm: tb_cm !== undefined ? tb_cm : pemeriksaan.tb_cm,
     });
+
+    const plotData = evaluasiPemeriksaan({
+      bb_kg: bb_kg !== undefined ? bb_kg : pemeriksaan.bb_kg,
+      tb_cm: tb_cm !== undefined ? tb_cm : pemeriksaan.tb_cm,
+      lingkar_kepala_cm: lingkar_kepala_cm !== undefined ? lingkar_kepala_cm : pemeriksaan.lingkar_kepala_cm,
+      lila_cm: lila_cm !== undefined ? lila_cm : pemeriksaan.lila_cm,
+      lingkar_perut_cm: lingkar_perut_cm !== undefined ? lingkar_perut_cm : pemeriksaan.lingkar_perut_cm,
+      td_sistole: td_sistole !== undefined ? td_sistole : pemeriksaan.td_sistole,
+      td_diastole: td_diastole !== undefined ? td_diastole : pemeriksaan.td_diastole,
+      kadar_gula: kadar_gula !== undefined ? kadar_gula : pemeriksaan.kadar_gula,
+      kategori_sasaran: kategoriAktif,
+      jenis_kelamin: pemeriksaan.kunjungan?.warga?.jenis_kelamin,
+      tanggal_lahir: pemeriksaan.kunjungan?.warga?.tanggal_lahir,
+      tanggal_pemeriksaan: targetTanggal,
+      zscores: growthScores,
+    });
+
+    const autoReasons = getCombinedReferralReasons(updatedDetailSkrining, plotData);
+    const referralDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true || Boolean(oldReferral));
 
     await pemeriksaan.update(
       {
@@ -983,15 +1134,15 @@ const updatePemeriksaan = async (req, res, next) => {
         is_perlu_rujukan: referralDecision,
         ...growthScores,
         screening_history: detail_skrining !== undefined ? appendScreeningHistory(pemeriksaan, updatedDetailSkrining, targetTanggal) : pemeriksaan.screening_history,
-        ...(detail_skrining !== undefined ? { step4_completed_at: new Date() } : {}),
-        ...(topik_penyuluhan !== undefined || is_perlu_rujukan !== undefined || alasan_rujukan !== undefined || status_kehadiran_rujukan !== undefined ? { step5_completed_at: new Date() } : {}),
+        ...(isStep2Edited ? { step2_completed_at: pemeriksaan.step2_completed_at || new Date() } : {}),
+        ...(isStep4Edited ? { step4_completed_at: pemeriksaan.step4_completed_at || new Date() } : {}),
+        ...(isStep5Edited ? { step5_completed_at: pemeriksaan.step5_completed_at || new Date() } : {}),
       },
       { transaction },
     );
 
     if (referralDecision) {
-      const screeningReasons = getScreeningReferralReasons(updatedDetailSkrining);
-      const referralReason = screeningReasons.length > 0 ? screeningReasons.join("; ") : String(alasan_rujukan || oldReferral?.alasan_rujukan || "").trim();
+      const referralReason = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || oldReferral?.alasan_rujukan || "").trim();
       if (!referralReason) {
         const error = new Error("alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening.");
         error.statusCode = 400;
@@ -1009,7 +1160,7 @@ const updatePemeriksaan = async (req, res, next) => {
         warga_id: pemeriksaan.kunjungan.warga_id,
         pemeriksaan_id: pemeriksaan.id,
         puskesmas_id: puskesmasId,
-        kader_id: req.user?.id,
+        kader_id: req.user?.id || 1,
         tanggal_rujukan: oldReferral?.tanggal_rujukan || new Date(),
         alasan_rujukan: referralReason,
         status_kehadiran_rujukan: status_kehadiran_rujukan ?? oldReferral?.status_kehadiran_rujukan ?? null,

@@ -571,15 +571,56 @@ const evaluasiIMTU = (bb_kg, tb_cm, usiaBulan, jenisKelamin) => {
 /**
  * Evaluasi Otomatis Khusus Bayi, Balita, Apras, Remaja
  */
-const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan }) => {
+/**
+ * Evaluasi Otomatis Khusus Bayi, Balita, Apras, Remaja
+ */
+const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan, zscores }) => {
   const usiaBulan = hitungUsiaBulan(tanggal_lahir, tanggal_pemeriksaan);
 
   const hasilBBU = usiaBulan <= 60 ? evaluasiBBU(bb_kg, usiaBulan, jenis_kelamin) : null;
   const hasilTBU = usiaBulan <= 60 ? evaluasiTBU(tb_cm, usiaBulan, jenis_kelamin) : null;
   const hasilUkuran = usiaBulan <= 60 ? evaluateWeightForSize(bb_kg, tb_cm, usiaBulan, jenis_kelamin) : null;
   const hasilIMTU = evaluasiIMTU(bb_kg, tb_cm, usiaBulan, jenis_kelamin);
+
+  if (zscores && typeof zscores === "object") {
+    if (hasilBBU && !hasilBBU.error && zscores.zscore_bbu !== undefined && zscores.zscore_bbu !== null) {
+      hasilBBU.zscore = zscores.zscore_bbu;
+      const z = Number(zscores.zscore_bbu);
+      if (Number.isFinite(z)) {
+        hasilBBU.is_merah = z < -2 || z > 1;
+      }
+    }
+    if (hasilTBU && !hasilTBU.error) {
+      const zVal = zscores.zscore_pbu ?? zscores.zscore_tbu;
+      if (zVal !== undefined && zVal !== null) {
+        hasilTBU.zscore = zVal;
+        const z = Number(zVal);
+        if (Number.isFinite(z)) {
+          hasilTBU.is_merah = z < -2;
+        }
+      }
+    }
+    if (hasilUkuran && !hasilUkuran.error) {
+      const zVal = zscores.zscore_bbpb ?? zscores.zscore_bbtb;
+      if (zVal !== undefined && zVal !== null) {
+        hasilUkuran.zscore = zVal;
+        const z = Number(zVal);
+        if (Number.isFinite(z)) {
+          hasilUkuran.is_merah = z < -2 || z > 1;
+        }
+      }
+    }
+    if (hasilIMTU && !hasilIMTU.error && zscores.zscore_imtu !== undefined && zscores.zscore_imtu !== null) {
+      hasilIMTU.zscore = zscores.zscore_imtu;
+      const z = Number(zscores.zscore_imtu);
+      if (Number.isFinite(z)) {
+        hasilIMTU.is_merah = z < -2 || z > 1;
+      }
+    }
+  }
+
   const hasil = [hasilBBU, hasilTBU, hasilUkuran, hasilIMTU].filter(Boolean);
-  const isPerluRujukan = hasil.some((item) => item.is_merah === true);
+  const isPerluRujukan = hasil.some((item) => item && item.is_merah === true);
 
   return {
     usia_bulan: usiaBulan,
@@ -596,10 +637,10 @@ const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin,
  * Evaluasi Umum Pemeriksaan Posyandu Dewasa / Lansia / Bumil / Busui
  */
 const evaluasiPemeriksaan = (data) => {
-  const { kategori_sasaran, bb_kg, tb_cm, td_sistole, td_diastole, lila_cm, lingkar_perut_cm, jenis_kelamin } = data;
+  const { kategori_sasaran, bb_kg, tb_cm, td_sistole, td_diastole, lila_cm, lingkar_perut_cm, jenis_kelamin, zscores } = data;
 
   if (["bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18"].includes(kategori_sasaran) && data.tanggal_lahir) {
-    return kalkulasiAntropometriAnak({ bb_kg, tb_cm, tanggal_lahir: data.tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan: data.tanggal_pemeriksaan });
+    return kalkulasiAntropometriAnak({ bb_kg, tb_cm, tanggal_lahir: data.tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan: data.tanggal_pemeriksaan, zscores });
   }
 
   const hasil = {
@@ -611,7 +652,7 @@ const evaluasiPemeriksaan = (data) => {
 
   const statusMerah = Object.values(hasil)
     .filter((h) => h !== null)
-    .some((h) => h.is_merah === true);
+    .some((h) => h && h.is_merah === true);
 
   return {
     is_perlu_rujukan: statusMerah,

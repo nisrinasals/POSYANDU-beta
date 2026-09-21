@@ -10,12 +10,20 @@ const { isExaminationComplete } = require("../utils/examinationCompletionHelper"
  * Endpoint: POST /api/kunjungan
  */
 const createKunjungan = async (req, res, next) => {
+  let transaction = null;
   try {
     const { warga_id, sesi_posyandu_id } = req.body;
+    transaction = await KunjunganPosyandu.sequelize.transaction();
 
     // 1. Validasi Keberadaan Sesi Posyandu & Status Wajib 'open'
-    const sesi = await SesiPosyandu.findByPk(sesi_posyandu_id, { include: [getPosyanduInclude(req.user)] });
+    const sesi = await SesiPosyandu.findByPk(sesi_posyandu_id, {
+      transaction,
+      lock: transaction?.LOCK ? transaction.LOCK.UPDATE : true,
+      include: [getPosyanduInclude(req.user)],
+    });
     if (!sesi) {
+      await transaction.rollback();
+      transaction = null;
       return res.status(404).json({
         success: false,
         message: "Sesi Posyandu tidak ditemukan.",
@@ -23,6 +31,8 @@ const createKunjungan = async (req, res, next) => {
     }
 
     if (sesi.status !== "open") {
+      await transaction.rollback();
+      transaction = null;
       return res.status(400).json({
         success: false,
         message: "Pendaftaran gagal. Sesi Posyandu ini sudah ditutup (closed).",
@@ -30,8 +40,10 @@ const createKunjungan = async (req, res, next) => {
     }
 
     // 2. Validasi Keberadaan Warga
-    const warga = await Warga.findByPk(warga_id);
+    const warga = await Warga.findByPk(warga_id, { transaction });
     if (!warga) {
+      await transaction.rollback();
+      transaction = null;
       return res.status(404).json({
         success: false,
         message: "Data Warga tidak ditemukan.",
@@ -39,6 +51,8 @@ const createKunjungan = async (req, res, next) => {
     }
 
     if (Number(warga.posyandu_id) !== Number(sesi.posyandu_id)) {
+      await transaction.rollback();
+      transaction = null;
       return res.status(400).json({ success: false, message: "Warga dan sesi Posyandu harus berada pada Posyandu yang sama." });
     }
 
@@ -48,9 +62,12 @@ const createKunjungan = async (req, res, next) => {
         warga_id,
         sesi_posyandu_id,
       },
+      transaction,
     });
 
     if (kunjunganEksis) {
+      await transaction.rollback();
+      transaction = null;
       return res.status(400).json({
         success: false,
         message: `Warga [${warga.nama_lengkap}] sudah terdaftar pada sesi ini dengan Nomor Antrean: ${kunjunganEksis.nomor_antrean}`,
@@ -58,21 +75,38 @@ const createKunjungan = async (req, res, next) => {
       });
     }
 
-    // 4. Hitung Auto-Increment Nomor Antrean per Sesi (Format: A-001, A-002, dst.)
-    const totalKunjunganSesi = await KunjunganPosyandu.count({
+    // 4. Hitung Auto-Increment Nomor Antrean per Sesi secara Concurrency-Safe
+    const allKunjunganInSesi = await KunjunganPosyandu.findAll({
       where: { sesi_posyandu_id },
+      attributes: ["nomor_antrean"],
+      transaction,
+      lock: transaction?.LOCK?.UPDATE || undefined,
     });
 
-    const nextNumber = totalKunjunganSesi + 1;
+    let maxNum = 0;
+    for (const k of allKunjunganInSesi) {
+      const match = String(k.nomor_antrean || "").match(/\d+/);
+      if (match) {
+        const val = parseInt(match[0], 10);
+        if (val > maxNum) maxNum = val;
+      }
+    }
+    const nextNumber = maxNum + 1;
     const nomorAntreanFormatted = `A-${String(nextNumber).padStart(3, "0")}`;
 
     // 5. Buat Record Kunjungan Baru (Default Status = langkah_1)
-    const newKunjungan = await KunjunganPosyandu.create({
-      warga_id,
-      sesi_posyandu_id,
-      nomor_antrean: nomorAntreanFormatted,
-      status_langkah: "langkah_1",
-    });
+    const newKunjungan = await KunjunganPosyandu.create(
+      {
+        warga_id,
+        sesi_posyandu_id,
+        nomor_antrean: nomorAntreanFormatted,
+        status_langkah: "langkah_1",
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+    transaction = null;
 
     await createAuditLog({
       userId: req.user?.id ?? null,
@@ -98,6 +132,7 @@ const createKunjungan = async (req, res, next) => {
       },
     });
   } catch (error) {
+    if (transaction) await transaction.rollback();
     if (error?.name === "SequelizeUniqueConstraintError") {
       return res.status(409).json({ success: false, message: "Warga sudah terdaftar pada sesi Posyandu ini." });
     }
@@ -300,13 +335,25 @@ const updateStatusLangkah = async (req, res, next) => {
     }
 
     const kunjungan = await KunjunganPosyandu.findByPk(id, {
-      include: [{ model: SesiPosyandu, as: "sesiPosyandu", required: true, include: [getPosyanduInclude(req.user)] }],
+      include: [
+        { model: SesiPosyandu, as: "sesiPosyandu", required: true, include: [getPosyanduInclude(req.user)] },
+        { model: Pemeriksaan, as: "pemeriksaan" },
+      ],
     });
     if (!kunjungan) {
       return res.status(404).json({
         success: false,
         message: "Data kunjungan tidak ditemukan.",
       });
+    }
+
+    if (status_langkah === "langkah_5") {
+      if (!kunjungan.pemeriksaan || !isExaminationComplete(kunjungan.pemeriksaan)) {
+        return res.status(400).json({
+          success: false,
+          message: "Tidak dapat mengubah status ke langkah_5 (Selesai) karena data pemeriksaan belum lengkap (Step 2, Step 4, dan Step 5).",
+        });
+      }
     }
 
     const oldStatusLangkah = kunjungan.status_langkah;

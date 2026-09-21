@@ -19,4 +19,46 @@ const getScreeningReferralReasons = (detail = {}) => {
   return [...new Set(reasons)];
 };
 
-module.exports = { getScreeningReferralReasons };
+const getPlotReferralReasons = (plotData) => {
+  if (!plotData || typeof plotData !== "object") return [];
+  const reasons = [];
+
+  const inspectItem = (item) => {
+    if (!item || typeof item !== "object") return;
+    if (item.is_merah === true) {
+      const label = item.indikator || item.nama;
+      const category = item.kategori;
+      if (label && category) {
+        reasons.push(`Hasil plotting ${label}: ${category}`);
+      } else if (label) {
+        reasons.push(`Hasil plotting ${label} tidak normal`);
+      } else if (category) {
+        reasons.push(`Hasil plotting: ${category}`);
+      } else {
+        reasons.push("Hasil plotting antropometri/fisik tidak normal");
+      }
+    }
+  };
+
+  if (plotData.hasil_plot && typeof plotData.hasil_plot === "object") {
+    for (const val of Object.values(plotData.hasil_plot)) {
+      inspectItem(val);
+    }
+  }
+
+  for (const [key, val] of Object.entries(plotData)) {
+    if (key !== "hasil_plot" && val && typeof val === "object") {
+      inspectItem(val);
+    }
+  }
+
+  return [...new Set(reasons)];
+};
+
+const getCombinedReferralReasons = (detailSkrining = {}, plotData = null) => {
+  const screeningReasons = getScreeningReferralReasons(detailSkrining);
+  const plotReasons = getPlotReferralReasons(plotData);
+  return [...new Set([...screeningReasons, ...plotReasons])];
+};
+
+module.exports = { getScreeningReferralReasons, getPlotReferralReasons, getCombinedReferralReasons };

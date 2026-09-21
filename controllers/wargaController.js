@@ -485,22 +485,22 @@ const updateWarga = async (req, res, next) => {
     };
 
     await warga.update({
-      nik: nik ?? warga.nik,
-      nama_lengkap: nama_lengkap ?? warga.nama_lengkap,
-      jenis_kelamin: jenis_kelamin ?? warga.jenis_kelamin,
-      tanggal_lahir: tanggal_lahir ?? warga.tanggal_lahir,
-      alamat: alamat ?? warga.alamat,
-      rt: rt ?? warga.rt,
-      rw: rw ?? warga.rw,
-      telepon: telepon ?? warga.telepon,
-      nama_ibu: nama_ibu ?? warga.nama_ibu,
-      nama_ayah: nama_ayah ?? warga.nama_ayah,
-      status_perkawinan: status_perkawinan ?? warga.status_perkawinan,
-      pekerjaan: pekerjaan ?? warga.pekerjaan,
-      pekerjaan_lainnya: pekerjaan_lainnya ?? warga.pekerjaan_lainnya,
-      bb_lahir_kg: bb_lahir_kg ?? warga.bb_lahir_kg,
-      tb_lahir_cm: tb_lahir_cm ?? warga.tb_lahir_cm,
-      status_domisili: status_domisili ?? warga.status_domisili,
+      nik: nik !== undefined ? nik : warga.nik,
+      nama_lengkap: nama_lengkap !== undefined ? nama_lengkap : warga.nama_lengkap,
+      jenis_kelamin: jenis_kelamin !== undefined ? jenis_kelamin : warga.jenis_kelamin,
+      tanggal_lahir: tanggal_lahir !== undefined ? tanggal_lahir : warga.tanggal_lahir,
+      alamat: alamat !== undefined ? alamat : warga.alamat,
+      rt: rt !== undefined ? rt : warga.rt,
+      rw: rw !== undefined ? rw : warga.rw,
+      telepon: telepon !== undefined ? telepon : warga.telepon,
+      nama_ibu: nama_ibu !== undefined ? nama_ibu : warga.nama_ibu,
+      nama_ayah: nama_ayah !== undefined ? nama_ayah : warga.nama_ayah,
+      status_perkawinan: status_perkawinan !== undefined ? status_perkawinan : warga.status_perkawinan,
+      pekerjaan: pekerjaan !== undefined ? pekerjaan : warga.pekerjaan,
+      pekerjaan_lainnya: pekerjaan_lainnya !== undefined ? pekerjaan_lainnya : warga.pekerjaan_lainnya,
+      bb_lahir_kg: bb_lahir_kg !== undefined ? bb_lahir_kg : warga.bb_lahir_kg,
+      tb_lahir_cm: tb_lahir_cm !== undefined ? tb_lahir_cm : warga.tb_lahir_cm,
+      status_domisili: status_domisili !== undefined ? status_domisili : warga.status_domisili,
     });
 
     await createAuditLog({
