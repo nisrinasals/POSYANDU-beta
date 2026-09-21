@@ -56,6 +56,8 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         defaultValue: 1,
       },
+      email_verified: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      email_verified_at: { type: DataTypes.DATE, allowNull: true },
     },
     {
       tableName: "users",

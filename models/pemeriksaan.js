@@ -69,6 +69,9 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: [],
       },
+      step2_completed_at: { type: DataTypes.DATE, allowNull: true },
+      step4_completed_at: { type: DataTypes.DATE, allowNull: true },
+      step5_completed_at: { type: DataTypes.DATE, allowNull: true },
       topik_penyuluhan: {
         type: DataTypes.TEXT,
       },

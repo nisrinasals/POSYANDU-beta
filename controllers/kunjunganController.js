@@ -2,6 +2,7 @@ const { KunjunganPosyandu, SesiPosyandu, Warga, Posyandu, Pemeriksaan } = requir
 const { Op } = require("sequelize");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
+const { isExaminationComplete } = require("../utils/examinationCompletionHelper");
 
 /**
  * 1. STEP 1: PENDAFTARAN / PRESENSI WARGA DATANG
@@ -34,6 +35,10 @@ const createKunjungan = async (req, res, next) => {
         success: false,
         message: "Data Warga tidak ditemukan.",
       });
+    }
+
+    if (Number(warga.posyandu_id) !== Number(sesi.posyandu_id)) {
+      return res.status(400).json({ success: false, message: "Warga dan sesi Posyandu harus berada pada Posyandu yang sama." });
     }
 
     // 3. Cek Apakah Warga Sudah Terdaftar di Sesi Ini (Cegah Double Registration)
@@ -92,6 +97,9 @@ const createKunjungan = async (req, res, next) => {
       },
     });
   } catch (error) {
+    if (error?.name === "SequelizeUniqueConstraintError") {
+      return res.status(409).json({ success: false, message: "Warga sudah terdaftar pada sesi Posyandu ini." });
+    }
     next(error);
   }
 };
@@ -111,14 +119,12 @@ const getAntreanHariIni = async (req, res, next) => {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const whereCondition = {
-      created_at: {
-        [Op.between]: [startOfDay, endOfDay],
-      },
-    };
+    const whereCondition = {};
 
     if (sesi_posyandu_id) {
       whereCondition.sesi_posyandu_id = sesi_posyandu_id;
+    } else {
+      whereCondition["$sesiPosyandu.tanggal_pelaksanaan$"] = new Date().toISOString().slice(0, 10);
     }
 
     const wargaWhere = {};
@@ -139,7 +145,7 @@ const getAntreanHariIni = async (req, res, next) => {
         {
           model: Pemeriksaan,
           as: "pemeriksaan",
-          attributes: ["id", "kategori_sasaran", "bb_kg", "tb_cm"],
+          attributes: ["id", "kategori_sasaran", "bb_kg", "tb_cm", "step2_completed_at", "step4_completed_at", "step5_completed_at"],
         },
         {
           model: SesiPosyandu,
@@ -152,10 +158,11 @@ const getAntreanHariIni = async (req, res, next) => {
       order: [["created_at", "ASC"]],
     });
 
+    const activeAntrean = antrean.filter((item) => !isExaminationComplete(item.pemeriksaan));
     return res.status(200).json({
       success: true,
       message: "Daftar antrean aktif berhasil dimuat.",
-      data: antrean,
+      data: activeAntrean,
     });
   } catch (error) {
     next(error);

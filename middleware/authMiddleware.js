@@ -50,6 +50,13 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
+    if (user.email_verified === false) {
+      if (["dinkes", "dinkesAdmin"].includes(user.role)) {
+        return res.status(403).json({ success: false, message: "Role Dinkes hanya dapat mengakses data agregat setelah autentikasi akun selesai." });
+      }
+      return res.status(403).json({ success: false, message: "Email belum diverifikasi." });
+    }
+
     // Attach data user ke objek request
     req.user = user;
     next();

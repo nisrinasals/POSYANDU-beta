@@ -328,6 +328,10 @@ const createWarga = async (req, res, next) => {
       });
     }
 
+    if (new Date(`${tanggal_lahir}T00:00:00Z`) > new Date()) {
+      return res.status(400).json({ success: false, message: "tanggal_lahir tidak boleh di masa depan." });
+    }
+
     if (!isValidNik(nik)) {
       return res.status(400).json({ success: false, message: "NIK harus terdiri dari 16 digit angka." });
     }
@@ -435,6 +439,9 @@ const updateWarga = async (req, res, next) => {
 
     if (nik !== undefined && !isValidNik(nik)) {
       return res.status(400).json({ success: false, message: "NIK harus terdiri dari 16 digit angka." });
+    }
+    if (tanggal_lahir !== undefined && new Date(`${tanggal_lahir}T00:00:00Z`) > new Date()) {
+      return res.status(400).json({ success: false, message: "tanggal_lahir tidak boleh di masa depan." });
     }
 
     if (nik && nik !== warga.nik) {

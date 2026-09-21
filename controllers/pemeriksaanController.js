@@ -439,7 +439,6 @@ const getStep3Pemeriksaan = async (req, res, next) => {
     if (!pemeriksaan) return res.status(404).json({ success: false, message: "Data pemeriksaan tidak ditemukan." });
 
     const current = pemeriksaan.get({ plain: true });
-    const calculatedZScores = getGrowthZScores(current.kunjungan.warga, current);
     const measurements = {
       bb_kg: current.bb_kg,
       tb_cm: current.tb_cm,
@@ -488,9 +487,13 @@ const getStep3Pemeriksaan = async (req, res, next) => {
       ],
     });
 
-    const plotData = ["bumil", "busui", "dewasa", "lansia"].includes(current.kategori_sasaran)
-      ? evaluasiPemeriksaan({ ...measurements, kategori_sasaran: current.kategori_sasaran, jenis_kelamin: current.kunjungan.warga.jenis_kelamin, tanggal_lahir: current.kunjungan.warga.tanggal_lahir })
-      : null;
+    const plotData = evaluasiPemeriksaan({
+      ...measurements,
+      kategori_sasaran: current.kategori_sasaran,
+      jenis_kelamin: current.kunjungan.warga.jenis_kelamin,
+      tanggal_lahir: current.kunjungan.warga.tanggal_lahir,
+      tanggal_pemeriksaan: current.tanggal,
+    });
     const periodeAcuan = current.profileKehamilan || getLatestPregnancyProfile(current.kunjungan.warga.profileKehamilan || []);
     const periode = tentukanPeriodePemeriksaan(current.kategori_sasaran, current.tanggal, periodeAcuan);
 
@@ -506,12 +509,12 @@ const getStep3Pemeriksaan = async (req, res, next) => {
         warga: current.kunjungan.warga,
         pengukuran_step_2: measurements,
         z_scores: {
-          zscore_bbu: current.zscore_bbu ?? calculatedZScores.zscore_bbu ?? null,
-          zscore_pbu: current.zscore_pbu ?? calculatedZScores.zscore_pbu ?? null,
-          zscore_tbu: current.zscore_tbu ?? calculatedZScores.zscore_tbu ?? null,
-          zscore_bbpb: current.zscore_bbpb ?? calculatedZScores.zscore_bbpb ?? null,
-          zscore_bbtb: current.zscore_bbtb ?? calculatedZScores.zscore_bbtb ?? null,
-          zscore_imtu: current.zscore_imtu ?? calculatedZScores.zscore_imtu ?? null,
+          zscore_bbu: current.zscore_bbu ?? null,
+          zscore_pbu: current.zscore_pbu ?? null,
+          zscore_tbu: current.zscore_tbu ?? null,
+          zscore_bbpb: current.zscore_bbpb ?? null,
+          zscore_bbtb: current.zscore_bbtb ?? null,
+          zscore_imtu: current.zscore_imtu ?? null,
         },
         standar_plot: STANDAR_PLOT[current.kategori_sasaran] || null,
         hasil_plot: plotData,
@@ -601,9 +604,13 @@ const createPemeriksaan = async (req, res, next) => {
       td_diastole: td_diastole ?? null,
       kadar_gula: kadar_gula ?? null,
       detail_skrining: scoredSkrining.detail,
+      screening_history: detail_skrining !== undefined ? appendScreeningHistory(pemeriksaan, scoredSkrining.detail, tglPemeriksaan) : pemeriksaan.screening_history,
       topik_penyuluhan: topik_penyuluhan || null,
       is_perlu_rujukan: is_perlu_rujukan ?? false,
       ...growthScores,
+      step2_completed_at: new Date(),
+      step4_completed_at: new Date(),
+      step5_completed_at: new Date(),
     });
 
     // Update status kunjungan ke langkah 5 (Selesai)
@@ -658,6 +665,7 @@ const saveStep2 = async (req, res, next) => {
       td_diastole: td_diastole !== undefined ? td_diastole : pemeriksaan.td_diastole,
       kadar_gula: kadar_gula !== undefined ? kadar_gula : pemeriksaan.kadar_gula,
       ...growthScores,
+      step2_completed_at: new Date(),
     });
 
     // Update status ke langkah 2 jika belum melebihi langkah 2
@@ -711,6 +719,7 @@ const saveStep4 = async (req, res, next) => {
       profile_kehamilan_id: profile_kehamilan_id !== undefined ? profile_kehamilan_id : pemeriksaan.profile_kehamilan_id,
       detail_skrining: scoredSkrining.detail,
       screening_history: appendScreeningHistory(pemeriksaan, scoredSkrining.detail, tglPemeriksaan),
+      step4_completed_at: new Date(),
     });
 
     // Update status ke langkah 4 jika belum mencapai langkah 5
@@ -787,6 +796,7 @@ const saveStep5 = async (req, res, next) => {
       {
         topik_penyuluhan: topik_penyuluhan !== undefined ? topik_penyuluhan : pemeriksaan.topik_penyuluhan,
         is_perlu_rujukan: keputusanRujukan,
+        step5_completed_at: new Date(),
       },
       { transaction },
     );
@@ -947,6 +957,7 @@ const updatePemeriksaan = async (req, res, next) => {
         is_perlu_rujukan: referralDecision,
         ...growthScores,
         screening_history: detail_skrining !== undefined ? appendScreeningHistory(pemeriksaan, updatedDetailSkrining, targetTanggal) : pemeriksaan.screening_history,
+        ...(detail_skrining !== undefined ? { step4_completed_at: new Date() } : {}),
       },
       { transaction },
     );

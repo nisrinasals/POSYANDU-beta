@@ -28,7 +28,11 @@ const makeFields = (includePosyandu = true) => [
     .withMessage("NIK harus terdiri dari 16 digit angka."),
   body("nama_lengkap").trim().isLength({ min: 2, max: 100 }).withMessage("Nama lengkap harus 2 sampai 100 karakter."),
   body("jenis_kelamin").isIn(["L", "P"]).withMessage("jenis_kelamin harus L atau P."),
-  body("tanggal_lahir").isISO8601({ strict: true, strictSeparator: true }).withMessage("tanggal_lahir harus berupa tanggal ISO yang valid."),
+  body("tanggal_lahir")
+    .isISO8601({ strict: true, strictSeparator: true })
+    .withMessage("tanggal_lahir harus berupa tanggal ISO yang valid.")
+    .custom((value) => new Date(`${value}T00:00:00Z`) <= new Date())
+    .withMessage("tanggal_lahir tidak boleh di masa depan."),
   body("alamat").optional().isString().isLength({ max: 500 }).withMessage("Alamat maksimal 500 karakter."),
   body("rt").optional().trim().isLength({ max: 5 }).withMessage("RT maksimal 5 karakter."),
   body("rw").optional().trim().isLength({ max: 5 }).withMessage("RW maksimal 5 karakter."),

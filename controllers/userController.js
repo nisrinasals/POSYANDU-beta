@@ -172,6 +172,9 @@ const verifyUser = async (req, res, next) => {
     if (!canVerifyUser(req.user, target)) {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki hak untuk memverifikasi akun ini." });
     }
+    if (target.email_verified !== true) {
+      return res.status(400).json({ success: false, message: "Akun belum dapat diaktifkan karena email belum diverifikasi." });
+    }
     const oldValue = { id: target.id, status: target.status };
     await target.update({ status: "active", verified_by: req.user.id, verified_at: new Date(), token_version: target.token_version + 1 });
     await createAuditLog({
@@ -204,6 +207,10 @@ const replacePuskesmasAdmin = async (req, res, next) => {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: "Anda tidak dapat mengganti admin pada Puskesmas ini." });
     }
+    if (replacement.email_verified === false) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: "User pengganti belum memverifikasi email." });
+    }
     const puskesmasId = replacement.puskesmas_id;
     await User.update({ role: "puskesmas", token_version: User.sequelize.literal('"token_version" + 1') }, { where: { puskesmas_id: puskesmasId, role: "puskesmasAdmin" }, transaction });
     await replacement.update({ role: "puskesmasAdmin", status: "active", verified_by: req.user.id, verified_at: new Date(), token_version: replacement.token_version + 1 }, { transaction });
@@ -227,6 +234,10 @@ const replaceDinkesAdmin = async (req, res, next) => {
     if (!replacement || !canReplaceDinkesAdmin(req.user, replacement)) {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: "Anda tidak dapat mengganti Admin Dinkes dengan target ini." });
+    }
+    if (replacement.email_verified === false) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: "User pengganti belum memverifikasi email." });
     }
 
     await User.update({ role: "dinkes", token_version: User.sequelize.literal('"token_version" + 1') }, { where: { role: "dinkesAdmin" }, transaction });

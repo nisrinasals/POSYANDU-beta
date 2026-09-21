@@ -9,7 +9,14 @@ const getTable = (index, gender, ageMonths) => {
 };
 const getRow = (index, gender, ageMonths, lookupKey = "age_months", lookupValue = ageMonths) => {
   const table = getTable(index, gender, ageMonths);
-  return table?.rows.find((row) => Number(row[lookupKey]) === Number(lookupValue)) || null;
+  if (!table) return null;
+  const rows = table.rows.filter((row) => Number.isFinite(Number(row[lookupKey])));
+  const exact = rows.find((row) => Number(row[lookupKey]) === Number(lookupValue));
+  if (exact) return exact;
+  if (!["BB/PB", "BB/TB"].includes(index)) return null;
+  const numericValue = Number(lookupValue);
+  if (!Number.isFinite(numericValue) || numericValue < Number(rows[0]?.[lookupKey]) || numericValue > Number(rows[rows.length - 1]?.[lookupKey])) return null;
+  return rows.reduce((nearest, candidate) => (Math.abs(Number(candidate[lookupKey]) - numericValue) < Math.abs(Number(nearest[lookupKey]) - numericValue) ? candidate : nearest));
 };
 
 const interpolate = (value, lower, upper, lowerZ, upperZ) => {
@@ -41,7 +48,7 @@ const zScoreFromRow = (value, row) => {
 
 const calculateGrowthZScores = ({ bb_kg, tb_cm, tanggal_lahir, tanggal, jenis_kelamin }) => {
   const birth = new Date(`${tanggal_lahir}T00:00:00Z`);
-  const reference = new Date(`${String(tanggal).slice(0, 10)}T00:00:00Z`);
+  const reference = new Date(tanggal instanceof Date ? tanggal : `${String(tanggal).slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime())) return {};
   let ageMonths = (reference.getUTCFullYear() - birth.getUTCFullYear()) * 12 + reference.getUTCMonth() - birth.getUTCMonth();
   if (reference.getUTCDate() < birth.getUTCDate()) ageMonths -= 1;

@@ -58,6 +58,8 @@ const register = async (req, res, next) => {
       posyandu_id: posyandu_id || null,
       status: "pending_approval",
       token_version: 1,
+      email_verified: false,
+      email_verified_at: null,
     });
 
     // Generate OTP untuk Verifikasi Email
@@ -139,6 +141,9 @@ const verifyOtp = async (req, res, next) => {
     await otpRecord.update({ is_used: true });
 
     const verifiedUser = await User.findOne({ where: { email } });
+    if (purpose === "register" && verifiedUser) {
+      await verifiedUser.update({ email_verified: true, email_verified_at: new Date() });
+    }
     await createAuditLog({
       userId: verifiedUser?.id ?? null,
       action: AUDIT_ACTIONS.AUTH_VERIFY,
@@ -266,6 +271,10 @@ const login = async (req, res, next) => {
         success: false,
         message: "Akun kamu masih menunggu persetujuan (approval) dari admin.",
       });
+    }
+
+    if (user.email_verified === false) {
+      return res.status(403).json({ success: false, message: "Email belum diverifikasi." });
     }
 
     if (user.status !== "active") {

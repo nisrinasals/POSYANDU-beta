@@ -571,8 +571,8 @@ const evaluasiIMTU = (bb_kg, tb_cm, usiaBulan, jenisKelamin) => {
 /**
  * Evaluasi Otomatis Khusus Bayi, Balita, Apras, Remaja
  */
-const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin }) => {
-  const usiaBulan = hitungUsiaBulan(tanggal_lahir);
+const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan }) => {
+  const usiaBulan = hitungUsiaBulan(tanggal_lahir, tanggal_pemeriksaan);
 
   const hasilBBU = usiaBulan <= 60 ? evaluasiBBU(bb_kg, usiaBulan, jenis_kelamin) : null;
   const hasilTBU = usiaBulan <= 60 ? evaluasiTBU(tb_cm, usiaBulan, jenis_kelamin) : null;
@@ -599,7 +599,7 @@ const evaluasiPemeriksaan = (data) => {
   const { kategori_sasaran, bb_kg, tb_cm, td_sistole, td_diastole, lila_cm, lingkar_perut_cm, jenis_kelamin } = data;
 
   if (["bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18"].includes(kategori_sasaran) && data.tanggal_lahir) {
-    return kalkulasiAntropometriAnak({ bb_kg, tb_cm, tanggal_lahir: data.tanggal_lahir, jenis_kelamin });
+    return kalkulasiAntropometriAnak({ bb_kg, tb_cm, tanggal_lahir: data.tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan: data.tanggal_pemeriksaan });
   }
 
   const hasil = {
