@@ -104,7 +104,7 @@ const authorize = (...allowedRoles) => {
 };
 
 const denyDinkesPersonalData = (req, res, next) => {
-  if (["dinkes", "dinkesAdmin"].includes(req.user?.role)) {
+  if (["dinkes"].includes(req.user?.role)) {
     return res.status(403).json({ success: false, message: "Role dinkes hanya dapat mengakses data agregat." });
   }
   return next();
