@@ -100,19 +100,6 @@ const SKEMA_SKRINING = {
       is_skrining_jiwa: false,
       is_periksa_hb: false,
     },
-    skrining_kesehatan_jiwa: {
-      bulan_pemeriksaan: "",
-      jawaban_skor: {
-        kurang_bersemangat: 0,
-        murung_tertekan_putus_asa: 0,
-        gugup_cemas_gelisah: 0,
-        sulit_kendalikan_khawatir: 0,
-      },
-      total_skor_jiwa: 0,
-      group1_skor_jiwa: 0,
-      group2_skor_jiwa: 0,
-      is_rujukan_jiwa: false,
-    },
     tbc: {
       has_batuk_2_minggu: false,
       has_demam_2_minggu: false,
@@ -136,19 +123,6 @@ const SKEMA_SKRINING = {
     pemeriksaan_tahunan_remaja_putri: {
       is_skrining_jiwa: false,
       is_periksa_hb: false,
-    },
-    skrining_kesehatan_jiwa: {
-      bulan_pemeriksaan: "",
-      jawaban_skor: {
-        kurang_bersemangat: 0,
-        murung_tertekan_putus_asa: 0,
-        gugup_cemas_gelisah: 0,
-        sulit_kendalikan_khawatir: 0,
-      },
-      total_skor_jiwa: 0,
-      group1_skor_jiwa: 0,
-      group2_skor_jiwa: 0,
-      is_rujukan_jiwa: false,
     },
     tbc: {
       has_batuk_2_minggu: false,
