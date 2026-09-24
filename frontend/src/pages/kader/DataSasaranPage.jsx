@@ -26,36 +26,11 @@ import {
   Building2,
 } from "lucide-react";
 import { Modal, Button } from "react-bootstrap";
-
 import { wargaService, kehamilanService } from "../../services";
 import { mapBackendWargaToFrontend } from "../../utils/dataMappers";
 import { validateNik, formatNikInput, validatePhone, formatPhoneInput, validateBirthDate } from "../../utils/validators";
 import { useNotification } from "../../context/NotificationContext";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
-
-const mapCategoryIdToBackend = (categoryId) => {
-  const categoryMap = {
-    bumil: "bumil",
-    nifas: "busui",
-
-    "bayi-0-11": "bayi",
-    bayi: "bayi",
-
-    "balita-12-59": "balita",
-    balita: "balita",
-
-    "apras-60-72": "apras",
-    apras: "apras",
-
-    "usekrem-6-14": "uskrem_6_14",
-    "usekrem-15-18": "uskrem_15_18",
-
-    dewasa: "dewasa",
-    lansia: "lansia",
-  };
-
-  return categoryMap[categoryId] || categoryId;
-};
 
 export default function DataSasaranPage({
   globalSasaranList: sasaranList = [],
@@ -76,6 +51,39 @@ export default function DataSasaranPage({
       setKategoriFilter(initialCategoryFilter);
     }
   }, [initialCategoryFilter]);
+
+  const [isLoadingSasaran, setIsLoadingSasaran] = useState(true);
+
+  // Data Sasaran selalu bersumber dari backend. Backend melakukan scoping
+  // berdasarkan role/posyandu pengguna yang sedang login.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSasaran = async () => {
+      setIsLoadingSasaran(true);
+      try {
+        const res = await wargaService.getAllWarga({
+          status_domisili: "all",
+        });
+
+        const items = Array.isArray(res?.data) ? res.data : [];
+
+        setSasaranList(items.map(mapBackendWargaToFrontend).filter(Boolean));
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Gagal mengambil Data Sasaran dari backend:", err);
+          showWarning("Gagal Memuat Data Sasaran", err.message || "Data sasaran tidak dapat dimuat dari server.");
+        }
+      } finally {
+        if (!cancelled) setIsLoadingSasaran(false);
+      }
+    };
+
+    loadSasaran();
+    return () => {
+      cancelled = true;
+    };
+  }, [setSasaranList]);
 
   // Modal Visibility States
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -138,6 +146,7 @@ export default function DataSasaranPage({
   });
 
   const [mutasiForm, setMutasiForm] = useState({
+    wargaId: null,
     nama: "",
     tglLahir: "",
     nik: "",
@@ -350,17 +359,7 @@ export default function DataSasaranPage({
       statusPernikahanBackend = "menikah";
     }
 
-    // Tanggal lahir default jika kosong
-    let tglLahirFormatted = categoryForm.tglLahir;
-    if (!tglLahirFormatted) {
-      if (katId === "lansia") {
-        tglLahirFormatted = "1960-01-01";
-      } else if (isDewasaOrLansia) {
-        tglLahirFormatted = "1995-01-01";
-      } else {
-        tglLahirFormatted = new Date().toISOString().split("T")[0];
-      }
-    }
+    const tglLahirFormatted = categoryForm.tglLahir;
 
     // Jenis Kelamin Backend: 'L' | 'P'
     const genderBackend = categoryForm.gender === "Perempuan" || categoryForm.gender === "P" || isFemale ? "P" : "L";
@@ -381,18 +380,13 @@ export default function DataSasaranPage({
       nama_lengkap: categoryForm.nama.trim(),
       jenis_kelamin: genderBackend,
       tanggal_lahir: tglLahirFormatted,
-      alamat: categoryForm.alamat || "-",
+      alamat: categoryForm.alamat.trim(),
       telepon: categoryForm.noHp || "-",
       nama_ibu: isDewasaOrLansia ? null : categoryForm.namaIbu || null,
       nama_ayah: isDewasaOrLansia ? null : categoryForm.namaAyah || null,
       status_perkawinan: statusPernikahanBackend,
       pekerjaan: isChild ? null : categoryForm.pekerjaan || null,
       status_domisili: "aktif",
-      posyandu_id: 1,
-
-      // Hanya dikirim untuk validasi backend.
-      // Tidak disimpan di tabel warga.
-      kategori_sasaran: mapCategoryIdToBackend(katId),
     };
 
     // Cek apakah NIK ini sudah ada di database / sasaranList
@@ -458,7 +452,7 @@ export default function DataSasaranPage({
       }
 
       if (!createdItem) {
-        throw new Error("Backend tidak mengembalikan data warga yang baru dibuat.");
+        throw new Error("Backend tidak mengembalikan data warga yang berhasil dibuat.");
       }
 
       // Jika klaster bumil / nifas, buat juga profil kehamilannya
@@ -485,27 +479,6 @@ export default function DataSasaranPage({
       onRefreshData?.();
     } catch (err) {
       console.error("Gagal simpan sasaran:", err);
-      // Kategori yang dipilih kader tidak sesuai dengan tanggal lahir.
-      if (err?.response?.data?.code === "CATEGORY_BIRTHDATE_MISMATCH") {
-        const mismatch = err.response.data.data;
-
-        const kategoriLabel = {
-          bayi: "Bayi 0–11 Bulan",
-          balita: "Balita 12–59 Bulan",
-          apras: "Apras 60–72 Bulan",
-          uskrem_6_14: "Usia Sekolah/Remaja 6–14 Tahun",
-          uskrem_15_18: "Remaja 15–18 Tahun",
-          dewasa: "Dewasa",
-          lansia: "Lansia",
-        };
-
-        showWarning(
-          "Kategori Tidak Sesuai",
-          `Tanggal lahir menunjukkan sasaran berusia ${mismatch.usia_tahun} tahun ${mismatch.usia_bulan % 12} bulan dan termasuk kategori ${kategoriLabel[mismatch.kategori_seharusnya] || mismatch.kategori_seharusnya}. Kategori yang dipilih adalah ${kategoriLabel[mismatch.kategori_dipilih] || mismatch.kategori_dipilih}.`,
-        );
-
-        return;
-      }
       // Fallback jika NIK ternyata sudah ada di DB dan form adalah Bumil/Nifas
       if ((katId === "bumil" || katId === "nifas") && err.message && err.message.toLowerCase().includes("sudah terdaftar")) {
         try {
@@ -537,7 +510,7 @@ export default function DataSasaranPage({
   };
 
   // Handle Mutasi Cek Data Submit (Step 1 -> Step 1.5 Verification)
-  const handleMutasiCheckSubmit = (e) => {
+  const handleMutasiCheckSubmit = async (e) => {
     e.preventDefault();
     const nikValidation = validateNik(mutasiCheckForm.nik);
     if (!nikValidation.isValid) {
@@ -545,50 +518,73 @@ export default function DataSasaranPage({
       return;
     }
 
-    // Cari apakah ada data warga yang cocok atau gunakan data default realistis
-    const foundWarga = sasaranList.find((w) => w.nik === mutasiCheckForm.nik || w.nama?.toLowerCase() === mutasiCheckForm.nama?.toLowerCase());
+    if (!mutasiCheckForm.nama.trim() || !mutasiCheckForm.namaIbu.trim()) {
+      showWarning("Validasi Data Mutasi", "Nama lengkap dan nama ibu kandung wajib diisi.");
+      return;
+    }
 
-    setMutasiCheckForm({
-      ...mutasiCheckForm,
-      nama: mutasiCheckForm.nama || foundWarga?.nama || "Salsa Dilla",
-      nik: mutasiCheckForm.nik || foundWarga?.nik || "32010101010999",
-      namaIbu: mutasiCheckForm.namaIbu || foundWarga?.namaIbu || "Kiya",
-      alamatAsal: foundWarga?.alamat || "Jl. Melati No. 12, RW 04, Desa Sukamaju",
-      posyanduAsal: foundWarga?.posyandu || "Posyandu Melati RW 04",
-      tglLahir: foundWarga?.tglLahir || "1998-05-14",
-      gender: foundWarga?.gender || "Perempuan",
-      statusPernikahan: foundWarga?.statusPernikahan || "Menikah",
-      pekerjaan: foundWarga?.pekerjaan || "Ibu Rumah Tangga",
-      noHp: foundWarga?.noHp || "081234567890",
-    });
+    try {
+      const res = await wargaService.verifyMutasi({
+        nik: nikValidation.cleanValue,
+        nama_lengkap: mutasiCheckForm.nama.trim(),
+        nama_ibu: mutasiCheckForm.namaIbu.trim(),
+      });
 
-    // Proceed to Step 1.5: Verification confirmation modal
-    setShowMutasiCheckModal(false);
-    setShowMutasiVerifyModal(true);
+      const verified = res?.data;
+      if (!verified?.id) {
+        throw new Error("Backend tidak mengembalikan data warga hasil verifikasi.");
+      }
+
+      // Ambil detail warga dari endpoint resmi agar form berikutnya tidak
+      const detailRes = await wargaService.getWargaById(verified.id);
+      const warga = detailRes?.data || detailRes;
+
+      setMutasiCheckForm((prev) => ({
+        ...prev,
+        wargaId: verified.id,
+        nama: warga?.nama_lengkap || verified.nama_lengkap || prev.nama,
+        nik: warga?.nik || verified.nik || prev.nik,
+        namaIbu: warga?.nama_ibu || verified.nama_ibu || prev.namaIbu,
+        alamatAsal: warga?.alamat || "",
+        posyanduAsal: warga?.posyandu?.nama_posyandu || verified.posyandu_saat_ini?.nama_posyandu || "",
+        tglLahir: warga?.tanggal_lahir ? String(warga.tanggal_lahir).split("T")[0] : "",
+        gender: warga?.jenis_kelamin === "P" ? "Perempuan" : "Laki-laki",
+        statusPernikahan: warga?.status_perkawinan === "menikah" ? "Menikah" : "Belum Menikah",
+        pekerjaan: warga?.pekerjaan || "",
+        noHp: warga?.telepon || "",
+      }));
+
+      setShowMutasiCheckModal(false);
+      setShowMutasiVerifyModal(true);
+    } catch (err) {
+      console.error("Gagal verifikasi mutasi:", err);
+      showWarning("Data Mutasi Tidak Ditemukan", err.message || "Data warga tidak cocok dengan data pada server.");
+    }
   };
 
   // Handle Mutasi Verification Confirmed (Step 1.5 -> Step 2 Mutasi Form)
   const handleConfirmMutasiVerification = () => {
     setShowMutasiVerifyModal(false);
-    setMutasiForm({
-      ...mutasiForm,
-      nama: mutasiCheckForm.nama || "",
-      nik: mutasiCheckForm.nik || "",
-      namaIbu: mutasiCheckForm.namaIbu || "",
-      alamatAsal: mutasiCheckForm.alamatAsal || "Jl. Melati No. 12, RW 04, Desa Sukamaju",
-      posyanduAsal: mutasiCheckForm.posyanduAsal || "Posyandu Melati RW 04",
-      tglLahir: mutasiCheckForm.tglLahir || "1998-05-14",
-      gender: mutasiCheckForm.gender || "Perempuan",
-      statusPernikahan: mutasiCheckForm.statusPernikahan || "Menikah",
-      pekerjaan: mutasiCheckForm.pekerjaan || "Ibu Rumah Tangga",
-      noHp: mutasiCheckForm.noHp || "081234567890",
+    setMutasiForm((prev) => ({
+      ...prev,
+      wargaId: mutasiCheckForm.wargaId || null,
+      nama: mutasiCheckForm.nama,
+      nik: mutasiCheckForm.nik,
+      namaIbu: mutasiCheckForm.namaIbu,
+      alamatAsal: mutasiCheckForm.alamatAsal,
+      posyanduAsal: mutasiCheckForm.posyanduAsal,
+      tglLahir: mutasiCheckForm.tglLahir,
+      gender: mutasiCheckForm.gender,
+      statusPernikahan: mutasiCheckForm.statusPernikahan,
+      pekerjaan: mutasiCheckForm.pekerjaan,
+      noHp: mutasiCheckForm.noHp,
       alamatDomisiliBaru: "",
       status: "Aktif",
-    });
+    }));
     setShowMutasiFormModal(true);
   };
 
-  // Handle Mutasi Final Save Submit (Image 4)
+  // Handle Mutasi Final Save Submit
   const handleMutasiSaveSubmit = async (e) => {
     e.preventDefault();
 
@@ -598,36 +594,35 @@ export default function DataSasaranPage({
       return;
     }
 
-    const genderBackend = mutasiForm.gender === "Perempuan" || mutasiForm.gender === "P" ? "P" : "L";
-    const payload = {
-      nik: nikValidation.cleanValue,
-      nama_lengkap: (mutasiForm.nama || "Sasaran Mutasi").trim(),
-      jenis_kelamin: genderBackend,
-      tanggal_lahir: mutasiForm.tglLahir || "1995-01-01",
-      alamat: mutasiForm.alamatDomisiliBaru || mutasiForm.alamatAsal || "Wilayah Posyandu Melati",
-      telepon: mutasiForm.noHp || "-",
-      nama_ibu: mutasiForm.namaIbu || null,
-      status_perkawinan: (mutasiForm.statusPernikahan || "").toLowerCase().includes("menikah") ? "menikah" : "tidak_menikah",
-      pekerjaan: mutasiForm.pekerjaan || null,
-      status_domisili: "aktif",
-    };
+    if (!mutasiForm.alamatDomisiliBaru.trim()) {
+      showWarning("Validasi Alamat", "Alamat domisili baru wajib diisi.");
+      return;
+    }
 
     try {
-      const res = await wargaService.createWarga(payload);
-      let createdItem = null;
-      if (res?.data) {
-        createdItem = mapBackendWargaToFrontend(res.data);
+      const confirmRes = await wargaService.confirmMutasi({
+        warga_id: Number(mutasiForm.wargaId),
+        nik: nikValidation.cleanValue,
+        nama_lengkap: mutasiForm.nama.trim(),
+        nama_ibu: mutasiForm.namaIbu.trim(),
+      });
+
+      if (!confirmRes?.data?.id) {
+        throw new Error("Backend tidak mengembalikan hasil mutasi yang valid.");
       }
-      if (!createdItem) {
-        throw new Error("Backend tidak mengembalikan data warga hasil mutasi.");
-      }
-      setSasaranList([createdItem, ...sasaranList.filter((s) => s.nik !== createdItem.nik)]);
+
+      // Endpoint confirm mutasi memindahkan Posyandu. Update alamat baru
+      // dilakukan melalui endpoint warga yang sama, bukan membuat warga baru.
+      await wargaService.updateWarga(confirmRes.data.id, {
+        alamat: mutasiForm.alamatDomisiliBaru.trim(),
+      });
+
       setShowMutasiFormModal(false);
-      showSuccess("Mutasi Berhasil", `Sasaran mutasi domisili atas nama "${createdItem.nama}" berhasil disimpan ke database.`);
+      showSuccess("Mutasi Berhasil", `Sasaran atas nama "${mutasiForm.nama}" berhasil dimutasi ke Posyandu tujuan.`);
       onRefreshData?.();
     } catch (err) {
-      console.error("Gagal simpan sasaran mutasi:", err);
-      showWarning("Gagal Menyimpan Mutasi", err.message || "Gagal menyimpan data mutasi ke database server.");
+      console.error("Gagal menyimpan mutasi:", err);
+      showWarning("Gagal Menyimpan Mutasi", err.message || "Gagal memproses mutasi pada database server.");
     }
   };
 
@@ -751,7 +746,13 @@ export default function DataSasaranPage({
               </tr>
             </thead>
             <tbody>
-              {filteredData.length > 0 ? (
+              {isLoadingSasaran ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-5 text-muted">
+                    Memuat data sasaran dari server...
+                  </td>
+                </tr>
+              ) : filteredData.length > 0 ? (
                 filteredData.map((item, index) => (
                   <tr key={item.id}>
                     <td className="ps-4 text-center fw-semibold text-secondary">{index + 1}</td>
@@ -811,18 +812,7 @@ export default function DataSasaranPage({
         {/* Pagination Footer */}
         <div className="d-flex flex-column flex-sm-row align-items-center justify-content-between pt-3 border-top mt-3 text-muted small gap-3">
           <div>
-            Menampilkan <span className="fw-semibold text-dark">{filteredData.length}</span> dari <span className="fw-semibold text-dark">148</span> sasaran
-          </div>
-          <div className="d-flex align-items-center gap-1">
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
-              <ChevronLeft size={16} />
-            </button>
-            <button className="btn btn-sm btn-primary-custom px-3 py-1 me-1">1</button>
-            <button className="btn btn-sm btn-light border px-3 py-1 me-1">2</button>
-            <button className="btn btn-sm btn-light border px-3 py-1 me-1">3</button>
-            <button className="btn btn-sm btn-light border p-1 rounded-2">
-              <ChevronRight size={16} />
-            </button>
+            Menampilkan <span className="fw-semibold text-dark">{filteredData.length}</span> sasaran dari {sasaranList.length}
           </div>
         </div>
       </div>
@@ -1772,13 +1762,13 @@ export default function DataSasaranPage({
                 <span className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
                   Alamat
                 </span>
-                <span className="fw-semibold text-dark">{mutasiCheckForm.alamat || mutasiCheckForm.alamatAsal || "Jl. Melati No. 12, RW 04, Desa Sukamaju"}</span>
+                <span className="fw-semibold text-dark">{mutasiCheckForm.alamatAsal || "-"}</span>
               </div>
               <div className="col-12 pt-2 border-top">
                 <span className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
                   Posyandu Sebelum Mutasi
                 </span>
-                <span className="fw-semibold text-dark">{mutasiCheckForm.posyanduAsal || "Posyandu Melati RW 04"}</span>
+                <span className="fw-semibold text-dark">{mutasiCheckForm.posyanduAsal || "-"}</span>
               </div>
             </div>
           </div>
