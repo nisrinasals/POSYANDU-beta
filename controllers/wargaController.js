@@ -1,4 +1,4 @@
-const { Warga, Posyandu, Puskesmas, KunjunganPosyandu, Pemeriksaan, ProfileKehamilan } = require("../models");
+const { Warga, Posyandu, Puskesmas, KunjunganPosyandu, Pemeriksaan, ProfileKehamilan, ProfilKesehatanWarga } = require("../models");
 const { Op } = require("sequelize");
 const ExcelJS = require("exceljs");
 const { tentukanKategori, tentukanKategoriAktif, hitungUmur, hitungRekapSasaran } = require("../utils/kategoriHelper");
@@ -178,6 +178,11 @@ const getAllWarga = async (req, res, next) => {
           separate: true,
           order: [["id", "DESC"]],
         },
+        {
+          model: ProfilKesehatanWarga,
+          as: "profilKesehatan",
+          required: false,
+        },
       ],
     });
 
@@ -246,6 +251,11 @@ const getWargaById = async (req, res, next) => {
         {
           model: ProfileKehamilan,
           as: "profileKehamilan",
+          required: false,
+        },
+        {
+          model: ProfilKesehatanWarga,
+          as: "profilKesehatan",
           required: false,
         },
         {
@@ -359,25 +369,54 @@ const createWarga = async (req, res, next) => {
       });
     }
 
-    const newWarga = await Warga.create({
-      nik,
-      nama_lengkap,
-      jenis_kelamin,
-      tanggal_lahir,
-      alamat: alamat || null,
-      rt: rt || null,
-      rw: rw || null,
-      telepon: telepon || null,
-      nama_ibu: nama_ibu || null,
-      nama_ayah: nama_ayah || null,
-      status_perkawinan: status_perkawinan || "tidak_menikah",
-      pekerjaan: pekerjaan || null,
-      pekerjaan_lainnya: pekerjaan_lainnya || null,
-      posyandu_id: posyanduTarget,
-      bb_lahir_kg: bb_lahir_kg || null,
-      tb_lahir_cm: tb_lahir_cm || null,
-      status_domisili,
-    });
+    const transaction = await Warga.sequelize.transaction();
+    let newWarga;
+    let createdProfil = null;
+
+    try {
+      newWarga = await Warga.create(
+        {
+          nik,
+          nama_lengkap,
+          jenis_kelamin,
+          tanggal_lahir,
+          alamat: alamat || null,
+          rt: rt || null,
+          rw: rw || null,
+          telepon: telepon || null,
+          nama_ibu: nama_ibu || null,
+          nama_ayah: nama_ayah || null,
+          status_perkawinan: status_perkawinan || "tidak_menikah",
+          pekerjaan: pekerjaan || null,
+          pekerjaan_lainnya: pekerjaan_lainnya || null,
+          posyandu_id: posyanduTarget,
+          bb_lahir_kg: bb_lahir_kg || null,
+          tb_lahir_cm: tb_lahir_cm || null,
+          status_domisili,
+        },
+        { transaction }
+      );
+
+      const profilInput = req.body.profil_kesehatan !== undefined ? req.body.profil_kesehatan : req.body.profil_kesehatan_warga;
+      if (profilInput) {
+        const kategoriEstimasi = tentukanKategori(tanggal_lahir);
+        const isAdultOrLansia = ["dewasa", "lansia"].includes(kategoriEstimasi);
+        createdProfil = await ProfilKesehatanWarga.create(
+          {
+            warga_id: newWarga.id,
+            riwayat_keluarga: profilInput.riwayat_keluarga || {},
+            riwayat_diri: profilInput.riwayat_diri || {},
+            perilaku_berisiko: isAdultOrLansia ? (profilInput.perilaku_berisiko || {}) : {},
+          },
+          { transaction }
+        );
+      }
+
+      await transaction.commit();
+    } catch (createErr) {
+      await transaction.rollback();
+      throw createErr;
+    }
 
     const { umurText } = hitungUmur(tanggal_lahir);
 
@@ -390,11 +429,16 @@ const createWarga = async (req, res, next) => {
       newValue: newWarga.toJSON(),
     });
 
+    const plainWarga = newWarga.toJSON();
+    if (createdProfil) {
+      plainWarga.profilKesehatan = createdProfil.toJSON();
+    }
+
     return res.status(201).json({
       success: true,
       message: `Berhasil menambahkan data warga [${nama_lengkap}].`,
       data: {
-        ...newWarga.toJSON(),
+        ...plainWarga,
         umur_text: umurText,
         kategori_sasaran_estimasi: tentukanKategori(tanggal_lahir),
       },
@@ -484,24 +528,72 @@ const updateWarga = async (req, res, next) => {
       status_domisili: warga.status_domisili,
     };
 
-    await warga.update({
-      nik: nik !== undefined ? nik : warga.nik,
-      nama_lengkap: nama_lengkap !== undefined ? nama_lengkap : warga.nama_lengkap,
-      jenis_kelamin: jenis_kelamin !== undefined ? jenis_kelamin : warga.jenis_kelamin,
-      tanggal_lahir: tanggal_lahir !== undefined ? tanggal_lahir : warga.tanggal_lahir,
-      alamat: alamat !== undefined ? alamat : warga.alamat,
-      rt: rt !== undefined ? rt : warga.rt,
-      rw: rw !== undefined ? rw : warga.rw,
-      telepon: telepon !== undefined ? telepon : warga.telepon,
-      nama_ibu: nama_ibu !== undefined ? nama_ibu : warga.nama_ibu,
-      nama_ayah: nama_ayah !== undefined ? nama_ayah : warga.nama_ayah,
-      status_perkawinan: status_perkawinan !== undefined ? status_perkawinan : warga.status_perkawinan,
-      pekerjaan: pekerjaan !== undefined ? pekerjaan : warga.pekerjaan,
-      pekerjaan_lainnya: pekerjaan_lainnya !== undefined ? pekerjaan_lainnya : warga.pekerjaan_lainnya,
-      bb_lahir_kg: bb_lahir_kg !== undefined ? bb_lahir_kg : warga.bb_lahir_kg,
-      tb_lahir_cm: tb_lahir_cm !== undefined ? tb_lahir_cm : warga.tb_lahir_cm,
-      status_domisili: status_domisili !== undefined ? status_domisili : warga.status_domisili,
-    });
+    const profilInput = req.body.profil_kesehatan !== undefined ? req.body.profil_kesehatan : req.body.profil_kesehatan_warga;
+
+    const transaction = await Warga.sequelize.transaction();
+    try {
+      await warga.update(
+        {
+          nik: nik !== undefined ? nik : warga.nik,
+          nama_lengkap: nama_lengkap !== undefined ? nama_lengkap : warga.nama_lengkap,
+          jenis_kelamin: jenis_kelamin !== undefined ? jenis_kelamin : warga.jenis_kelamin,
+          tanggal_lahir: tanggal_lahir !== undefined ? tanggal_lahir : warga.tanggal_lahir,
+          alamat: alamat !== undefined ? alamat : warga.alamat,
+          rt: rt !== undefined ? rt : warga.rt,
+          rw: rw !== undefined ? rw : warga.rw,
+          telepon: telepon !== undefined ? telepon : warga.telepon,
+          nama_ibu: nama_ibu !== undefined ? nama_ibu : warga.nama_ibu,
+          nama_ayah: nama_ayah !== undefined ? nama_ayah : warga.nama_ayah,
+          status_perkawinan: status_perkawinan !== undefined ? status_perkawinan : warga.status_perkawinan,
+          pekerjaan: pekerjaan !== undefined ? pekerjaan : warga.pekerjaan,
+          pekerjaan_lainnya: pekerjaan_lainnya !== undefined ? pekerjaan_lainnya : warga.pekerjaan_lainnya,
+          bb_lahir_kg: bb_lahir_kg !== undefined ? bb_lahir_kg : warga.bb_lahir_kg,
+          tb_lahir_cm: tb_lahir_cm !== undefined ? tb_lahir_cm : warga.tb_lahir_cm,
+          status_domisili: status_domisili !== undefined ? status_domisili : warga.status_domisili,
+        },
+        { transaction }
+      );
+
+      if (profilInput !== undefined && profilInput !== null) {
+        const targetTanggalLahir = tanggal_lahir !== undefined ? tanggal_lahir : warga.tanggal_lahir;
+        const kategoriAktif = tentukanKategori(targetTanggalLahir);
+        const isAdultOrLansia = ["dewasa", "lansia"].includes(kategoriAktif);
+
+        let existingProfil = await ProfilKesehatanWarga.findOne({ where: { warga_id: warga.id }, transaction });
+        const newRiwayatKeluarga = profilInput.riwayat_keluarga !== undefined ? profilInput.riwayat_keluarga : (existingProfil?.riwayat_keluarga || {});
+        const newRiwayatDiri = profilInput.riwayat_diri !== undefined ? profilInput.riwayat_diri : (existingProfil?.riwayat_diri || {});
+        const newPerilaku = isAdultOrLansia
+          ? (profilInput.perilaku_berisiko !== undefined ? profilInput.perilaku_berisiko : (existingProfil?.perilaku_berisiko || {}))
+          : {};
+
+        if (existingProfil) {
+          await existingProfil.update(
+            {
+              riwayat_keluarga: newRiwayatKeluarga,
+              riwayat_diri: newRiwayatDiri,
+              perilaku_berisiko: newPerilaku,
+              updated_at: new Date(),
+            },
+            { transaction }
+          );
+        } else {
+          await ProfilKesehatanWarga.create(
+            {
+              warga_id: warga.id,
+              riwayat_keluarga: newRiwayatKeluarga,
+              riwayat_diri: newRiwayatDiri,
+              perilaku_berisiko: newPerilaku,
+            },
+            { transaction }
+          );
+        }
+      }
+
+      await transaction.commit();
+    } catch (updateErr) {
+      await transaction.rollback();
+      throw updateErr;
+    }
 
     await createAuditLog({
       userId: req.user?.id ?? null,
@@ -529,10 +621,17 @@ const updateWarga = async (req, res, next) => {
       },
     });
 
+    const updatedWargaData = await Warga.findByPk(warga.id, {
+      include: [
+        { model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "alamat", "puskesmas_id"] },
+        { model: ProfilKesehatanWarga, as: "profilKesehatan" },
+      ],
+    });
+
     return res.status(200).json({
       success: true,
       message: "Data warga berhasil diperbarui.",
-      data: warga,
+      data: updatedWargaData || warga,
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) return res.status(409).json({ success: false, message: "NIK sudah digunakan oleh warga lain." });

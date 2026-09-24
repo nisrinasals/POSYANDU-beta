@@ -6,6 +6,42 @@ const { positiveId, pagination } = require("./common");
 const kategori = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 const statusDomisili = ["aktif", "pindah", "meninggal"];
 
+const VALID_RIWAYAT_KEYS = ["hipertensi", "DM", "stroke", "jantung", "asma"];
+const VALID_PERILAKU_KEYS = ["merokok", "konsumsi_tinggi_gula", "garam", "lemak", "konsumsi_tinggi_garam", "konsumsi_tinggi_lemak"];
+
+const validateProfilKesehatanSection = (sectionObj, validKeys, sectionName) => {
+  if (sectionObj === undefined || sectionObj === null) return true;
+  if (typeof sectionObj !== "object" || Array.isArray(sectionObj)) {
+    throw new Error(`${sectionName} harus berupa object.`);
+  }
+  for (const [key, val] of Object.entries(sectionObj)) {
+    if (!validKeys.includes(key)) {
+      throw new Error(`Key '${key}' pada ${sectionName} tidak valid.`);
+    }
+    if (typeof val !== "boolean") {
+      throw new Error(`Nilai '${key}' pada ${sectionName} harus berupa boolean.`);
+    }
+  }
+  return true;
+};
+
+const validateProfilKesehatanPayload = (value) => {
+  if (value === undefined || value === null) return true;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("profil_kesehatan harus berupa object.");
+  }
+  if (value.riwayat_keluarga !== undefined) {
+    validateProfilKesehatanSection(value.riwayat_keluarga, VALID_RIWAYAT_KEYS, "riwayat_keluarga");
+  }
+  if (value.riwayat_diri !== undefined) {
+    validateProfilKesehatanSection(value.riwayat_diri, VALID_RIWAYAT_KEYS, "riwayat_diri");
+  }
+  if (value.perilaku_berisiko !== undefined) {
+    validateProfilKesehatanSection(value.perilaku_berisiko, VALID_PERILAKU_KEYS, "perilaku_berisiko");
+  }
+  return true;
+};
+
 const listFilters = [
   ...pagination,
   query("search").optional().trim().isLength({ max: 100 }).withMessage("search maksimal 100 karakter."),
@@ -46,6 +82,8 @@ const makeFields = (includePosyandu = true) => [
   body("bb_lahir_kg").optional().isFloat({ min: 0, max: 99.99 }).withMessage("bb_lahir_kg harus berupa angka 0 sampai 99.99.").toFloat(),
   body("tb_lahir_cm").optional().isFloat({ min: 0, max: 999.99 }).withMessage("tb_lahir_cm harus berupa angka valid.").toFloat(),
   body("status_domisili").optional().isIn(statusDomisili).withMessage("status_domisili tidak valid."),
+  body("profil_kesehatan").optional().custom(validateProfilKesehatanPayload),
+  body("profil_kesehatan_warga").optional().custom(validateProfilKesehatanPayload),
 ];
 
 const createWarga = makeFields();

@@ -59,6 +59,7 @@ dibentuk pada migration `create-all-tables`; total schema akhir adalah
 |  13 | `20260921002000` | `add-email-verification-and-examination-completion.js` | Menambah email verification dan timestamp completion pemeriksaan                        |
 |  14 | `20260921003000` | `enforce-one-active-pregnancy.js`                      | Membuat unique partial index untuk satu kehamilan aktif                                 |
 |  15 | `20260921004000` | `backfill-active-email-verification.js`                | Backfill email verification untuk user aktif                                            |
+|  16 | `20260924000000` | `create-profil-kesehatan-warga.js`                     | Membuat tabel `profil_kesehatan_warga`                                                  |
 
 
 # 3. Detail Migration
