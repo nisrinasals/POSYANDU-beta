@@ -9,6 +9,8 @@ const { getSasaranExportColumns, formatSasaranRow } = require("../utils/export/s
 // 9 Kategori Sasaran Resmi ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 
+const AGE_BASED_KATEGORI = ["bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
+
 const VALID_STATUS_DOMISILI = ["aktif", "pindah", "meninggal"];
 const VALID_JENIS_KELAMIN = ["L", "P"];
 const VALID_STATUS_PERKAWINAN = ["menikah", "tidak_menikah"];
@@ -327,6 +329,8 @@ const createWarga = async (req, res, next) => {
       bb_lahir_kg,
       tb_lahir_cm,
       status_domisili = "aktif",
+
+      kategori_sasaran: kategoriInput,
     } = req.body;
 
     const posyanduTarget = role === "kader" ? user.posyandu_id : inputPosyanduId;
@@ -342,6 +346,34 @@ const createWarga = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "tanggal_lahir tidak boleh di masa depan." });
     }
 
+    if (kategoriInput !== undefined) {
+      if (!VALID_KATEGORI.includes(kategoriInput)) {
+        return res.status(400).json({
+          success: false,
+          message: `Kategori sasaran tidak valid. Pilihan: ${VALID_KATEGORI.join(", ")}`,
+        });
+      }
+
+      if (AGE_BASED_KATEGORI.includes(kategoriInput)) {
+        const kategoriAktual = tentukanKategoriAktif(tanggal_lahir, [], new Date());
+
+        if (kategoriAktual !== kategoriInput) {
+          const { years, totalMonths } = hitungUmur(tanggal_lahir, new Date());
+
+          return res.status(400).json({
+            success: false,
+            code: "CATEGORY_BIRTHDATE_MISMATCH",
+            message: "Kategori sasaran tidak sesuai dengan tanggal lahir.",
+            data: {
+              kategori_dipilih: kategoriInput,
+              kategori_seharusnya: kategoriAktual,
+              usia_tahun: years,
+              usia_bulan: totalMonths,
+            },
+          });
+        }
+      }
+    }
     if (!isValidNik(nik)) {
       return res.status(400).json({ success: false, message: "NIK harus terdiri dari 16 digit angka." });
     }
@@ -394,7 +426,7 @@ const createWarga = async (req, res, next) => {
           tb_lahir_cm: tb_lahir_cm || null,
           status_domisili,
         },
-        { transaction }
+        { transaction },
       );
 
       const profilInput = req.body.profil_kesehatan !== undefined ? req.body.profil_kesehatan : req.body.profil_kesehatan_warga;
@@ -406,9 +438,9 @@ const createWarga = async (req, res, next) => {
             warga_id: newWarga.id,
             riwayat_keluarga: profilInput.riwayat_keluarga || {},
             riwayat_diri: profilInput.riwayat_diri || {},
-            perilaku_berisiko: isAdultOrLansia ? (profilInput.perilaku_berisiko || {}) : {},
+            perilaku_berisiko: isAdultOrLansia ? profilInput.perilaku_berisiko || {} : {},
           },
-          { transaction }
+          { transaction },
         );
       }
 
@@ -551,7 +583,7 @@ const updateWarga = async (req, res, next) => {
           tb_lahir_cm: tb_lahir_cm !== undefined ? tb_lahir_cm : warga.tb_lahir_cm,
           status_domisili: status_domisili !== undefined ? status_domisili : warga.status_domisili,
         },
-        { transaction }
+        { transaction },
       );
 
       if (profilInput !== undefined && profilInput !== null) {
@@ -560,11 +592,9 @@ const updateWarga = async (req, res, next) => {
         const isAdultOrLansia = ["dewasa", "lansia"].includes(kategoriAktif);
 
         let existingProfil = await ProfilKesehatanWarga.findOne({ where: { warga_id: warga.id }, transaction });
-        const newRiwayatKeluarga = profilInput.riwayat_keluarga !== undefined ? profilInput.riwayat_keluarga : (existingProfil?.riwayat_keluarga || {});
-        const newRiwayatDiri = profilInput.riwayat_diri !== undefined ? profilInput.riwayat_diri : (existingProfil?.riwayat_diri || {});
-        const newPerilaku = isAdultOrLansia
-          ? (profilInput.perilaku_berisiko !== undefined ? profilInput.perilaku_berisiko : (existingProfil?.perilaku_berisiko || {}))
-          : {};
+        const newRiwayatKeluarga = profilInput.riwayat_keluarga !== undefined ? profilInput.riwayat_keluarga : existingProfil?.riwayat_keluarga || {};
+        const newRiwayatDiri = profilInput.riwayat_diri !== undefined ? profilInput.riwayat_diri : existingProfil?.riwayat_diri || {};
+        const newPerilaku = isAdultOrLansia ? (profilInput.perilaku_berisiko !== undefined ? profilInput.perilaku_berisiko : existingProfil?.perilaku_berisiko || {}) : {};
 
         if (existingProfil) {
           await existingProfil.update(
@@ -574,7 +604,7 @@ const updateWarga = async (req, res, next) => {
               perilaku_berisiko: newPerilaku,
               updated_at: new Date(),
             },
-            { transaction }
+            { transaction },
           );
         } else {
           await ProfilKesehatanWarga.create(
@@ -584,7 +614,7 @@ const updateWarga = async (req, res, next) => {
               riwayat_diri: newRiwayatDiri,
               perilaku_berisiko: newPerilaku,
             },
-            { transaction }
+            { transaction },
           );
         }
       }
