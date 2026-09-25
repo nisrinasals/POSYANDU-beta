@@ -10,6 +10,7 @@ const kehamilanController = require("../controllers/kehamilanController");
 const userController = require("../controllers/userController");
 const imunisasiController = require("../controllers/imunisasiController");
 const rujukanController = require("../controllers/rujukanController");
+const ScreeningConfigController = require("../controllers/screeningConfigController");
 
 const uploadProfilePicture = require("../middleware/uploadProfilePicture");
 const { authenticateToken, authorize, denyDinkesPersonalData } = require("../middleware/authMiddleware");
@@ -19,7 +20,6 @@ const api = express.Router();
 
 const authenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin", "sa")];
 const personalAuthenticated = [...authenticated, denyDinkesPersonalData];
-
 // ======================================================
 // Authentication routes
 // ======================================================
@@ -132,5 +132,12 @@ api.delete("/pemeriksaan/:id", personalAuthenticated, validator.pemeriksaan.idOn
 api.get("/rujukan", personalAuthenticated, validator.rujukan.listFilters, validateResult, rujukanController.getAllRujukan);
 api.get("/rujukan/:id/export", personalAuthenticated, validator.rujukan.idOnly, validateResult, rujukanController.exportRujukanPdf);
 api.get("/rujukan/:id", personalAuthenticated, validator.rujukan.idOnly, validateResult, rujukanController.getRujukanById);
+
+// ======================================================
+// Screening Config routes
+// ======================================================
+
+api.get("screening-config", authenticateToken, authorize("dinkesAdmin", "sa"), validateResult, ScreeningConfigController.getScreeningConfig);
+api.put("screening-config/:id", authenticateToken, authorize("dinkesAdmin", "sa"), validator.screeningConfig.updateScreeningConfig, validateResult, ScreeningConfigController.getScreeningConfig);
 
 module.exports = api;

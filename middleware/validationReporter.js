@@ -12,6 +12,7 @@ const userValidators = require("./validators/userValidators");
 const wargaValidators = require("./validators/wargaValidators");
 const imunisasiValidators = require("./validators/imunisasiValidators");
 const rujukanValidators = require("./validators/rujukanValidators");
+const screeningConfigValidators = require("./validators/screeningConfigValidator");
 
 const validator = {
   auth: authValidators,
@@ -25,6 +26,7 @@ const validator = {
   warga: wargaValidators,
   imunisasi: imunisasiValidators,
   rujukan: rujukanValidators,
+  screeningConfig: screeningConfigValidators,
 };
 
 const validateResult = (req, res, next) => {

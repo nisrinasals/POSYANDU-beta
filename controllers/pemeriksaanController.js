@@ -14,6 +14,7 @@ const { calculateGrowthZScores } = require("../utils/growthZScoreHelper");
 const { calculatePregnancyAge, validateHphtAgainstDate } = require("../utils/pregnancyHelper");
 const { getScreeningEligibility, validateIrreversibleAsi } = require("../utils/screeningEligibilityHelper");
 const { checkSudahSkriningTahunan, getPreviousAnnualScreening } = require("../utils/skriningChecker");
+const { getScreeningConfig } = require("../utils/screeningConfig");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -356,9 +357,7 @@ const getPemeriksaanById = async (req, res, next) => {
     }
 
     const targetYear = new Date(pemeriksaan.tanggal).getFullYear();
-    const prevAnnual = pemeriksaan.kunjungan?.warga_id
-      ? await getPreviousAnnualScreening(pemeriksaan.kunjungan.warga_id, targetYear, pemeriksaan.id)
-      : null;
+    const prevAnnual = pemeriksaan.kunjungan?.warga_id ? await getPreviousAnnualScreening(pemeriksaan.kunjungan.warga_id, targetYear, pemeriksaan.id) : null;
     const isAnnualCompleted = Boolean(prevAnnual || pemeriksaan.detail_skrining?.is_skrining_tahunan === true);
 
     return res.status(200).json({
@@ -392,9 +391,7 @@ const getScreeningHistory = async (req, res, next) => {
     if (!current) return res.status(404).json({ success: false, message: "Data pemeriksaan tidak ditemukan." });
     const history = (Array.isArray(current.screening_history) ? current.screening_history : []).sort((left, right) => new Date(right.tanggal) - new Date(left.tanggal));
     const targetYear = new Date(current.tanggal).getFullYear();
-    const prevAnnual = current.kunjungan?.warga_id
-      ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id)
-      : null;
+    const prevAnnual = current.kunjungan?.warga_id ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id) : null;
     const isAnnualCompleted = Boolean(prevAnnual || current.detail_skrining?.is_skrining_tahunan === true || history.some((h) => h.hasil?.is_skrining_tahunan === true));
 
     return res.status(200).json({
@@ -540,10 +537,9 @@ const getStep3Pemeriksaan = async (req, res, next) => {
     const periode = tentukanPeriodePemeriksaan(current.kategori_sasaran, current.tanggal, periodeAcuan);
 
     const targetYear = new Date(current.tanggal).getFullYear();
-    const prevAnnual = current.kunjungan?.warga_id
-      ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id)
-      : null;
+    const prevAnnual = current.kunjungan?.warga_id ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id) : null;
     const isAnnualCompleted = Boolean(prevAnnual || current.detail_skrining?.is_skrining_tahunan === true);
+    const config = await getScreeningConfig();
 
     return res.status(200).json({
       success: true,
@@ -569,7 +565,7 @@ const getStep3Pemeriksaan = async (req, res, next) => {
         historis: history,
         growth_history: history,
         usia_kehamilan: calculatePregnancyAge(periodeAcuan?.hpht, current.tanggal),
-        screening_eligibility: getScreeningEligibility(current.kunjungan.warga.tanggal_lahir, current.tanggal),
+        screening_eligibility: getScreeningEligibility(current.kunjungan.warga.tanggal_lahir, current.tanggal, config),
         is_annual_screening_completed: isAnnualCompleted,
         previous_annual_screening: prevAnnual ? { id: prevAnnual.id, tanggal: prevAnnual.tanggal, detail_skrining: prevAnnual.detail_skrining } : null,
       },
@@ -665,7 +661,7 @@ const createPemeriksaan = async (req, res, next) => {
     });
 
     const autoReasons = getCombinedReferralReasons(scoredSkrining.detail, plotData);
-    const isPerluRujukanDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true);
+    const isPerluRujukanDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : autoReasons.length > 0 || plotData.is_perlu_rujukan === true;
 
     if (isPerluRujukanDecision) {
       const referralReason = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || "").trim();
@@ -892,7 +888,7 @@ const saveStep5 = async (req, res, next) => {
     });
 
     const autoReasons = getCombinedReferralReasons(pemeriksaan.detail_skrining, plotData);
-    const keputusanRujukan = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true);
+    const keputusanRujukan = is_perlu_rujukan !== undefined ? is_perlu_rujukan : autoReasons.length > 0 || plotData.is_perlu_rujukan === true;
     const oldReferral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
     let referral = null;
 
@@ -1076,14 +1072,7 @@ const updatePemeriksaan = async (req, res, next) => {
     }
 
     const isStep2Edited =
-      bb_kg !== undefined ||
-      tb_cm !== undefined ||
-      lingkar_kepala_cm !== undefined ||
-      lila_cm !== undefined ||
-      lingkar_perut_cm !== undefined ||
-      td_sistole !== undefined ||
-      td_diastole !== undefined ||
-      kadar_gula !== undefined;
+      bb_kg !== undefined || tb_cm !== undefined || lingkar_kepala_cm !== undefined || lila_cm !== undefined || lingkar_perut_cm !== undefined || td_sistole !== undefined || td_diastole !== undefined || kadar_gula !== undefined;
     const isStep4Edited = detail_skrining !== undefined || is_skrining_tahunan !== undefined;
     const isStep5Edited = topik_penyuluhan !== undefined || is_perlu_rujukan !== undefined || alasan_rujukan !== undefined || status_kehadiran_rujukan !== undefined;
 
@@ -1113,7 +1102,7 @@ const updatePemeriksaan = async (req, res, next) => {
     });
 
     const autoReasons = getCombinedReferralReasons(updatedDetailSkrining, plotData);
-    const referralDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true || Boolean(oldReferral));
+    const referralDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : autoReasons.length > 0 || plotData.is_perlu_rujukan === true || Boolean(oldReferral);
 
     await pemeriksaan.update(
       {
