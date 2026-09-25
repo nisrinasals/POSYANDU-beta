@@ -8,7 +8,7 @@ const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
-const { getCombinedReferralReasons } = require("../utils/rujukanHelper");
+const { getScreeningReferralReasons, getPlotReferralReasons, getCombinedReferralReasons } = require("../utils/rujukanHelper");
 const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../utils/export/rekapExportHelper");
 const { calculateGrowthZScores } = require("../utils/growthZScoreHelper");
 const { calculatePregnancyAge, validateHphtAgainstDate } = require("../utils/pregnancyHelper");
@@ -806,6 +806,8 @@ const saveStep2 = async (req, res, next) => {
       step2_completed_at: new Date(),
     });
 
+    const plotReasons = getPlotReferralReasons(plotData);
+
     // Update status ke langkah 2 jika belum melebihi langkah 2
     if (["langkah_1"].includes(kunjungan.status_langkah)) {
       await kunjungan.update({ status_langkah: "langkah_2" });
@@ -868,6 +870,10 @@ const saveStep4 = async (req, res, next) => {
       step4_completed_at: new Date(),
     });
 
+    const screeningReferralReasons = getScreeningReferralReasons(scoredSkrining.detail);
+    const screeningConfig = await getScreeningConfig();
+    const screeningEligibility = getScreeningEligibility(kunjungan.warga.tanggal_lahir, tglPemeriksaan, screeningConfig);
+
     // Update status ke langkah 4 jika belum mencapai langkah 5
     if (["langkah_1", "langkah_2", "langkah_3"].includes(kunjungan.status_langkah)) {
       await kunjungan.update({ status_langkah: "langkah_4" });
@@ -921,44 +927,79 @@ const saveStep5 = async (req, res, next) => {
       },
     });
 
-    const autoReasons = getCombinedReferralReasons(pemeriksaan.detail_skrining, plotData);
-    const keputusanRujukan = is_perlu_rujukan !== undefined ? is_perlu_rujukan : autoReasons.length > 0 || plotData.is_perlu_rujukan === true;
-    const oldReferral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
+    const automaticReasons = getCombinedReferralReasons(pemeriksaan.detail_skrining, plotData);
+    const manualReason = String(alasan_rujukan ?? "").trim();
+    const keputusanRujukan = automaticReasons.length > 0 || is_perlu_rujukan === true;
+    const alasanFinal = [...automaticReasons, ...(manualReason ? [manualReason] : [])].join("; ");
+    const oldReferral = await Rujukan.findOne({
+      where: {
+        pemeriksaan_id: pemeriksaan.id,
+      },
+      transaction,
+    });
+
+    // Simpan snapshot SEBELUM update/delete
+    const oldReferralSnapshot = oldReferral ? rujukanAuditSnapshot(oldReferral) : null;
+
     let referral = null;
 
     if (keputusanRujukan) {
-      const alasan = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || oldReferral?.alasan_rujukan || "").trim();
-      if (!alasan) {
+      if (!alasanFinal) {
         await transaction.rollback();
         transaction = null;
-        return res.status(400).json({ success: false, message: "alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening." });
+
+        return res.status(400).json({
+          success: false,
+          message: "Alasan rujukan wajib diisi jika rujukan dipilih.",
+        });
       }
 
       const puskesmasId = kunjungan.warga?.posyandu?.puskesmas_id;
       if (!puskesmasId) {
         await transaction.rollback();
         transaction = null;
-        return res.status(400).json({ success: false, message: "Puskesmas warga tidak ditemukan." });
+
+        return res.status(400).json({
+          success: false,
+          message: "Puskesmas warga tidak ditemukan.",
+        });
       }
 
-      referral = oldReferral;
+      if (!req.user?.id) {
+        await transaction.rollback();
+        transaction = null;
+
+        return res.status(401).json({
+          success: false,
+          message: "User tidak terautentikasi.",
+        });
+      }
+
       const referralPayload = {
         warga_id: kunjungan.warga_id,
         pemeriksaan_id: pemeriksaan.id,
         puskesmas_id: puskesmasId,
-        kader_id: req.user?.id || 1,
-        tanggal_rujukan: new Date(),
-        alasan_rujukan: alasan,
+        kader_id: req.user.id,
+        tanggal_rujukan: oldReferral?.tanggal_rujukan || new Date(),
+        alasan_rujukan: alasanFinal,
         status_kehadiran_rujukan: status_kehadiran_rujukan ?? oldReferral?.status_kehadiran_rujukan ?? null,
       };
-      if (referral) await referral.update(referralPayload, { transaction });
-      else referral = await Rujukan.create(referralPayload, { transaction });
-    } else {
-      referral = oldReferral;
-      if (referral) {
-        await referral.destroy({ transaction });
-        referral = null;
+
+      if (oldReferral) {
+        await oldReferral.update(referralPayload, { transaction });
+
+        referral = oldReferral;
+      } else {
+        referral = await Rujukan.create(referralPayload, { transaction });
       }
+    } else {
+      if (oldReferral) {
+        await oldReferral.destroy({
+          transaction,
+        });
+      }
+
+      referral = null;
     }
 
     await pemeriksaan.update(
@@ -970,35 +1011,73 @@ const saveStep5 = async (req, res, next) => {
       { transaction },
     );
 
-    // Tandai status pemeriksaan kunjungan selesai
-    await kunjungan.update({ status_langkah: "langkah_5" }, { transaction });
+    await kunjungan.update(
+      {
+        status_langkah: "langkah_5",
+      },
+      { transaction },
+    );
+
+    if (!oldReferral && referral) {
+      await createAuditLog({
+        userId: req.user?.id ?? null,
+        action: AUDIT_ACTIONS.RUJUKAN_CREATE,
+        tableName: "rujukan",
+        recordId: referral.id,
+        oldValue: null,
+        newValue: rujukanAuditSnapshot(referral),
+        transaction,
+      });
+    } else if (oldReferral && referral) {
+      await createAuditLog({
+        userId: req.user?.id ?? null,
+        action: AUDIT_ACTIONS.RUJUKAN_UPDATE,
+        tableName: "rujukan",
+        recordId: referral.id,
+        oldValue: oldReferralSnapshot,
+        newValue: rujukanAuditSnapshot(referral),
+        transaction,
+      });
+    } else if (oldReferral && !referral) {
+      await createAuditLog({
+        userId: req.user?.id ?? null,
+        action: AUDIT_ACTIONS.RUJUKAN_DELETE,
+        tableName: "rujukan",
+        recordId: oldReferral.id,
+        oldValue: oldReferralSnapshot,
+        newValue: null,
+        transaction,
+      });
+    }
 
     await transaction.commit();
     transaction = null;
 
-    if (!oldReferral && referral) {
-      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_CREATE, tableName: "rujukan", recordId: referral.id, oldValue: null, newValue: rujukanAuditSnapshot(referral) });
-    } else if (oldReferral && referral) {
-      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_UPDATE, tableName: "rujukan", recordId: referral.id, oldValue: rujukanAuditSnapshot(oldReferral), newValue: rujukanAuditSnapshot(referral) });
-    } else if (oldReferral && !referral) {
-      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_DELETE, tableName: "rujukan", recordId: oldReferral.id, oldValue: rujukanAuditSnapshot(oldReferral), newValue: null });
-    }
-
     return res.status(200).json({
       success: true,
-      message: "Data edukasi & rujukan (Step 5) berhasil disimpan. Pemeriksaan Selesai.",
+      message: "Data edukasi & rujukan (Step 5) berhasil disimpan. Pemeriksaan selesai.",
       data: pemeriksaan,
       rujukan: referral,
+      referral_reasons: {
+        automatic: automaticReasons,
+        manual: manualReason || null,
+        final: alasanFinal || null,
+      },
     });
   } catch (error) {
-    if (transaction) await transaction.rollback();
+    if (transaction) {
+      await transaction.rollback();
+    }
+
     if (error.statusCode) {
-      return res.status(error.statusCode).json({ success: false, message: error.message });
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
     }
     next(error);
   }
 };
-
 /**
  * 7. UPDATE PEMERIKSAAN
  */
