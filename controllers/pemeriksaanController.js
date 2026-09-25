@@ -8,7 +8,7 @@ const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
-const { getScreeningReferralReasons, getPlotReferralReasons, getCombinedReferralReasons } = require("../utils/rujukanHelper");
+const { getCombinedReferralReasons } = require("../utils/rujukanHelper");
 const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../utils/export/rekapExportHelper");
 const { calculateGrowthZScores } = require("../utils/growthZScoreHelper");
 const { calculatePregnancyAge, validateHphtAgainstDate } = require("../utils/pregnancyHelper");
@@ -661,12 +661,16 @@ const createPemeriksaan = async (req, res, next) => {
     });
 
     const autoReasons = getCombinedReferralReasons(scoredSkrining.detail, plotData);
-    const isPerluRujukanDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : autoReasons.length > 0 || plotData.is_perlu_rujukan === true;
-
+    const manualReason = String(alasan_rujukan ?? "").trim();
+    const isPerluRujukanDecision = autoReasons.length > 0 || is_perlu_rujukan === true;
     if (isPerluRujukanDecision) {
-      const referralReason = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || "").trim();
+      const referralReason = [...autoReasons, ...(manualReason ? [manualReason] : [])].join("; ");
+
       if (!referralReason) {
-        return res.status(400).json({ success: false, message: "alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening." });
+        return res.status(400).json({
+          success: false,
+          message: "Alasan rujukan wajib diisi jika rujukan dipilih.",
+        });
       }
     }
 
@@ -696,25 +700,55 @@ const createPemeriksaan = async (req, res, next) => {
     });
 
     if (isPerluRujukanDecision) {
-      const referralReason = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || "").trim();
+      const referralReason = [...autoReasons, ...(manualReason ? [manualReason] : [])].join("; ");
+
       const puskesmasId = kunjungan.warga?.posyandu?.puskesmas_id;
-      if (puskesmasId) {
-        const existingRef = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id } });
-        const refPayload = {
-          warga_id: kunjungan.warga_id,
+
+      if (!puskesmasId) {
+        return res.status(400).json({
+          success: false,
+          message: "Puskesmas warga tidak ditemukan sehingga rujukan tidak dapat dibuat.",
+        });
+      }
+
+      if (!req.user?.id) {
+        return res.status(401).json({
+          success: false,
+          message: "User tidak terautentikasi.",
+        });
+      }
+
+      const existingRef = await Rujukan.findOne({
+        where: {
           pemeriksaan_id: pemeriksaan.id,
-          puskesmas_id: puskesmasId,
-          kader_id: req.user?.id || 1,
-          tanggal_rujukan: existingRef?.tanggal_rujukan || new Date(),
-          alasan_rujukan: referralReason,
-          status_kehadiran_rujukan: status_kehadiran_rujukan ?? existingRef?.status_kehadiran_rujukan ?? null,
-        };
-        if (existingRef) await existingRef.update(refPayload);
-        else await Rujukan.create(refPayload);
+        },
+      });
+
+      const refPayload = {
+        warga_id: kunjungan.warga_id,
+        pemeriksaan_id: pemeriksaan.id,
+        puskesmas_id: puskesmasId,
+        kader_id: req.user.id,
+        tanggal_rujukan: existingRef?.tanggal_rujukan || new Date(),
+        alasan_rujukan: referralReason,
+        status_kehadiran_rujukan: status_kehadiran_rujukan ?? existingRef?.status_kehadiran_rujukan ?? null,
+      };
+
+      if (existingRef) {
+        await existingRef.update(refPayload);
+      } else {
+        await Rujukan.create(refPayload);
       }
     } else {
-      const existingRef = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id } });
-      if (existingRef) await existingRef.destroy();
+      const existingRef = await Rujukan.findOne({
+        where: {
+          pemeriksaan_id: pemeriksaan.id,
+        },
+      });
+
+      if (existingRef) {
+        await existingRef.destroy();
+      }
     }
 
     // Update status kunjungan ke langkah 5 (Selesai)
