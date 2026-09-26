@@ -1,0 +1,2943 @@
+{
+  "info": {
+    "name": "POSYANDU-beta",
+    "description": "Complete Postman documentation generated from routes/api.js, validators, controllers and server.js. API operations: 65; public health operation: 1.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "server_url",
+      "value": "http://localhost:3000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{server_url}}/health",
+              "host": [
+                "{{server_url}}",
+                "health"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "description": "Public liveness check. Expected JSON: { success: true, message: \"API Posyandu aktif.\" }.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /auth/register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": [
+                "{{base_url}}",
+                "auth",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"kader\",\n  \"email\": \"kader@example.test\",\n  \"password\": \"Password123!\",\n  \"nama_lengkap\": \"Kader Contoh\",\n  \"telepon\": \"081234567890\",\n  \"nik\": \"3174010101010001\",\n  \"puskesmas_id\": 1,\n  \"posyandu_id\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Public registration. Body: role kader|puskesmas|dinkes, email, password 8-72 chars, nama_lengkap, optional telepon, nik (16 digits), puskesmas_id, posyandu_id. Sends OTP.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [201, 400, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/verify-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/verify-otp",
+              "host": [
+                "{{base_url}}",
+                "auth",
+                "verify-otp"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"kader@example.test\",\n  \"otp_code\": \"123456\",\n  \"purpose\": \"register\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Public OTP verification. Body: email, otp_code (6 digits), purpose register|reset_password.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/resend-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/resend-otp",
+              "host": [
+                "{{base_url}}",
+                "auth",
+                "resend-otp"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"kader@example.test\",\n  \"purpose\": \"register\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Public OTP resend. Body: email and purpose register|reset_password. May return 429 when rate limited.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 429];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}",
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"kader@example.test\",\n  \"password\": \"Password123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Public login. Body: email and password. Save the returned token or Authorization header as {{token}}.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}",
+                  "if (payload && payload.success !== false) { const data = payload.data || payload; const value = data && (data.id || (data.user && data.user.id)); if (value) pm.environment.set(\"token\", String(value)); }",
+                  "if (payload && payload.token) pm.environment.set(\"token\", payload.token); const auth = pm.response.headers.get(\"Authorization\"); if (auth) pm.environment.set(\"token\", auth.replace(/^Bearer\\s+/i, \"\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/request-reset-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/request-reset-password",
+              "host": [
+                "{{base_url}}",
+                "auth",
+                "request-reset-password"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"kader@example.test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Public password reset request. Body: email. OTP is sent by the backend.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/reset-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/reset-password",
+              "host": [
+                "{{base_url}}",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"kader@example.test\",\n  \"otp_code\": \"123456\",\n  \"new_password\": \"NewPassword123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Public password reset. Body: email, otp_code, new_password (8-72 chars).",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}",
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "description": "Authenticated logout. Invalidates the current token by increasing token_version.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 401];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Posyandu",
+      "item": [
+        {
+          "name": "GET /posyandu",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/posyandu",
+              "host": [
+                "{{base_url}}",
+                "posyandu"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": false
+                },
+                {
+                  "key": "search",
+                  "value": "Melati",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Authenticated roles: kader, puskesmas, puskesmasAdmin, dinkes, dinkesAdmin, sa. Query: page, limit 1-100, search, puskesmas_id, kecamatan_id. Returns data plus pagination.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /posyandu/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/posyandu/:id",
+              "host": [
+                "{{base_url}}",
+                "posyandu",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Authenticated roles above. Path id is a positive integer. Returns one posyandu with related puskesmas and kelurahan.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Warga",
+      "item": [
+        {
+          "name": "GET /warga",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/warga",
+              "host": [
+                "{{base_url}}",
+                "warga"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": false
+                },
+                {
+                  "key": "status_domisili",
+                  "value": "aktif",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Personal data route: authenticated roles except dinkes and dinkesAdmin. Query: page, limit, search, posyandu_id, jenis_kelamin L|P, kategori_sasaran, category, status_domisili all|aktif|pindah|meninggal, rt, rw. Returns warga and pagination.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /warga/export",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/warga/export",
+              "host": [
+                "{{base_url}}",
+                "warga",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "status_domisili",
+                  "value": "aktif",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Personal data route. Same warga filters. Returns an Excel file, not a JSON envelope.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /warga/statistik-sasaran",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/warga/statistik-sasaran",
+              "host": [
+                "{{base_url}}",
+                "warga",
+                "statistik-sasaran"
+              ]
+            }
+          },
+          "description": "Authenticated aggregate statistics route. Returns category counts and does not expose direct personal records.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 401];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /warga/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/warga/:id",
+              "host": [
+                "{{base_url}}",
+                "warga",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id is a positive integer. Returns warga with pregnancy and health profile relations.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /warga",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/warga",
+              "host": [
+                "{{base_url}}",
+                "warga"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nik\": \"3174010101010002\",\n  \"nama_lengkap\": \"Siti Contoh\",\n  \"jenis_kelamin\": \"P\",\n  \"tanggal_lahir\": \"2020-04-12\",\n  \"alamat\": \"Jl. Contoh No. 1\",\n  \"rt\": \"001\",\n  \"rw\": \"002\",\n  \"telepon\": \"081234567891\",\n  \"nama_ibu\": \"Ibu Contoh\",\n  \"nama_ayah\": \"Ayah Contoh\",\n  \"status_perkawinan\": \"tidak_menikah\",\n  \"pekerjaan\": \"Pelajar\",\n  \"posyandu_id\": 1,\n  \"status_domisili\": \"aktif\",\n  \"profil_kesehatan\": {\n    \"riwayat_keluarga\": {\n      \"hipertensi\": false,\n      \"DM\": false\n    },\n    \"riwayat_diri\": {\n      \"asma\": false\n    },\n    \"perilaku_berisiko\": {\n      \"merokok\": false\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Required: nik, nama_lengkap, jenis_kelamin L|P, tanggal_lahir. Optional profile and location fields are validated by wargaValidators.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [201, 400, 403, 409];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}",
+                  "if (payload && payload.success !== false) { const data = payload.data || payload; const value = data && (data.id || (data.user && data.user.id)); if (value) pm.environment.set(\"warga_id\", String(value)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /warga/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/warga/:id",
+              "host": [
+                "{{base_url}}",
+                "warga",
+                "{{id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nama_lengkap\": \"Siti Contoh Updated\",\n  \"alamat\": \"Jl. Contoh Baru No. 2\",\n  \"rt\": \"003\",\n  \"rw\": \"002\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Path id is positive. All warga fields are optional on update; no posyandu_id update is accepted by validator.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /warga/:id/status-domisili",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/warga/:id/status-domisili",
+              "host": [
+                "{{base_url}}",
+                "warga",
+                "{{id}}",
+                "status-domisili"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status_domisili\": \"aktif\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Path id is positive. Body status_domisili: aktif|pindah|meninggal.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /warga/mutasi/verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/warga/mutasi/verify",
+              "host": [
+                "{{base_url}}",
+                "warga",
+                "mutasi",
+                "verify"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nik\": \"3174010101010002\",\n  \"nama_lengkap\": \"Siti Contoh\",\n  \"nama_ibu\": \"Ibu Contoh\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Body: nik, nama_lengkap, nama_ibu. Verifies a candidate warga for mutation.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /warga/mutasi/confirm",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/warga/mutasi/confirm",
+              "host": [
+                "{{base_url}}",
+                "warga",
+                "mutasi",
+                "confirm"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warga_id\": \"{{warga_id}}\",\n  \"nik\": \"3174010101010002\",\n  \"nama_lengkap\": \"Siti Contoh\",\n  \"nama_ibu\": \"Ibu Contoh\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Body: warga_id, nik, nama_lengkap, nama_ibu. Confirms mutation using the kader destination scope.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Imunisasi",
+      "item": [
+        {
+          "name": "GET /imunisasi/warga/:warga_id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/imunisasi/warga/:warga_id",
+              "host": [
+                "{{base_url}}",
+                "imunisasi",
+                "warga",
+                "{{warga_id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path warga_id is positive. Returns immunizations ordered by date descending.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /imunisasi/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/imunisasi/:id",
+              "host": [
+                "{{base_url}}",
+                "imunisasi",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id is positive. Returns one immunization with warga relation.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /imunisasi",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/imunisasi",
+              "host": [
+                "{{base_url}}",
+                "imunisasi"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warga_id\": \"{{warga_id}}\",\n  \"jenis_imunisasi\": \"DPT-HB-Hib 1\",\n  \"tanggal_imunisasi\": \"2026-10-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Required body: warga_id, jenis_imunisasi (non-empty, max 100), tanggal_imunisasi (ISO date).",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [201, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /imunisasi/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/imunisasi/:id",
+              "host": [
+                "{{base_url}}",
+                "imunisasi",
+                "{{id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jenis_imunisasi\": \"DPT-HB-Hib 2\",\n  \"tanggal_imunisasi\": \"2026-11-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Path id positive. Optional jenis_imunisasi and tanggal_imunisasi.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sesi Posyandu",
+      "item": [
+        {
+          "name": "GET /sesi-posyandu",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sesi-posyandu",
+              "host": [
+                "{{base_url}}",
+                "sesi-posyandu"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": false
+                },
+                {
+                  "key": "posyandu_id",
+                  "value": "{{posyandu_id}}",
+                  "disabled": false
+                },
+                {
+                  "key": "status",
+                  "value": "open",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Authenticated roles. Query: page, limit, posyandu_id, status open|closed, tanggal ISO date.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /sesi-posyandu/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sesi-posyandu/:id",
+              "host": [
+                "{{base_url}}",
+                "sesi-posyandu",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Authenticated roles. Path id positive. Returns sesi with posyandu relation.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /sesi-posyandu",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sesi-posyandu",
+              "host": [
+                "{{base_url}}",
+                "sesi-posyandu"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"posyandu_id\": 1,\n  \"tanggal_pelaksanaan\": \"2026-10-01\",\n  \"lokasi\": \"Balai RW 002\",\n  \"rw\": \"002\",\n  \"status\": \"open\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Authenticated roles. Required: posyandu_id, tanggal_pelaksanaan ISO date, lokasi, rw, status open|closed. Duplicate posyandu/date is rejected.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [201, 400, 403, 409];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}",
+                  "if (payload && payload.success !== false) { const data = payload.data || payload; const value = data && (data.id || (data.user && data.user.id)); if (value) pm.environment.set(\"sesi_posyandu_id\", String(value)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /sesi-posyandu/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sesi-posyandu/:id",
+              "host": [
+                "{{base_url}}",
+                "sesi-posyandu",
+                "{{id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lokasi\": \"Balai RW 002 - Updated\",\n  \"rw\": \"002\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Authenticated roles. Path id positive. Optional posyandu_id, tanggal_pelaksanaan, lokasi, rw, status. Closed sessions cannot be changed.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404, 409];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /sesi-posyandu/:id/status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sesi-posyandu/:id/status",
+              "host": [
+                "{{base_url}}",
+                "sesi-posyandu",
+                "{{id}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"closed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Authenticated roles. Path id positive. Body status open|closed.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "PATCH /users/:id/verify",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/:id/verify",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "{{id}}",
+                "verify"
+              ]
+            }
+          },
+          "description": "Admin route: puskesmasAdmin, dinkesAdmin, sa. Path id positive. Approves a pending user.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /users/:id/deactivate",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/:id/deactivate",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "{{id}}",
+                "deactivate"
+              ]
+            }
+          },
+          "description": "Admin route: puskesmasAdmin, dinkesAdmin, sa. Path id positive. Deactivates a user.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /users/:id/puskesmas-admin",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/:id/puskesmas-admin",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "{{id}}",
+                "puskesmas-admin"
+              ]
+            }
+          },
+          "description": "Admin route: dinkesAdmin or sa. Path id positive. Replaces the puskesmas admin assignment.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /users/:id/dinkes-admin",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/:id/dinkes-admin",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "{{id}}",
+                "dinkes-admin"
+              ]
+            }
+          },
+          "description": "Admin route: dinkesAdmin or sa. Path id positive. Replaces the dinkes admin assignment.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/me",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "description": "Authenticated. Returns current profile without password hash and token version.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 401];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /users/me",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/me",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "me"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nama_lengkap\": \"Kader Contoh Updated\",\n  \"telepon\": \"081234567899\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Authenticated. Optional body: nama_lengkap, telepon, nik (16 digits).",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /users/me/profile-picture",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/me/profile-picture",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "me",
+                "profile-picture"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null
+                }
+              ]
+            }
+          },
+          "description": "Authenticated multipart upload. Form-data field file must be an image and is limited by upload middleware. Use Postman file selection.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 413];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": [
+                "{{base_url}}",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": false
+                },
+                {
+                  "key": "status",
+                  "value": "pending_approval",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Admin route: puskesmasAdmin, dinkesAdmin, sa. Query: page, limit, search, role, status, puskesmas_id, posyandu_id.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/:id",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Admin route: puskesmasAdmin, dinkesAdmin, sa. Path id positive.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /users/:id/role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/:id/role",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "{{id}}",
+                "role"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"kader\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "SA-only route. Path id positive. Body role: kader|puskesmas|puskesmasAdmin|dinkes|dinkesAdmin|sa.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /users/:id/status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/:id/status",
+              "host": [
+                "{{base_url}}",
+                "users",
+                "{{id}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Admin route. Path id positive. Body status: pending_approval|rejected|active|inactive.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kehamilan",
+      "item": [
+        {
+          "name": "GET /kehamilan/warga/:warga_id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kehamilan/warga/:warga_id",
+              "host": [
+                "{{base_url}}",
+                "kehamilan",
+                "warga",
+                "{{warga_id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path warga_id positive. Returns pregnancy profiles for warga.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /kehamilan/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kehamilan/:id",
+              "host": [
+                "{{base_url}}",
+                "kehamilan",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Returns pregnancy profile with warga and posyandu relations.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /kehamilan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/kehamilan",
+              "host": [
+                "{{base_url}}",
+                "kehamilan"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warga_id\": \"{{warga_id}}\",\n  \"nama_suami\": \"Budi Contoh\",\n  \"hpht\": \"2026-01-10\",\n  \"hpl\": \"2026-10-17\",\n  \"anak_ke\": 1,\n  \"status_kehamilan\": \"hamil\",\n  \"is_menyusui\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Required warga_id. Optional dates, nama_suami, anak_ke >=1, jarak_anak_sebelum_bulan >=0, cara_persalinan normal|dengan_tindakan, status hamil|nifas|menyusui|selesai, is_menyusui.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [201, 400, 403, 409];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /kehamilan/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/kehamilan/:id",
+              "host": [
+                "{{base_url}}",
+                "kehamilan",
+                "{{id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status_kehamilan\": \"nifas\",\n  \"tanggal_persalinan\": \"2026-10-17\",\n  \"is_menyusui\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Path id positive. Pregnancy fields are optional on update.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404, 409];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /kehamilan/:id/status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/kehamilan/:id/status",
+              "host": [
+                "{{base_url}}",
+                "kehamilan",
+                "{{id}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status_kehamilan\": \"menyusui\",\n  \"is_menyusui\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Path id positive. Required status_kehamilan plus optional is_menyusui and tanggal_persalinan.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kunjungan",
+      "item": [
+        {
+          "name": "POST /kunjungan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/kunjungan",
+              "host": [
+                "{{base_url}}",
+                "kunjungan"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warga_id\": \"{{warga_id}}\",\n  \"sesi_posyandu_id\": \"{{sesi_posyandu_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Required warga_id and sesi_posyandu_id. Requires an open session matching the warga posyandu; creates nomor_antrean and starts at langkah_1.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [201, 400, 403, 404, 409];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}",
+                  "if (payload && payload.success !== false) { const data = payload.data || payload; const value = data && (data.id || (data.user && data.user.id)); if (value) pm.environment.set(\"kunjungan_id\", String(value)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /kunjungan/antrean-hari-ini",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kunjungan/antrean-hari-ini",
+              "host": [
+                "{{base_url}}",
+                "kunjungan",
+                "antrean-hari-ini"
+              ],
+              "query": [
+                {
+                  "key": "sesi_posyandu_id",
+                  "value": "{{sesi_posyandu_id}}",
+                  "disabled": false
+                },
+                {
+                  "key": "search",
+                  "value": "Siti",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Personal data route. Optional query sesi_posyandu_id and search. Returns active queue for today or the selected session.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /kunjungan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kunjungan",
+              "host": [
+                "{{base_url}}",
+                "kunjungan"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": false
+                },
+                {
+                  "key": "sesi_posyandu_id",
+                  "value": "{{sesi_posyandu_id}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Personal data route. Query: page, limit, search, sesi_posyandu_id, status_langkah langkah_1..langkah_5, start_date, end_date.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /kunjungan/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kunjungan/:id",
+              "host": [
+                "{{base_url}}",
+                "kunjungan",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Returns visit with warga, sesi and pemeriksaan relations.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /kunjungan/:id/status-langkah",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/kunjungan/:id/status-langkah",
+              "host": [
+                "{{base_url}}",
+                "kunjungan",
+                "{{id}}",
+                "status-langkah"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status_langkah\": \"langkah_2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Path id positive. Body status_langkah langkah_1..langkah_5.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /kunjungan/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kunjungan/:id",
+              "host": [
+                "{{base_url}}",
+                "kunjungan",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Deletes the visit.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pemeriksaan",
+      "item": [
+        {
+          "name": "GET /pemeriksaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": false
+                },
+                {
+                  "key": "warga_id",
+                  "value": "{{warga_id}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Personal data route. Query: page, limit, search, kategori_sasaran, sesi_posyandu_id, posyandu_id, warga_id, start_date, end_date.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /pemeriksaan/export",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/export",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "warga_id",
+                  "value": "{{warga_id}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Authenticated export route. Same filters as list; returns Excel. Role-specific restrictions may reject personal filters for dinkes.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /pemeriksaan/:id/step-3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/:id/step-3",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "{{id}}",
+                "step-3"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Returns step-3 read-only measurement/plot data.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /pemeriksaan/:id/screening-history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/:id/screening-history",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "{{id}}",
+                "screening-history"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Returns screening history.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /pemeriksaan/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/:id",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Returns full examination with visit and warga relations.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /pemeriksaan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kunjungan_id\": \"{{kunjungan_id}}\",\n  \"kategori_sasaran\": \"balita\",\n  \"tanggal\": \"2026-10-01\",\n  \"bb_kg\": 12.5,\n  \"tb_cm\": 90.2,\n  \"lingkar_kepala_cm\": 48,\n  \"is_skrining_tahunan\": false,\n  \"detail_skrining\": {},\n  \"topik_penyuluhan\": \"Gizi seimbang\",\n  \"is_perlu_rujukan\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Required kunjungan_id. Optional kategori_sasaran, tanggal, screening object/flags, measurements, education and referral output. Creates or finds the examination.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [201, 400, 403, 404, 409];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}",
+                  "if (payload && payload.success !== false) { const data = payload.data || payload; const value = data && (data.id || (data.user && data.user.id)); if (value) pm.environment.set(\"pemeriksaan_id\", String(value)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /pemeriksaan/step-2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/step-2",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "step-2"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kunjungan_id\": \"{{kunjungan_id}}\",\n  \"bb_kg\": 12.5,\n  \"tb_cm\": 90.2,\n  \"lingkar_kepala_cm\": 48,\n  \"lila_cm\": 15.2,\n  \"lingkar_perut_cm\": 50,\n  \"td_sistole\": 100,\n  \"td_diastole\": 70,\n  \"kadar_gula\": 90\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Required kunjungan_id. Optional measurements: bb_kg, tb_cm, lingkar_kepala_cm, lila_cm, lingkar_perut_cm, td_sistole, td_diastole, kadar_gula.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /pemeriksaan/step-4",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/step-4",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "step-4"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kunjungan_id\": \"{{kunjungan_id}}\",\n  \"detail_skrining\": {},\n  \"is_skrining_tahunan\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Required kunjungan_id. Optional detail_skrining object, is_skrining_tahunan boolean, profile_kehamilan_id.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /pemeriksaan/step-5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/step-5",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "step-5"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kunjungan_id\": \"{{kunjungan_id}}\",\n  \"topik_penyuluhan\": \"Gizi seimbang\",\n  \"is_perlu_rujukan\": true,\n  \"alasan_rujukan\": \"Perlu pemeriksaan lanjutan\",\n  \"status_kehadiran_rujukan\": \"tidak_hadir\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Required kunjungan_id. Optional topik_penyuluhan, is_perlu_rujukan, alasan_rujukan, status_kehadiran_rujukan hadir|tidak_hadir. May create a referral.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /pemeriksaan/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/:id",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "{{id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bb_kg\": 12.8,\n  \"topik_penyuluhan\": \"Pola hidup sehat\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Personal data route. Path id positive. Optional examination, screening, measurement and output fields.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /pemeriksaan/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pemeriksaan/:id",
+              "host": [
+                "{{base_url}}",
+                "pemeriksaan",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Deletes examination.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rujukan",
+      "item": [
+        {
+          "name": "GET /rujukan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rujukan",
+              "host": [
+                "{{base_url}}",
+                "rujukan"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": false
+                },
+                {
+                  "key": "kader_id",
+                  "value": "{{user_id}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "description": "Personal data route. Query: page, limit, search, puskesmas_id, kader_id, start_date, end_date. Returns referrals with related records.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /rujukan/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rujukan/:id",
+              "host": [
+                "{{base_url}}",
+                "rujukan",
+                "{{id}}"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Returns one referral.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /rujukan/:id/export",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rujukan/:id/export",
+              "host": [
+                "{{base_url}}",
+                "rujukan",
+                "{{id}}",
+                "export"
+              ]
+            }
+          },
+          "description": "Personal data route. Path id positive. Returns a PDF referral document.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Screening Config",
+      "item": [
+        {
+          "name": "GET /screening-config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/screening-config",
+              "host": [
+                "{{base_url}}",
+                "screening-config"
+              ]
+            }
+          },
+          "description": "Admin-only route: dinkesAdmin or sa. Returns config records keyed by config key.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 401, 403];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /screening-config/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/screening-config/:id",
+              "host": [
+                "{{base_url}}",
+                "screening-config",
+                "{{id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asi_eksklusif_months\": [\n    1,\n    2,\n    3,\n    4,\n    5,\n    6\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "description": "Admin-only route: dinkesAdmin or sa. Path id is the database config id. Body is an object keyed by the selected config key, for example { asi_eksklusif_months: [1, 2, 3, 4, 5, 6] } or { mpasi_min_age_months: 6 }.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [200, 400, 401, 403, 404];",
+                  "pm.test(\"status code is expected\", function () { pm.expect(expected).to.include(pm.response.code); });",
+                  "let payload = null;",
+                  "try { payload = pm.response.json(); } catch (e) {}",
+                  "if (pm.response.headers.get(\"Content-Type\") && pm.response.headers.get(\"Content-Type\").includes(\"application/json\")) {",
+                  "  pm.test(\"JSON response has success flag\", function () { pm.expect(payload).to.have.property(\"success\"); });",
+                  "  if (pm.response.code < 400) pm.test(\"successful response is marked success\", function () { pm.expect(payload.success).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
