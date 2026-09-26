@@ -145,7 +145,7 @@ api.put("/screening-config/:id", authenticateToken, authorize("dinkesAdmin", "sa
 // Public routes
 // ======================================================
 
-router.get("/public/posyandu", getPublicPosyandu);
-router.get("/public/puskesmas", getPublicPuskesmas);
+api.get("/public/posyandu", getPublicPosyandu);
+api.get("/public/puskesmas", getPublicPuskesmas);
 
 module.exports = api;
