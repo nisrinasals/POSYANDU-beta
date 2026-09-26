@@ -12,7 +12,8 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { 
-  STANDAR_KATEGORI 
+  STANDAR_KATEGORI, 
+  trenPemeriksaanDanKunjungan 
 } from '../../data/mockData';
 
 export default function PuskesmasDashboardPage({ 
@@ -60,42 +61,18 @@ export default function PuskesmasDashboardPage({
 
   const totalJadwalCount = globalJadwalList ? globalJadwalList.length : 0;
 
-  // Aggregate the real examination records returned by the backend.
+  // Active chart data
   const chartData = useMemo(() => {
-    const records = Object.values(globalPemeriksaanData || {}).filter(
-      (item) => item && typeof item === 'object' && item.tanggal
-    );
-    const now = new Date();
-    const countForMonth = (year, month) =>
-      records.filter((item) => {
-        const d = new Date(item.tanggal);
-        return d.getFullYear() === year && d.getMonth() === month;
-      }).length;
-
-    const points = [];
-    if (periodeGrafik === '6bulan') {
-      for (let offset = 5; offset >= 0; offset -= 1) {
-        const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-        const count = countForMonth(d.getFullYear(), d.getMonth());
-        points.push({
-          periode: d.toLocaleDateString('id-ID', { month: 'short' }),
-          pemeriksaan: count,
-          kunjungan: count
-        });
-      }
-    } else {
-      const year = Number(periodeGrafik);
-      for (let month = 0; month < 12; month += 1) {
-        const count = countForMonth(year, month);
-        points.push({
-          periode: new Date(year, month, 1).toLocaleDateString('id-ID', { month: 'short' }),
-          pemeriksaan: count,
-          kunjungan: count
-        });
-      }
+    if (totalSasaranCount === 0 && examinedCount === 0) {
+      const base = trenPemeriksaanDanKunjungan[periodeGrafik] || trenPemeriksaanDanKunjungan['6bulan'];
+      return base.map(item => ({
+        periode: item.periode,
+        pemeriksaan: 0,
+        kunjungan: 0
+      }));
     }
-    return points;
-  }, [globalPemeriksaanData, periodeGrafik]);
+    return trenPemeriksaanDanKunjungan[periodeGrafik] || trenPemeriksaanDanKunjungan['6bulan'];
+  }, [periodeGrafik, totalSasaranCount, examinedCount]);
 
   // Scaler calculation for SVG Chart
   const maxPemeriksaan = 350;

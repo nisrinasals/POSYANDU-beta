@@ -55,7 +55,7 @@ export default function PuskesmasVerifikasiKaderPage({
   React.useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await userService.getUsersList({ page: 1, limit: 1000 });
+        const res = await userService.getAllUsers();
         if (res?.data && Array.isArray(res.data)) {
           const kaders = [];
           const stafs = [];
@@ -77,7 +77,7 @@ export default function PuskesmasVerifikasiKaderPage({
               posyandu: u.posyandu?.nama_posyandu || u.posyandu || 'Posyandu Melati',
               rw: u.rw || 'RW 04',
               tglDaftar: u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : 'Hari ini',
-              status: u.status === 'pending_approval' ? 'pending' : (u.status || 'inactive'),
+              status: u.is_verified ? 'active' : (u.status || 'pending'),
               bidangJabatan: u.jabatan || u.bidangJabatan || 'Staf Medis / Pembina',
               unitKategori: u.unit || 'Medis',
               puskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas || 'Puskesmas Sukamaju'
@@ -178,6 +178,29 @@ export default function PuskesmasVerifikasiKaderPage({
     return matchesTipe && matchesSearch;
   });
 
+  // Dynamic Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, selectedRoleTab, tipeAkunFilter, posyanduFilter, searchQuery]);
+
+  const currentList = isKader ? filteredKader : (isStaf ? filteredStaf : filteredKelolaAkun);
+  const totalPages = Math.ceil(currentList.length / itemsPerPage) || 1;
+
+  const paginatedKader = useMemo(() => {
+    return filteredKader.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredKader, currentPage, itemsPerPage]);
+
+  const paginatedStaf = useMemo(() => {
+    return filteredStaf.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredStaf, currentPage, itemsPerPage]);
+
+  const paginatedKelolaAkun = useMemo(() => {
+    return filteredKelolaAkun.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredKelolaAkun, currentPage, itemsPerPage]);
+
   // Handlers for Kader Actions
   const handleApproveKader = async (id, nama) => {
     const target = localKaderList.find(k => k.id === id);
@@ -193,8 +216,7 @@ export default function PuskesmasVerifikasiKaderPage({
       try {
         await userService.verifyUser(id);
       } catch (err) {
-        showWarning('Perubahan Gagal', err.message || 'Perubahan akun gagal disimpan ke backend.');
-        return;
+        console.info('Backend verify user notice:', err);
       }
 
       if (propOnApproveKader) {
@@ -202,6 +224,12 @@ export default function PuskesmasVerifikasiKaderPage({
       } else {
         const nextList = localKaderList.map(k => k.id === id ? { ...k, status: 'active' } : k);
         setLocalKaderList(nextList);
+        try {
+          localStorage.setItem('posyandu_kader_list', JSON.stringify(nextList));
+          const regUsers = JSON.parse(localStorage.getItem('posyandu_registered_users') || '[]');
+          const updated = regUsers.map(u => u.email?.toLowerCase() === target?.email?.toLowerCase() ? { ...u, status: 'active' } : u);
+          localStorage.setItem('posyandu_registered_users', JSON.stringify(updated));
+        } catch (e) {}
       }
       showSuccess("Kader Disetujui & Email Terkirim", `Pendaftaran kader ${nama} berhasil disetujui. Email notifikasi aktivasi telah dikirimkan ke ${target?.email || 'kader'}.`);
       onRefreshData?.();
@@ -222,8 +250,7 @@ export default function PuskesmasVerifikasiKaderPage({
       try {
         await userService.deactivateUser(id);
       } catch (err) {
-        showWarning('Perubahan Gagal', err.message || 'Perubahan akun gagal disimpan ke backend.');
-        return;
+        console.info('Backend deactivate user notice:', err);
       }
 
       if (propOnRejectKader) {
@@ -231,6 +258,12 @@ export default function PuskesmasVerifikasiKaderPage({
       } else {
         const nextList = localKaderList.map(k => k.id === id ? { ...k, status: 'rejected' } : k);
         setLocalKaderList(nextList);
+        try {
+          localStorage.setItem('posyandu_kader_list', JSON.stringify(nextList));
+          const regUsers = JSON.parse(localStorage.getItem('posyandu_registered_users') || '[]');
+          const updated = regUsers.map(u => u.email?.toLowerCase() === target?.email?.toLowerCase() ? { ...u, status: 'rejected' } : u);
+          localStorage.setItem('posyandu_registered_users', JSON.stringify(updated));
+        } catch (e) {}
       }
       showWarning("Pendaftaran Ditolak", `Pendaftaran kader ${nama} telah ditolak. Notifikasi email telah dikirimkan ke ${target?.email || 'kader'}.`);
       onRefreshData?.();
@@ -252,8 +285,7 @@ export default function PuskesmasVerifikasiKaderPage({
       try {
         await userService.verifyUser(id);
       } catch (err) {
-        showWarning('Perubahan Gagal', err.message || 'Perubahan akun gagal disimpan ke backend.');
-        return;
+        console.info('Backend verify user notice:', err);
       }
 
       if (propOnApproveStaf) {
@@ -261,6 +293,12 @@ export default function PuskesmasVerifikasiKaderPage({
       } else {
         const nextList = localStafList.map(s => s.id === id ? { ...s, status: 'active' } : s);
         setLocalStafList(nextList);
+        try {
+          localStorage.setItem('posyandu_staf_list', JSON.stringify(nextList));
+          const regUsers = JSON.parse(localStorage.getItem('posyandu_registered_users') || '[]');
+          const updated = regUsers.map(u => u.email?.toLowerCase() === target?.email?.toLowerCase() ? { ...u, status: 'active' } : u);
+          localStorage.setItem('posyandu_registered_users', JSON.stringify(updated));
+        } catch (e) {}
       }
       showSuccess("Staf Disetujui & Email Terkirim", `Akun staf ${nama} berhasil disetujui dan aktif. Email notifikasi aktivasi telah dikirimkan ke ${target?.email || 'staf'}.`);
       onRefreshData?.();
@@ -281,8 +319,7 @@ export default function PuskesmasVerifikasiKaderPage({
       try {
         await userService.deactivateUser(id);
       } catch (err) {
-        showWarning('Perubahan Gagal', err.message || 'Perubahan akun gagal disimpan ke backend.');
-        return;
+        console.info('Backend deactivate user notice:', err);
       }
 
       if (propOnRejectStaf) {
@@ -290,6 +327,12 @@ export default function PuskesmasVerifikasiKaderPage({
       } else {
         const nextList = localStafList.map(s => s.id === id ? { ...s, status: 'rejected' } : s);
         setLocalStafList(nextList);
+        try {
+          localStorage.setItem('posyandu_staf_list', JSON.stringify(nextList));
+          const regUsers = JSON.parse(localStorage.getItem('posyandu_registered_users') || '[]');
+          const updated = regUsers.map(u => u.email?.toLowerCase() === target?.email?.toLowerCase() ? { ...u, status: 'rejected' } : u);
+          localStorage.setItem('posyandu_registered_users', JSON.stringify(updated));
+        } catch (e) {}
       }
       showWarning("Pendaftaran Ditolak", `Pendaftaran staf ${nama} telah ditolak. Notifikasi email telah dikirimkan ke ${target?.email || 'staf'}.`);
       onRefreshData?.();
@@ -310,11 +353,10 @@ export default function PuskesmasVerifikasiKaderPage({
     if (confirmed) {
       try {
         await userService.changeUserStatus(item.id, {
-          status: newStatus === 'inactive' ? 'inactive' : 'active'
+          status: newStatus === 'inactive' ? 'nonaktif' : 'aktif'
         });
       } catch (err) {
-        showWarning('Perubahan Gagal', err.message || 'Status akun gagal disimpan ke backend.');
-        return;
+        console.info('Backend change status user notice:', err);
       }
 
       if (item.tipeAkun === 'kader') {
@@ -323,12 +365,18 @@ export default function PuskesmasVerifikasiKaderPage({
         } else {
           const nextList = localKaderList.map(k => k.id === item.id ? { ...k, status: newStatus } : k);
           setLocalKaderList(nextList);
+          try {
+            localStorage.setItem('posyandu_kader_list', JSON.stringify(nextList));
+          } catch (e) {}
         }
       } else if (propOnToggleStafStatus) {
         propOnToggleStafStatus(item.id, newStatus);
       } else {
         const nextList = localStafList.map(s => s.id === item.id ? { ...s, status: newStatus } : s);
         setLocalStafList(nextList);
+        try {
+          localStorage.setItem('posyandu_staf_list', JSON.stringify(nextList));
+        } catch (e) {}
       }
       showSuccess("Status Diperbarui", `Akun ${item.nama} kini berstatus ${newStatus === 'inactive' ? 'Non-Aktif' : 'Aktif'}.`);
       onRefreshData?.();
@@ -476,77 +524,80 @@ export default function PuskesmasVerifikasiKaderPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredKader.length > 0 ? (
-                  filteredKader.map((item, index) => (
-                    <tr key={item.id}>
-                      <td className="fw-semibold text-secondary">{index + 1 < 10 ? `0${index + 1}` : index + 1}</td>
-                      <td>
-                        <div className="fw-bold text-dark" style={{ fontSize: '0.875rem' }}>{item.nama}</div>
-                        <div className="text-muted font-monospace small" style={{ fontSize: '0.75rem' }}>{item.nik}</div>
-                      </td>
-                      <td>
-                        <div className="text-dark small fw-medium">{item.email}</div>
-                        {item.telepon && (
-                          <div className="text-muted small" style={{ fontSize: '0.75rem' }}>{item.telepon}</div>
-                        )}
-                      </td>
-                      <td>
-                        <div className="fw-semibold text-dark small">{item.posyandu}</div>
-                        <div className="text-muted small" style={{ fontSize: '0.75rem' }}>{item.rw}</div>
-                      </td>
-                      <td className="text-dark small">{item.tglDaftar}</td>
-                      <td>
-                        {item.status === 'pending' && (
-                          <span className="badge border px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1" style={{ backgroundColor: 'rgba(254, 109, 1, 0.15)', color: '#FE6D01', borderColor: '#FE6D01' }}>
-                            Menunggu
-                          </span>
-                        )}
-                        {item.status === 'active' && (
-                          <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
-                            Aktif
-                          </span>
-                        )}
-                        {(item.status === 'rejected' || item.status === 'inactive') && (
-                          <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
-                            Ditolak
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-center">
-                        {item.status === 'pending' && (
-                          <div className="d-flex align-items-center justify-content-center gap-2">
-                            <button 
-                              className="btn text-white btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 fw-semibold shadow-xs"
-                              style={{ backgroundColor: '#428A75' }}
-                              onClick={() => handleApproveKader(item.id, item.nama)}
-                              title="Setujui pendaftaran kader"
-                            >
-                              <Check size={14} />
-                              <span>Setujui</span>
-                            </button>
-                            <button 
-                              className="btn btn-outline-danger btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 shadow-xs"
-                              onClick={() => handleRejectKader(item.id, item.nama)}
-                              title="Tolak pendaftaran kader"
-                            >
-                              <X size={14} />
-                              <span>Tolak</span>
-                            </button>
-                          </div>
-                        )}
-                        {item.status === 'active' && (
-                          <span className="badge bg-light text-success border border-success-subtle px-2 py-1 small">
-                            ✓ Terverifikasi
-                          </span>
-                        )}
-                        {(item.status === 'rejected' || item.status === 'inactive') && (
-                          <span className="badge bg-light text-danger border border-danger-subtle px-2 py-1 small">
-                            ✕ Ditolak
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                {paginatedKader.length > 0 ? (
+                  paginatedKader.map((item, index) => {
+                    const rowNo = (currentPage - 1) * itemsPerPage + index + 1;
+                    return (
+                      <tr key={item.id}>
+                        <td className="fw-semibold text-secondary">{rowNo < 10 ? `0${rowNo}` : rowNo}</td>
+                        <td>
+                          <div className="fw-bold text-dark" style={{ fontSize: '0.875rem' }}>{item.nama}</div>
+                          <div className="text-muted font-monospace small" style={{ fontSize: '0.75rem' }}>{item.nik}</div>
+                        </td>
+                        <td>
+                          <div className="text-dark small fw-medium">{item.email}</div>
+                          {item.telepon && (
+                            <div className="text-muted small" style={{ fontSize: '0.75rem' }}>{item.telepon}</div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="fw-semibold text-dark small">{item.posyandu}</div>
+                          <div className="text-muted small" style={{ fontSize: '0.75rem' }}>{item.rw}</div>
+                        </td>
+                        <td className="text-dark small">{item.tglDaftar}</td>
+                        <td>
+                          {item.status === 'pending' && (
+                            <span className="badge border px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1" style={{ backgroundColor: 'rgba(254, 109, 1, 0.15)', color: '#FE6D01', borderColor: '#FE6D01' }}>
+                              Menunggu
+                            </span>
+                          )}
+                          {item.status === 'active' && (
+                            <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
+                              Aktif
+                            </span>
+                          )}
+                          {(item.status === 'rejected' || item.status === 'inactive') && (
+                            <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
+                              Ditolak
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-center">
+                          {item.status === 'pending' && (
+                            <div className="d-flex align-items-center justify-content-center gap-2">
+                              <button 
+                                className="btn text-white btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 fw-semibold shadow-xs"
+                                style={{ backgroundColor: '#428A75' }}
+                                onClick={() => handleApproveKader(item.id, item.nama)}
+                                title="Setujui pendaftaran kader"
+                              >
+                                <Check size={14} />
+                                <span>Setujui</span>
+                              </button>
+                              <button 
+                                className="btn btn-outline-danger btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 shadow-xs"
+                                onClick={() => handleRejectKader(item.id, item.nama)}
+                                title="Tolak pendaftaran kader"
+                              >
+                                <X size={14} />
+                                <span>Tolak</span>
+                              </button>
+                            </div>
+                          )}
+                          {item.status === 'active' && (
+                            <span className="badge bg-light text-success border border-success-subtle px-2 py-1 small">
+                              ✓ Terverifikasi
+                            </span>
+                          )}
+                          {(item.status === 'rejected' || item.status === 'inactive') && (
+                            <span className="badge bg-light text-danger border border-danger-subtle px-2 py-1 small">
+                              ✕ Ditolak
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="7" className="text-center py-4 text-muted">
@@ -576,72 +627,75 @@ export default function PuskesmasVerifikasiKaderPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredStaf.length > 0 ? (
-                  filteredStaf.map((item, index) => (
-                    <tr key={item.id}>
-                      <td className="fw-semibold text-secondary">{index + 1 < 10 ? `0${index + 1}` : index + 1}</td>
-                      <td>
-                        <div className="fw-bold text-dark" style={{ fontSize: '0.875rem' }}>{item.nama}</div>
-                        {item.bidangJabatan && (
-                          <div className="text-muted small" style={{ fontSize: '0.75rem' }}>{item.bidangJabatan}</div>
-                        )}
-                      </td>
-                      <td>
-                        <div className="text-dark small fw-medium">{item.email}</div>
-                      </td>
-                      <td className="text-dark small">{item.tglDaftar}</td>
-                      <td>
-                        {item.status === 'pending' && (
-                          <span className="badge border px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1" style={{ backgroundColor: 'rgba(254, 109, 1, 0.15)', color: '#FE6D01', borderColor: '#FE6D01' }}>
-                            Menunggu
-                          </span>
-                        )}
-                        {item.status === 'active' && (
-                          <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
-                            Aktif
-                          </span>
-                        )}
-                        {(item.status === 'rejected' || item.status === 'inactive') && (
-                          <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
-                            Ditolak
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-center">
-                        {item.status === 'pending' && (
-                          <div className="d-flex align-items-center justify-content-center gap-2">
-                            <button 
-                              className="btn text-white btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 fw-semibold shadow-xs"
-                              style={{ backgroundColor: '#428A75' }}
-                              onClick={() => handleApproveStaf(item.id, item.nama)}
-                              title="Setujui pendaftaran staf puskesmas"
-                            >
-                              <Check size={14} />
-                              <span>Setujui</span>
-                            </button>
-                            <button 
-                              className="btn btn-outline-danger btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 shadow-xs"
-                              onClick={() => handleRejectStaf(item.id, item.nama)}
-                              title="Tolak pendaftaran staf puskesmas"
-                            >
-                              <X size={14} />
-                              <span>Tolak</span>
-                            </button>
-                          </div>
-                        )}
-                        {item.status === 'active' && (
-                          <span className="badge bg-light text-success border border-success-subtle px-2 py-1 small">
-                            ✓ Terverifikasi
-                          </span>
-                        )}
-                        {(item.status === 'rejected' || item.status === 'inactive') && (
-                          <span className="badge bg-light text-danger border border-danger-subtle px-2 py-1 small">
-                            ✕ Ditolak
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                {paginatedStaf.length > 0 ? (
+                  paginatedStaf.map((item, index) => {
+                    const rowNo = (currentPage - 1) * itemsPerPage + index + 1;
+                    return (
+                      <tr key={item.id}>
+                        <td className="fw-semibold text-secondary">{rowNo < 10 ? `0${rowNo}` : rowNo}</td>
+                        <td>
+                          <div className="fw-bold text-dark" style={{ fontSize: '0.875rem' }}>{item.nama}</div>
+                          {item.bidangJabatan && (
+                            <div className="text-muted small" style={{ fontSize: '0.75rem' }}>{item.bidangJabatan}</div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="text-dark small fw-medium">{item.email}</div>
+                        </td>
+                        <td className="text-dark small">{item.tglDaftar}</td>
+                        <td>
+                          {item.status === 'pending' && (
+                            <span className="badge border px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1" style={{ backgroundColor: 'rgba(254, 109, 1, 0.15)', color: '#FE6D01', borderColor: '#FE6D01' }}>
+                              Menunggu
+                            </span>
+                          )}
+                          {item.status === 'active' && (
+                            <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
+                              Aktif
+                            </span>
+                          )}
+                          {(item.status === 'rejected' || item.status === 'inactive') && (
+                            <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
+                              Ditolak
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-center">
+                          {item.status === 'pending' && (
+                            <div className="d-flex align-items-center justify-content-center gap-2">
+                              <button 
+                                className="btn text-white btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 fw-semibold shadow-xs"
+                                style={{ backgroundColor: '#428A75' }}
+                                onClick={() => handleApproveStaf(item.id, item.nama)}
+                                title="Setujui pendaftaran staf puskesmas"
+                              >
+                                <Check size={14} />
+                                <span>Setujui</span>
+                              </button>
+                              <button 
+                                className="btn btn-outline-danger btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 shadow-xs"
+                                onClick={() => handleRejectStaf(item.id, item.nama)}
+                                title="Tolak pendaftaran staf puskesmas"
+                              >
+                                <X size={14} />
+                                <span>Tolak</span>
+                              </button>
+                            </div>
+                          )}
+                          {item.status === 'active' && (
+                            <span className="badge bg-light text-success border border-success-subtle px-2 py-1 small">
+                              ✓ Terverifikasi
+                            </span>
+                          )}
+                          {(item.status === 'rejected' || item.status === 'inactive') && (
+                            <span className="badge bg-light text-danger border border-danger-subtle px-2 py-1 small">
+                              ✕ Ditolak
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="6" className="text-center py-4 text-muted">
@@ -672,59 +726,62 @@ export default function PuskesmasVerifikasiKaderPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredKelolaAkun.length > 0 ? (
-                  filteredKelolaAkun.map((item, index) => (
-                    <tr key={`${item.tipeAkun}-${item.id}`} className={item.status === 'inactive' ? 'bg-light bg-opacity-50' : ''}>
-                      <td className="fw-semibold text-secondary">{index + 1 < 10 ? `0${index + 1}` : index + 1}</td>
-                      <td>
-                        <div className="fw-bold text-dark" style={{ fontSize: '0.875rem' }}>{item.nama}</div>
-                        <div className="text-muted font-monospace" style={{ fontSize: '0.75rem' }}>
-                          {item.nik || '320101XXXXXXXXXX'}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="text-dark small fw-medium">{item.email}</div>
-                        <div className="text-muted font-monospace" style={{ fontSize: '0.75rem' }}>
-                          {item.telepon || '0812XXXXXXXX'}
-                        </div>
-                      </td>
-                      <td className="text-dark small">{item.tglDaftar}</td>
-                      <td>
-                        {item.status === 'active' ? (
-                          <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
-                            <span className="rounded-circle bg-success" style={{ width: '6px', height: '6px' }}></span>
-                            Aktif
-                          </span>
-                        ) : (
-                          <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
-                            <span className="rounded-circle bg-danger" style={{ width: '6px', height: '6px' }}></span>
-                            Non-Aktif
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-center">
-                        {item.status === 'active' ? (
-                          <button
-                            className="btn btn-outline-danger btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5 rounded-2 fw-semibold shadow-xs"
-                            onClick={() => handleToggleKelolaStatus(item, 'inactive')}
-                            title="Nonaktifkan akun ini"
-                          >
-                            <UserX size={14} />
-                            <span>Nonaktifkan</span>
-                          </button>
-                        ) : (
-                          <button
-                            className="btn btn-success text-white btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5 rounded-2 fw-semibold shadow-xs"
-                            onClick={() => handleToggleKelolaStatus(item, 'active')}
-                            title="Aktifkan kembali akun ini"
-                          >
-                            <UserCheck size={14} />
-                            <span>Aktifkan</span>
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                {paginatedKelolaAkun.length > 0 ? (
+                  paginatedKelolaAkun.map((item, index) => {
+                    const rowNo = (currentPage - 1) * itemsPerPage + index + 1;
+                    return (
+                      <tr key={`${item.tipeAkun}-${item.id}`} className={item.status === 'inactive' ? 'bg-light bg-opacity-50' : ''}>
+                        <td className="fw-semibold text-secondary">{rowNo < 10 ? `0${rowNo}` : rowNo}</td>
+                        <td>
+                          <div className="fw-bold text-dark" style={{ fontSize: '0.875rem' }}>{item.nama}</div>
+                          <div className="text-muted font-monospace" style={{ fontSize: '0.75rem' }}>
+                            {item.nik || '320101XXXXXXXXXX'}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="text-dark small fw-medium">{item.email}</div>
+                          <div className="text-muted font-monospace" style={{ fontSize: '0.75rem' }}>
+                            {item.telepon || '0812XXXXXXXX'}
+                          </div>
+                        </td>
+                        <td className="text-dark small">{item.tglDaftar}</td>
+                        <td>
+                          {item.status === 'active' ? (
+                            <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
+                              <span className="rounded-circle bg-success" style={{ width: '6px', height: '6px' }}></span>
+                              Aktif
+                            </span>
+                          ) : (
+                            <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
+                              <span className="rounded-circle bg-danger" style={{ width: '6px', height: '6px' }}></span>
+                              Non-Aktif
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-center">
+                          {item.status === 'active' ? (
+                            <button
+                              className="btn btn-outline-danger btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5 rounded-2 fw-semibold shadow-xs"
+                              onClick={() => handleToggleKelolaStatus(item, 'inactive')}
+                              title="Nonaktifkan akun ini"
+                            >
+                              <UserX size={14} />
+                              <span>Nonaktifkan</span>
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-success text-white btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5 rounded-2 fw-semibold shadow-xs"
+                              onClick={() => handleToggleKelolaStatus(item, 'active')}
+                              title="Aktifkan kembali akun ini"
+                            >
+                              <UserCheck size={14} />
+                              <span>Aktifkan</span>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="6" className="text-center py-4 text-muted">
@@ -742,7 +799,7 @@ export default function PuskesmasVerifikasiKaderPage({
           <div className="d-flex align-items-center gap-1">
             <span className="text-muted">Menampilkan</span>
             <strong className="text-dark me-1">
-              {isKader ? filteredKader.length : (isStaf ? filteredStaf.length : filteredKelolaAkun.length)}
+              {currentList.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, currentList.length)}
             </strong>
             <span>
               {isKelola ? (
@@ -754,11 +811,30 @@ export default function PuskesmasVerifikasiKaderPage({
           </div>
 
           <div className="d-flex align-items-center gap-1">
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
+            <button 
+              className="btn btn-sm btn-light border p-1 rounded-2" 
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              title="Halaman Sebelumnya"
+            >
               <ChevronLeft size={16} />
             </button>
-            <button className="btn btn-sm text-white px-3 py-1 rounded-2 fw-bold" style={{ backgroundColor: '#428A75' }}>1</button>
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button 
+                key={page}
+                className={`btn btn-sm px-3 py-1 rounded-2 fw-bold ${currentPage === page ? 'text-white' : 'btn-light border text-dark'}`}
+                style={currentPage === page ? { backgroundColor: '#428A75' } : {}}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+            <button 
+              className="btn btn-sm btn-light border p-1 rounded-2" 
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              title="Halaman Berikutnya"
+            >
               <ChevronRight size={16} />
             </button>
           </div>

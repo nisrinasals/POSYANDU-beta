@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Download, 
   Search, 
@@ -11,7 +11,9 @@ import {
   Eye, 
   Edit,
   FileText, 
-  Printer
+  Printer,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import DetailRekapModal, { resolve5StepDetails } from '../../components/pemeriksaan/DetailRekapModal';
 import ExportRekapModal from '../../components/pemeriksaan/ExportRekapModal';
@@ -49,6 +51,7 @@ export default function RekapPemeriksaanPage({
 
         return {
           ...resolved,
+          exam: exam || resolved.exam || null,
           id: s.id,
           idSasaran: s.idSasaran || `PSY-${String(s.id).padStart(3, '0')}`,
           nama: s.nama || 'Sasaran',
@@ -119,6 +122,20 @@ export default function RekapPemeriksaanPage({
       return matchSearch && matchCat && matchMonthYear;
     });
   }, [allRekapList, searchTerm, selectedCategory, selectedMonthNum, selectedYear]);
+
+  // Dynamic Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCategory, selectedMonthNum, selectedYear]);
+
+  const totalPages = Math.ceil(filteredList.length / itemsPerPage) || 1;
+  const paginatedList = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredList.slice(start, start + itemsPerPage);
+  }, [filteredList, currentPage, itemsPerPage]);
 
   const handleOpenDetail = (citizen) => {
     setSelectedCitizen(citizen);
@@ -258,16 +275,18 @@ export default function RekapPemeriksaanPage({
               </tr>
             </thead>
             <tbody>
-              {filteredList.length === 0 ? (
+              {paginatedList.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="text-center py-5 text-muted">
                     Tidak ada data pemeriksaan yang sesuai dengan filter bulan ({selectedMonthNum}) / tahun ({selectedYear}) yang dipilih.
                   </td>
                 </tr>
               ) : (
-                filteredList.map((row, idx) => (
+                paginatedList.map((row, idx) => (
                   <tr key={row.id} className="border-bottom">
-                    <td className="ps-4 text-center fw-medium text-muted small">{idx + 1}</td>
+                    <td className="ps-4 text-center fw-medium text-muted small">
+                      {(currentPage - 1) * itemsPerPage + idx + 1}
+                    </td>
                     <td>
                       <div className="fw-bold text-dark mb-0">{row.nama}</div>
                       <div className="text-muted font-monospace" style={{ fontSize: '0.78rem' }}>{row.nik}</div>
@@ -305,17 +324,35 @@ export default function RekapPemeriksaanPage({
         {/* Footer Pagination Bar */}
         <div className="p-3 bg-light-subtle d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2 border-top">
           <span className="text-muted small">
-            Menampilkan {filteredList.length} dari {allRekapList.length} sasaran
+            Menampilkan <span className="fw-semibold text-dark">{filteredList.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}</span> s/d <span className="fw-semibold text-dark">{Math.min(currentPage * itemsPerPage, filteredList.length)}</span> dari <span className="fw-semibold text-dark">{filteredList.length}</span> sasaran
           </span>
-          <nav>
-            <ul className="pagination pagination-sm mb-0">
-              <li className="page-item disabled"><span className="page-link">&lt;</span></li>
-              <li className="page-item active"><span className="page-link bg-dark border-dark">1</span></li>
-              <li className="page-item"><span className="page-link text-dark">2</span></li>
-              <li className="page-item"><span className="page-link text-dark">3</span></li>
-              <li className="page-item"><span className="page-link text-dark">&gt;</span></li>
-            </ul>
-          </nav>
+          <div className="d-flex align-items-center gap-1">
+            <button 
+              className="btn btn-sm btn-light border p-1 rounded-2" 
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              title="Halaman Sebelumnya"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button 
+                key={page}
+                className={`btn btn-sm px-3 py-1 me-1 ${currentPage === page ? 'btn-dark fw-bold' : 'btn-light border'}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+            <button 
+              className="btn btn-sm btn-light border p-1 rounded-2"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              title="Halaman Berikutnya"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -323,6 +360,7 @@ export default function RekapPemeriksaanPage({
       {selectedCitizen && (
         <DetailRekapModal 
           citizen={selectedCitizen}
+          examData={selectedCitizen?.exam || selectedCitizen}
           onClose={handleCloseDetail}
           theme="kader"
           onEdit={(citizen) => {

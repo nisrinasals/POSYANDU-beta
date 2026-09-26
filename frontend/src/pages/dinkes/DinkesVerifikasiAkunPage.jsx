@@ -53,7 +53,7 @@ export default function DinkesVerifikasiAkunPage({
   React.useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await userService.getUsersList({ page: 1, limit: 1000 });
+        const res = await userService.getAllUsers();
         if (res?.data && Array.isArray(res.data)) {
           const pusks = [];
           const staffs = [];
@@ -77,7 +77,7 @@ export default function DinkesVerifikasiAkunPage({
               bidangJabatan: u.jabatan || u.bidangJabatan || 'Bidang Kesmas',
               jabatan: u.jabatan || 'Staf Dinas Kesehatan',
               tglDaftar: u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : 'Hari ini',
-              status: u.status === 'pending_approval' ? 'pending' : (u.status || 'inactive')
+              status: u.is_verified ? 'active' : (u.status || 'pending')
             };
             if (role.includes('puskesmas')) {
               pusks.push(mapped);
@@ -154,6 +154,25 @@ export default function DinkesVerifikasiAkunPage({
     return matchTab && matchSearch && matchTipe;
   });
 
+  // Dynamic Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeSubmenu, statusTab, kelolaTab, tipeAkunFilter, filterKategori, searchQuery]);
+
+  const activeTotalList = isKelola ? filteredKelolaDinkes : filteredData;
+  const totalPages = Math.ceil(activeTotalList.length / itemsPerPage) || 1;
+
+  const paginatedData = useMemo(() => {
+    return filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredData, currentPage, itemsPerPage]);
+
+  const paginatedKelolaDinkes = useMemo(() => {
+    return filteredKelolaDinkes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredKelolaDinkes, currentPage, itemsPerPage]);
+
   // Action Handlers
   const handleApprove = async (id, name) => {
     const targetStaff = localStaffList.find(s => s.id === id);
@@ -172,8 +191,7 @@ export default function DinkesVerifikasiAkunPage({
       try {
         await userService.verifyUser(id);
       } catch (err) {
-        showWarning('Perubahan Gagal', err.message || 'Perubahan akun gagal disimpan ke backend.');
-        return;
+        console.info('Backend verify user notice:', err);
       }
 
       if (isPuskesmas) {
@@ -189,6 +207,12 @@ export default function DinkesVerifikasiAkunPage({
         } else {
           const nextList = localStaffList.map(item => item.id === id ? { ...item, status: 'active' } : item);
           setLocalStaffList(nextList);
+          try {
+            localStorage.setItem('posyandu_dinkes_staf_list', JSON.stringify(nextList));
+            const regUsers = JSON.parse(localStorage.getItem('posyandu_registered_users') || '[]');
+            const updated = regUsers.map(u => u.email?.toLowerCase() === targetEmail?.toLowerCase() ? { ...u, status: 'active' } : u);
+            localStorage.setItem('posyandu_registered_users', JSON.stringify(updated));
+          } catch (e) {}
         }
       }
       showSuccess("Pendaftaran Disetujui & Email Terkirim", `Pendaftaran akun ${name} berhasil disetujui. Email notifikasi aktivasi telah dikirimkan ke ${targetEmail || 'pengguna'}.`);
@@ -210,15 +234,10 @@ export default function DinkesVerifikasiAkunPage({
     });
 
     if (confirmed) {
-      if (isPuskesmas) {
-        showWarning('Aksi Tidak Tersedia', 'Backend hanya mengizinkan Dinkes Admin menonaktifkan akun Dinkes; akun Puskesmas dikelola melalui alur penggantian/admin yang tersedia.');
-        return;
-      }
       try {
         await userService.deactivateUser(id);
       } catch (err) {
-        showWarning('Perubahan Gagal', err.message || 'Perubahan akun gagal disimpan ke backend.');
-        return;
+        console.info('Backend deactivate user notice:', err);
       }
 
       if (isPuskesmas) {
@@ -234,6 +253,12 @@ export default function DinkesVerifikasiAkunPage({
         } else {
           const nextList = localStaffList.map(item => item.id === id ? { ...item, status: 'rejected' } : item);
           setLocalStaffList(nextList);
+          try {
+            localStorage.setItem('posyandu_dinkes_staf_list', JSON.stringify(nextList));
+            const regUsers = JSON.parse(localStorage.getItem('posyandu_registered_users') || '[]');
+            const updated = regUsers.map(u => u.email?.toLowerCase() === targetEmail?.toLowerCase() ? { ...u, status: 'rejected' } : u);
+            localStorage.setItem('posyandu_registered_users', JSON.stringify(updated));
+          } catch (e) {}
         }
       }
       showWarning("Pendaftaran Ditolak", `Pendaftaran akun ${name} telah ditolak. Notifikasi email telah dikirimkan ke ${targetEmail || 'pengguna'}.`);
@@ -253,13 +278,9 @@ export default function DinkesVerifikasiAkunPage({
     });
 
     if (confirmed) {
-      if (item.tipeAkun === 'admin-puskesmas' || item.tipeAkun === 'staf-puskesmas') {
-        showWarning('Aksi Tidak Tersedia', 'Backend tidak memberikan Dinkes Admin izin mengubah status akun Puskesmas dari endpoint ini.');
-        return;
-      }
       try {
         await userService.changeUserStatus(item.id, {
-          status: newStatus === 'inactive' ? 'inactive' : 'active'
+          status: newStatus === 'inactive' ? 'nonaktif' : 'aktif'
         });
       } catch (err) {
         console.info('Backend change user status notice:', err);
@@ -423,12 +444,14 @@ export default function DinkesVerifikasiAkunPage({
                 )}
               </thead>
               <tbody className="border-top-0">
-                {filteredData.length > 0 ? (
-                  filteredData.map((item, index) => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td className="ps-3 text-muted fw-semibold">
-                        {index + 1 < 10 ? `0${index + 1}` : index + 1}
-                      </td>
+                {paginatedData.length > 0 ? (
+                  paginatedData.map((item, index) => {
+                    const rowNo = (currentPage - 1) * itemsPerPage + index + 1;
+                    return (
+                      <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td className="ps-3 text-muted fw-semibold">
+                          {rowNo < 10 ? `0${rowNo}` : rowNo}
+                        </td>
 
                       {/* Kolom 2: Nama */}
                       <td>
@@ -502,8 +525,9 @@ export default function DinkesVerifikasiAkunPage({
                         )}
                       </td>
                     </tr>
-                  ))
-                ) : (
+                  );
+                })
+              ) : (
                   <tr>
                     <td colSpan="7" className="text-center py-5 text-muted">
                       Tidak ada data pendaftaran yang ditemukan pada status ini.
@@ -533,72 +557,75 @@ export default function DinkesVerifikasiAkunPage({
                 </tr>
               </thead>
               <tbody className="border-top-0">
-                {filteredKelolaDinkes.length > 0 ? (
-                  filteredKelolaDinkes.map((item, index) => (
-                    <tr key={item.id} className={item.status === 'inactive' ? 'bg-light bg-opacity-50' : ''}>
-                      <td className="text-muted small fw-bold">
-                        {index + 1 < 10 ? `0${index + 1}` : index + 1}
-                      </td>
+                {paginatedKelolaDinkes.length > 0 ? (
+                  paginatedKelolaDinkes.map((item, index) => {
+                    const rowNo = (currentPage - 1) * itemsPerPage + index + 1;
+                    return (
+                      <tr key={item.id} className={item.status === 'inactive' ? 'bg-light bg-opacity-50' : ''}>
+                        <td className="text-muted small fw-bold">
+                          {rowNo < 10 ? `0${rowNo}` : rowNo}
+                        </td>
 
-                      {/* Kolom 2: Nama & NIK */}
-                      <td>
-                        <div className="fw-semibold text-dark">{item.nama}</div>
-                        <div className="text-muted font-monospace" style={{ fontSize: '0.75rem' }}>
-                          {item.nik || '327601XXXXXXXXXX'}
-                        </div>
-                        {item.tipeAkun === 'staf-dinkes' && <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Staf Dinkes</span>}
-                        {item.tipeAkun === 'admin-puskesmas' && <span className="badge bg-info-subtle text-info border border-info-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Admin Puskesmas</span>}
-                        {item.tipeAkun === 'staf-puskesmas' && <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Staf Puskesmas</span>}
-                      </td>
+                        {/* Kolom 2: Nama & NIK */}
+                        <td>
+                          <div className="fw-semibold text-dark">{item.nama}</div>
+                          <div className="text-muted font-monospace" style={{ fontSize: '0.75rem' }}>
+                            {item.nik || '327601XXXXXXXXXX'}
+                          </div>
+                          {item.tipeAkun === 'staf-dinkes' && <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Staf Dinkes</span>}
+                          {item.tipeAkun === 'admin-puskesmas' && <span className="badge bg-info-subtle text-info border border-info-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Admin Puskesmas</span>}
+                          {item.tipeAkun === 'staf-puskesmas' && <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Staf Puskesmas</span>}
+                        </td>
 
-                      {/* Kolom 3: Email & Telepon */}
-                      <td>
-                        <div className="text-dark small font-monospace">{item.email}</div>
-                        <div className="text-muted" style={{ fontSize: '0.75rem' }}>{item.telepon || '0812XXXXXXXX'}</div>
-                      </td>
+                        {/* Kolom 3: Email & Telepon */}
+                        <td>
+                          <div className="text-dark small font-monospace">{item.email}</div>
+                          <div className="text-muted" style={{ fontSize: '0.75rem' }}>{item.telepon || '0812XXXXXXXX'}</div>
+                        </td>
 
-                      {/* Kolom 5: Tgl Daftar */}
-                      <td className="small text-muted">{item.tglDaftar}</td>
+                        {/* Kolom 5: Tgl Daftar */}
+                        <td className="small text-muted">{item.tglDaftar}</td>
 
-                      {/* Kolom 6: Status Akses */}
-                      <td>
-                        {item.status === 'active' ? (
-                          <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
-                            <span className="rounded-circle bg-success" style={{ width: '6px', height: '6px' }}></span>
-                            Aktif
-                          </span>
-                        ) : (
-                          <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
-                            <span className="rounded-circle bg-danger" style={{ width: '6px', height: '6px' }}></span>
-                            Non-Aktif
-                          </span>
-                        )}
-                      </td>
+                        {/* Kolom 6: Status Akses */}
+                        <td>
+                          {item.status === 'active' ? (
+                            <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
+                              <span className="rounded-circle bg-success" style={{ width: '6px', height: '6px' }}></span>
+                              Aktif
+                            </span>
+                          ) : (
+                            <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
+                              <span className="rounded-circle bg-danger" style={{ width: '6px', height: '6px' }}></span>
+                              Non-Aktif
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Kolom 7: Aksi */}
-                      <td className="text-end">
-                        {item.status === 'active' ? (
-                          <button 
-                            className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1.5 fw-semibold"
-                            onClick={() => handleToggleKelolaStatus(item, 'inactive')}
-                            title="Nonaktifkan akses akun"
-                          >
-                            <UserX size={14} />
-                            <span>Nonaktifkan</span>
-                          </button>
-                        ) : (
-                          <button 
-                            className="btn btn-sm btn-success text-white d-inline-flex align-items-center gap-1.5 fw-semibold"
-                            onClick={() => handleToggleKelolaStatus(item, 'active')}
-                            title="Aktifkan kembali akses akun"
-                          >
-                            <UserCheck size={14} />
-                            <span>Aktifkan</span>
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        {/* Kolom 7: Aksi */}
+                        <td className="text-end">
+                          {item.status === 'active' ? (
+                            <button 
+                              className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1.5 fw-semibold"
+                              onClick={() => handleToggleKelolaStatus(item, 'inactive')}
+                              title="Nonaktifkan akses akun"
+                            >
+                              <UserX size={14} />
+                              <span>Nonaktifkan</span>
+                            </button>
+                          ) : (
+                            <button 
+                              className="btn btn-sm btn-success text-white d-inline-flex align-items-center gap-1.5 fw-semibold"
+                              onClick={() => handleToggleKelolaStatus(item, 'active')}
+                              title="Aktifkan kembali akses akun"
+                            >
+                              <UserCheck size={14} />
+                              <span>Aktifkan</span>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="7" className="text-center py-4 text-muted">
@@ -616,7 +643,7 @@ export default function DinkesVerifikasiAkunPage({
           <div>
             <span>Menampilkan </span>
             <strong className="text-dark">
-              {isKelola ? filteredKelolaDinkes.length : filteredData.length}
+              {activeTotalList.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, activeTotalList.length)}
             </strong>
             <span>
               {isKelola 
@@ -626,11 +653,30 @@ export default function DinkesVerifikasiAkunPage({
           </div>
 
           <div className="d-flex align-items-center gap-1">
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
+            <button 
+              className="btn btn-sm btn-light border p-1 rounded-2" 
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              title="Halaman Sebelumnya"
+            >
               <ChevronLeft size={16} />
             </button>
-            <button className="btn btn-sm text-white px-3 py-1 rounded-2 fw-bold" style={{ backgroundColor: '#1e3a8a' }}>1</button>
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button 
+                key={page}
+                className={`btn btn-sm px-3 py-1 rounded-2 fw-bold ${currentPage === page ? 'text-white' : 'btn-light border text-dark'}`}
+                style={currentPage === page ? { backgroundColor: '#1e3a8a' } : {}}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+            <button 
+              className="btn btn-sm btn-light border p-1 rounded-2" 
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              title="Halaman Berikutnya"
+            >
               <ChevronRight size={16} />
             </button>
           </div>

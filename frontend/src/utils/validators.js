@@ -107,3 +107,112 @@ export const validateMeasurements = ({ bb, tb, lila, sistol, diastol }) => {
     errorMessage: errors.join('\n')
   };
 };
+
+// 9. Validasi Kesesuaian Usia / Tanggal Lahir terhadap Klaster Kategori ILP
+export const validateCategoryAge = (kategoriId, birthDateStr, gender = 'L') => {
+  if (!birthDateStr) return { isValid: false, message: 'Tanggal lahir wajib diisi.' };
+  
+  const birth = new Date(birthDateStr);
+  const now = new Date();
+  if (isNaN(birth.getTime())) return { isValid: false, message: 'Format tanggal lahir tidak valid.' };
+  if (birth > now) return { isValid: false, message: 'Tanggal lahir tidak boleh di masa depan.' };
+
+  // Hitung usia dalam tahun dan total bulan
+  let years = now.getFullYear() - birth.getFullYear();
+  let months = now.getMonth() - birth.getMonth();
+  if (now.getDate() < birth.getDate()) {
+    months--;
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  const totalMonths = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+
+  // Tentukan kategori aktual berdasarkan usia
+  let actualCategory = '';
+  if (totalMonths < 12) {
+    actualCategory = 'Bayi 0–11 Bln';
+  } else if (totalMonths < 60) {
+    actualCategory = 'Balita 12–59 Bln';
+  } else if (totalMonths <= 72) {
+    actualCategory = 'Apras 60–72 Bln';
+  } else if (years >= 6 && years <= 14) {
+    actualCategory = 'Usekrem 6–14 Thn';
+  } else if (years >= 15 && years <= 18) {
+    actualCategory = 'Usekrem 15–18 Thn';
+  } else if (years >= 19 && years <= 59) {
+    actualCategory = 'Dewasa';
+  } else {
+    actualCategory = 'Lansia';
+  }
+
+  const ageDisplay = years > 0 ? `${years} Tahun` : `${Math.max(0, totalMonths)} Bulan`;
+  const kat = String(kategoriId || '').toLowerCase().replace(/[–—]/g, '-').trim();
+
+  if (kat === 'bayi-0-11' || kat.includes('bayi')) {
+    if (totalMonths >= 12) {
+      return {
+        isValid: false,
+        message: `Tanggal lahir yang dimasukkan menghasilkan usia ${ageDisplay} (tergolong kategori "${actualCategory}"). Klaster "Bayi 0–11 Bln" hanya untuk usia 0 hingga 11 bulan. Silakan pilih klaster yang sesuai.`
+      };
+    }
+  } else if (kat === 'balita-12-59' || kat.includes('balita')) {
+    if (totalMonths < 12 || totalMonths >= 60) {
+      return {
+        isValid: false,
+        message: `Tanggal lahir yang dimasukkan menghasilkan usia ${ageDisplay} (tergolong kategori "${actualCategory}"). Klaster "Balita 12–59 Bln" hanya untuk usia 12 hingga 59 bulan (1–4 tahun). Silakan pilih klaster yang sesuai.`
+      };
+    }
+  } else if (kat === 'apras-60-72' || kat.includes('apras')) {
+    if (totalMonths < 60 || totalMonths > 72) {
+      return {
+        isValid: false,
+        message: `Tanggal lahir yang dimasukkan menghasilkan usia ${ageDisplay} (tergolong kategori "${actualCategory}"). Klaster "Apras 60–72 Bln" hanya untuk anak usia 60 hingga 72 bulan (5–6 tahun). Silakan pilih klaster yang sesuai.`
+      };
+    }
+  } else if (kat === 'usekrem-6-14' || kat.includes('6-14') || kat.includes('sekolah')) {
+    if (years < 6 || years > 14 || (years === 6 && totalMonths < 72)) {
+      return {
+        isValid: false,
+        message: `Tanggal lahir yang dimasukkan menghasilkan usia ${ageDisplay} (tergolong kategori "${actualCategory}"). Klaster "Usekrem 6–14 Thn" hanya untuk usia 6 hingga 14 tahun. Silakan pilih klaster yang sesuai.`
+      };
+    }
+  } else if (kat === 'usekrem-15-18' || kat.includes('15-18') || kat.includes('remaja')) {
+    if (years < 15 || years > 18) {
+      return {
+        isValid: false,
+        message: `Tanggal lahir yang dimasukkan menghasilkan usia ${ageDisplay} (tergolong kategori "${actualCategory}"). Klaster "Usekrem 15–18 Thn" hanya untuk usia 15 hingga 18 tahun. Silakan pilih klaster yang sesuai.`
+      };
+    }
+  } else if (kat === 'dewasa') {
+    if (years < 19 || years > 59) {
+      return {
+        isValid: false,
+        message: `Tanggal lahir yang dimasukkan menghasilkan usia ${ageDisplay} (tergolong kategori "${actualCategory}"). Klaster "Dewasa" hanya untuk usia produktif 19 hingga 59 tahun. Silakan pilih klaster yang sesuai.`
+      };
+    }
+  } else if (kat === 'lansia') {
+    if (years < 60) {
+      return {
+        isValid: false,
+        message: `Tanggal lahir yang dimasukkan menghasilkan usia ${ageDisplay} (tergolong kategori "${actualCategory}"). Klaster "Lansia" hanya untuk usia 60 tahun ke atas. Silakan pilih klaster yang sesuai.`
+      };
+    }
+  } else if (kat === 'bumil' || kat === 'nifas') {
+    if (gender === 'L' || gender === 'Laki-laki') {
+      return {
+        isValid: false,
+        message: `Klaster "${kat === 'bumil' ? 'Ibu Hamil' : 'Nifas/Menyusui'}" wajib berjenis kelamin Perempuan.`
+      };
+    }
+    if (years < 10 || years > 60) {
+      return {
+        isValid: false,
+        message: `Tanggal lahir yang dimasukkan menghasilkan usia ${ageDisplay}. Klaster "${kat === 'bumil' ? 'Ibu Hamil' : 'Nifas/Menyusui'}" diperuntukkan untuk usia reproduktif wanita (10–60 tahun).`
+      };
+    }
+  }
+
+  return { isValid: true, actualCategory, ageDisplay };
+};

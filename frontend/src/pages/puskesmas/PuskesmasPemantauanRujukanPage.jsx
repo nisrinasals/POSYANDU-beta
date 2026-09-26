@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Search, 
   Eye,
@@ -15,52 +15,170 @@ import {
 import { STANDAR_KATEGORI } from '../../data/mockData';
 import { rujukanService } from '../../services';
 
+// Helper to extract true referral reasons from Langkah 4 (Screening) & Langkah 3 (Plotting)
+const extractReferralIndikasi = (s, exam) => {
+  const reasons = [];
+  const details = [];
+
+  const l4 = exam?.langkah4 || exam?.detail_skrining || exam || {};
+  const l3 = exam?.langkah3 || {};
+  const l2 = exam?.langkah2 || exam || {};
+  const kat = (s.kategori || s.kategori_sasaran || exam?.kategori_sasaran || '').toLowerCase();
+
+  if (exam?.alasan_rujukan || exam?.alasanRujukan) {
+    const rawReason = exam.alasan_rujukan || exam.alasanRujukan;
+    reasons.push(rawReason);
+    details.push(rawReason);
+  }
+
+  const isTbcRisiko = l4.tbc?.is_tbc_terindikasi || 
+    [l4.batukTbc, l4.demamTbc, l4.bbTurunTbc, l4.kontakTbc, l4.lesuTbc, l4.batukBesarTbc, l4.nafsuMakanTbc, l4.bbMenurunTbc, l4.lemahLesuTbc, l4.berkeringatMalamTbc, l4.batukDarahTbc, l4.sesakNafasTbc].some(v => v === 'Ya' || v === true);
+  if (isTbcRisiko) {
+    reasons.push('Terindikasi Gejala TBC');
+    details.push('Ditemukan gejala batuk/demam/penurunan berat badan terindikasi TBC yang memerlukan evaluasi TCM/dahak di Puskesmas.');
+  }
+
+  const gd = parseInt(l4.gulaDarah || l4.kadar_gula_darah || exam?.kadar_gula || s.gulaDarah);
+  if (!isNaN(gd) && gd >= 200) {
+    reasons.push(`Hiperglikemia / GDS Tinggi (${gd} mg/dL)`);
+    details.push(`Kadar gula darah sewaktu ${gd} mg/dL (≥ 200 mg/dL) terindikasi diabetes melitus.`);
+  } else if (!isNaN(gd) && gd >= 140) {
+    reasons.push(`Prediabetes / GDS Meningkat (${gd} mg/dL)`);
+    details.push(`Kadar gula darah sewaktu ${gd} mg/dL (140-199 mg/dL) memerlukan pemeriksaan toleransi glukosa.`);
+  }
+
+  const kol = parseInt(l4.kolesterol || l4.kadar_kolesterol || exam?.kadar_kolesterol || s.kolesterol);
+  if (!isNaN(kol) && kol >= 200) {
+    reasons.push(`Hiperkolesterolemia (${kol} mg/dL)`);
+    details.push(`Kadar kolesterol total ${kol} mg/dL (≥ 200 mg/dL) memerlukan penanganan profil lipid.`);
+  }
+
+  const pumaScore = parseInt(l4.skrining_ppok_puma?.total_skor_puma || l4.pumaScore || l4.puma);
+  if (!isNaN(pumaScore) && pumaScore >= 6) {
+    reasons.push(`Risiko Tinggi PPOK (Skor PUMA: ${pumaScore})`);
+    details.push(`Skor kuesioner PUMA ${pumaScore} (≥ 6) memerlukan pemeriksaan spirometri di Puskesmas.`);
+  }
+
+  if (l4.skrining_kesehatan_jiwa?.is_rujukan_jiwa || (l4.skriningJiwa && String(l4.skriningJiwa).toLowerCase().includes('rujuk'))) {
+    reasons.push('Indikasi Skrining Kesehatan Jiwa');
+    details.push('Hasil skrining kesehatan jiwa menunjukkan gejala distres/masalah emosional yang memerlukan konseling lanjutan.');
+  }
+
+  if (l4.mataKanan === 'Gangguan' || l4.mataKiri === 'Gangguan' || l4.telingaKanan === 'Gangguan' || l4.telingaKiri === 'Gangguan') {
+    reasons.push('Gangguan Fungsi Indera (Mata / Telinga)');
+    details.push('Ditemukan penurunan visus hitung jari atau gangguan pendengaran tes berbisik.');
+  }
+
+  const hb = parseFloat(l4.periksaHb || l4.hb || s.hb);
+  if (!isNaN(hb) && hb < 12.0) {
+    reasons.push(`Anemia (Kadar Hb: ${hb} g/dL)`);
+    details.push(`Kadar hemoglobin ${hb} g/dL (< 12 g/dL) terindikasi anemia defisiensi zat besi.`);
+  }
+
+  if (l4.skrining_aks_barthel?.is_rujukan_aks || (l4.aksKategori && l4.aksKategori !== 'Mandiri' && l4.aksKategori !== 'Mandiri Penuh')) {
+    reasons.push(`Penurunan Kemandirian Fisik (AKS: ${l4.aksKategori || 'Ketergantungan'})`);
+    details.push('Skrining AKS Barthel menunjukkan ketergantungan fungsional yang memerlukan pendampingan.');
+  }
+  if (l4.skilasStatus && !String(l4.skilasStatus).toLowerCase().includes('normal') && !String(l4.skilasStatus).toLowerCase().includes('tidak')) {
+    reasons.push(`Penurunan Kapasitas Intrinsik (${l4.skilasStatus})`);
+    details.push('Skrining SKILAS mendeteksi penurunan domain kognitif, mobilitas, atau nutrisi.');
+  }
+
+  const tensiS = parseInt(l2.tensiSistol || l2.td_sistole || (l2.tensi ? String(l2.tensi).split('/')[0] : 0));
+  const tensiD = parseInt(l2.tensiDiastol || l2.td_diastole || (l2.tensi ? String(l2.tensi).split('/')[1] : 0));
+  if (tensiS >= 140 || tensiD >= 90) {
+    reasons.push(`Risiko Hipertensi (${tensiS}/${tensiD} mmHg)`);
+    details.push(`Tekanan darah ${tensiS}/${tensiD} mmHg melebihi batas normal (≥ 140/90 mmHg).`);
+  }
+
+  const lila = parseFloat(l2.lila || l2.lila_cm);
+  if (!isNaN(lila)) {
+    if (kat.includes('bumil') && lila < 23.5) {
+      reasons.push(`Kurang Energi Kronis (LiLA: ${lila} cm)`);
+      details.push(`LiLA ibu hamil ${lila} cm (< 23.5 cm) berisiko KEK dan memerlukan intervensi gizi & PMT.`);
+    } else if (kat.includes('lansia') && lila < 21.5) {
+      reasons.push(`Risiko Malnutrisi Lansia (LiLA: ${lila} cm)`);
+      details.push(`LiLA lansia ${lila} cm (< 21.5 cm) memerlukan pemantauan status gizi.`);
+    }
+  }
+
+  const lp = parseFloat(l2.lp || l2.lingkar_perut_cm);
+  if (!isNaN(lp) && lp > 90) {
+    reasons.push(`Obesitas Sentral (Lingkar Perut: ${lp} cm)`);
+    details.push(`Lingkar perut ${lp} cm (> 90 cm) meningkatkan risiko penyakit kardiovaskular.`);
+  }
+
+  if (l3.bbU && (l3.bbU.toLowerCase().includes('kurang') || l3.bbU.toLowerCase().includes('buruk') || l3.bbU.toLowerCase().includes('turun'))) {
+    reasons.push(`Plotting BB/U Kurang Sesuai Kurva`);
+    details.push('Pertumbuhan berat badan menurut usia di bawah standar garis kurva KMS/KIA.');
+  }
+  if (l3.tbU && (l3.tbU.toLowerCase().includes('pendek') || l3.tbU.toLowerCase().includes('stunted'))) {
+    reasons.push(`Terindikasi Stunting (TB/U Pendek)`);
+    details.push('Panjang/Tinggi badan menurut usia berada di bawah -2 SD standar baku WHO.');
+  }
+  if (l3.bbTb && (l3.bbTb.toLowerCase().includes('kurang') || l3.bbTb.toLowerCase().includes('wasted'))) {
+    reasons.push(`Gizi Kurang (Wasting: BB/TB < -2 SD)`);
+    details.push('Status gizi balita memerlukan rujukan pemberian makanan tambahan pemulihan.');
+  }
+
+  if (reasons.length === 0) {
+    return {
+      masalahBadge: 'Hasil Skrining Memerlukan Tindak Lanjut',
+      masalahSub: 'Ditemukan indikasi risiko klinis dari hasil skrining & pengukuran fisik yang memerlukan penanganan di Puskesmas.'
+    };
+  }
+
+  return {
+    masalahBadge: reasons.slice(0, 2).join(' • '),
+    masalahSub: details.join(' ')
+  };
+};
+
 export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [], globalPemeriksaanData = {} }) {
   // State kehadiran pasien rujukan (id: 'Hadir' | 'Tidak Hadir')
   const [attendanceMap, setAttendanceMap] = useState({});
 
-  const [backendReferrals, setBackendReferrals] = useState([]);
+  const dynamicReferrals = useMemo(() => {
+    const list = [];
+    if (globalSasaranList && globalSasaranList.length > 0) {
+      globalSasaranList.forEach(s => {
+        const exam = globalPemeriksaanData?.[s.id] || globalPemeriksaanData?.[String(s.id)];
+        const l5 = exam?.langkah5;
+        const isReferred = (l5 && (l5.statusRujukan === 'Rujuk ke Puskesmas / Pustu' || (typeof l5.statusRujukan === 'string' && l5.statusRujukan.toLowerCase().includes('rujuk')))) ||
+                           (s.statusRujukan && typeof s.statusRujukan === 'string' && s.statusRujukan.toLowerCase().includes('rujuk')) ||
+                           exam?.is_perlu_rujukan === true;
+        if (isReferred) {
+          let formattedAge = '-';
+          if (s.usia) {
+            formattedAge = String(s.usia).replace(/\s*\(.*?\)/g, '').split('•')[0].trim();
+          } else if (s.tglLahir || s.tanggalLahir) {
+            const birthDate = s.tglLahir || s.tanggalLahir;
+            formattedAge = `${new Date().getFullYear() - new Date(birthDate).getFullYear()} Th`;
+          }
 
-  useEffect(() => {
-    let cancelled = false;
-    rujukanService.getRujukanList({ page: 1, limit: 1000 })
-      .then((res) => {
-        const rows = Array.isArray(res?.data) ? res.data : [];
-        if (!cancelled) setBackendReferrals(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setBackendReferrals([]);
+          const referralIndikasi = extractReferralIndikasi(s, exam);
+
+          list.push({
+            id: `RUJ-POS-${s.id}`,
+            no: `0${list.length + 1}`,
+            nama: s.nama || s.name || 'Warga Posyandu',
+            nik: s.nik || '-',
+            kategori: s.kategori || 'Sasaran Posyandu',
+            kategoriKey: (s.subKategori || s.kategori || '').toLowerCase().replace(/\s+/g, '-'),
+            usia: formattedAge,
+            posyandu: s.posyandu || 'Posyandu Melati (RW 04)',
+            kader: s.kader || exam?.petugasPemeriksa || 'Kader Dzakiyah Al Zahrani',
+            masalahBadge: referralIndikasi.masalahBadge,
+            masalahSub: referralIndikasi.masalahSub,
+            tglDirujuk: exam?.tglPemeriksaan || exam?.tanggal || '26-09-2026',
+            kehadiran: 'Hadir',
+            catatanKunjungan: ''
+          });
+        }
       });
-    return () => { cancelled = true; };
-  }, []);
-
-  const dynamicReferrals = useMemo(() => backendReferrals.map((item, index) => ({
-    id: item.id,
-    no: String(index + 1).padStart(2, '0'),
-    nama: item.warga?.nama_lengkap || '-',
-    nik: item.warga?.nik || '-',
-    kategori: ({
-      bumil: 'Bumil',
-      busui: 'Nifas/Menyusui',
-      bayi: 'Bayi 0–11 Bln',
-      balita: 'Balita 12–59 Bln',
-      apras: 'Apras 60–72 Bln',
-      uskrem_6_14: 'Usekrem 6–14 Thn',
-      uskrem_15_18: 'Usekrem 15–18 Thn',
-      dewasa: 'Dewasa',
-      lansia: 'Lansia'
-    }[item.pemeriksaan?.kategori_sasaran] || item.pemeriksaan?.kategori_sasaran || 'Sasaran'),
-    kategoriKey: item.pemeriksaan?.kategori_sasaran || '',
-    usia: '-',
-    posyandu: item.warga?.posyandu?.nama_posyandu || '-',
-    kader: item.kader?.nama_lengkap || '-',
-    masalahBadge: item.alasan_rujukan || 'Memerlukan rujukan',
-    masalahSub: item.alasan_rujukan || '-',
-    tglDirujuk: item.tanggal_rujukan ? String(item.tanggal_rujukan).split('T')[0] : '-',
-    kehadiran: item.status_kehadiran_rujukan === 'tidak_hadir' ? 'Tidak Hadir' : 'Hadir',
-    catatanKunjungan: '',
-    raw: item
-  })), [backendReferrals]);
+    }
+    return list;
+  }, [globalSasaranList, globalPemeriksaanData]);
 
   const referrals = useMemo(() => {
     return dynamicReferrals;
@@ -71,14 +189,22 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
   const [selectedSiklus, setSelectedSiklus] = useState('all');
   const [selectedKehadiranFilter, setSelectedKehadiranFilter] = useState('all');
   
-  // List of Posyandu for dropdown filter, sourced from backend referrals.
+  // List of Posyandu for dropdown filter
   const availablePosyanduList = useMemo(() => {
-    const listFromData = referrals
-      .map(item => item.posyandu ? item.posyandu.split('(')[0].trim() : '')
-      .filter(Boolean);
-    return Array.from(new Set(listFromData));
+    const listFromData = referrals.map(item => item.posyandu ? item.posyandu.split('(')[0].trim() : '').filter(Boolean);
+    const standardList = [
+      'Posyandu Melati',
+      'Posyandu Mawar',
+      'Posyandu Kenanga',
+      'Posyandu Anggrek',
+      'Posyandu Dahlia',
+      'Posyandu Cempaka',
+      'Posyandu Flamboyan',
+      'Posyandu Bougenville',
+      'Posyandu Teratai'
+    ];
+    return Array.from(new Set([...standardList, ...listFromData]));
   }, [referrals]);
-
 
   // Modal state
   const [selectedReferral, setSelectedReferral] = useState(null);

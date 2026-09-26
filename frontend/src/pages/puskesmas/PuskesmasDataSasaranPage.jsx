@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Modal, Button } from 'react-bootstrap';
 import DetailSasaranModal from '../../components/sasaran/DetailSasaranModal';
+import { formatIndoDate } from '../../utils/dataMappers';
 
 export const defaultFallbackSasaranList = [];
 
@@ -63,7 +64,17 @@ export default function PuskesmasDataSasaranPage({
 
   // Available Posyandu List for filter dropdown
   const availablePosyanduList = useMemo(() => {
-    const list = [];
+    const list = [
+      'Posyandu Melati',
+      'Posyandu Flamboyan',
+      'Posyandu Mawar',
+      'Posyandu Dahlia',
+      'Posyandu Teratai',
+      'Posyandu Cempaka',
+      'Posyandu Kenanga',
+      'Posyandu Anggrek',
+      'Posyandu Nusa Indah'
+    ];
     dataset.forEach(item => {
       if (item.posyandu) {
         const rawName = item.posyandu.split('—')[0].split('RW')[0].trim();
@@ -264,14 +275,14 @@ export default function PuskesmasDataSasaranPage({
                       <div className="text-muted font-monospace" style={{ fontSize: '0.78rem' }}>{item.nik}</div>
                     </td>
                     <td className="text-center text-secondary fw-medium text-nowrap">
-                      {item.tglLahir}
+                      {formatIndoDate(item.tglLahir)}
                     </td>
                     <td>
                       <div className="fw-semibold text-dark mb-0">{item.kategori}</div>
                     </td>
                     <td>
                       <div className="fw-semibold text-dark" style={{ fontSize: '0.84rem' }}>
-                        {item.posyandu ? item.posyandu.split('—')[0].trim() : '-'}
+                        {item.posyandu ? item.posyandu.split('—')[0].trim() : 'Posyandu Melati'}
                       </div>
                       <div className="text-muted small" style={{ fontSize: '0.72rem' }}>
                         {item.rw ? `Wilayah ${item.rw}` : 'Wilayah RW 04'}
@@ -300,7 +311,7 @@ export default function PuskesmasDataSasaranPage({
         {/* Pagination Footer */}
         <div className="card-footer bg-white border-top py-3 px-4 d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2">
           <div className="text-muted small">
-            Menampilkan <span className="fw-semibold text-dark">{paginatedData.length}</span> dari <span className="fw-semibold text-dark">{totalItems}</span> sasaran
+            Menampilkan <span className="fw-semibold text-dark">{totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}</span> s/d <span className="fw-semibold text-dark">{Math.min(currentPage * itemsPerPage, totalItems)}</span> dari <span className="fw-semibold text-dark">{totalItems}</span> sasaran
           </div>
 
           <div className="d-flex align-items-center gap-1">

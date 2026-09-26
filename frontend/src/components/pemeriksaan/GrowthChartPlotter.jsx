@@ -28,21 +28,48 @@ import {
  */
 export default function GrowthChartPlotter({
   gender = 'Perempuan',
-  umurBulan = 36,
-  bb = 13.5,
-  tb = 92.0,
+  umurBulan: propUmurBulan,
+  ageInMonths,
+  bb: propBb,
+  weight,
+  tb: propTb,
+  height,
   riwayatPemeriksaan = [],
-  activeCategory = 'balita-12-59', // 'bayi-0-11', 'balita-12-59', 'apras', 'usekrem-6-14', 'usekrem-15-18'
-  namaAnak = 'Anak'
+  activeCategory: propCategory,
+  category,
+  namaAnak: propNama,
+  childName
 }) {
   const gCode = normalizeGender(gender);
   const isFemale = gCode === 'F';
-  const isTeen = ['usekrem-6-14', 'usekrem-15-18', 'usekrem', 'remaja'].some(k => (activeCategory || '').includes(k)) || umurBulan >= 60;
+
+  const umurBulan = parseFloat(propUmurBulan ?? ageInMonths ?? 36);
+  const bb = parseFloat(propBb ?? weight ?? 13.5);
+  const tb = parseFloat(propTb ?? height ?? 92.0);
+  const activeCategory = String(propCategory || category || 'balita-12-59').toLowerCase();
+  const namaAnak = propNama || childName || 'Anak';
+
+  // Apras (60-72 bulan / 5-6 tahun) sampai Usekrem (6-14 & 15-18 tahun / 5-18 tahun):
+  // Sesuai standar Permenkes No. 2 Tahun 2020 & permintaan user, hanya kurva IMT/U saja yang ditampilkan.
+  const isOnlyImt = [
+    'apras-60-72',
+    'apras',
+    'usekrem-6-14',
+    'usekrem-15-18',
+    'usekrem',
+    'remaja'
+  ].some(k => activeCategory.includes(k)) || umurBulan >= 60;
 
   // Tabs pilihan tipe grafik
-  const defaultChartType = isTeen ? 'imtu' : (umurBulan >= 24 ? 'tbu' : 'pbu');
+  const defaultChartType = isOnlyImt ? 'imtu' : (umurBulan >= 24 ? 'tbu' : 'pbu');
   const [chartType, setChartType] = useState(defaultChartType);
   const [hoveredPoint, setHoveredPoint] = useState(null);
+
+  React.useEffect(() => {
+    if (isOnlyImt) {
+      setChartType('imtu');
+    }
+  }, [isOnlyImt, umurBulan, activeCategory]);
 
   // Konfigurasi kurva & dataset berdasarkan chartType & gender
   const { datasetKey, chartTitle, yLabel, xLabel, xMin, xMax, yMin, yMax, unitX, unitY, isImtTeen } = useMemo(() => {
@@ -105,7 +132,7 @@ export default function GrowthChartPlotter({
       };
     } else {
       // IMT/U
-      if (isTeen) {
+      if (isOnlyImt) {
         return {
           datasetKey: `${gCode}(5-18 tahun) IMTU`,
           chartTitle: `Grafik Indeks Massa Tubuh (IMT) Menurut Usia Anak ${isFemale ? 'Perempuan' : 'Laki-laki'} 5 - 18 Tahun`,
@@ -136,7 +163,7 @@ export default function GrowthChartPlotter({
         };
       }
     }
-  }, [chartType, gCode, isFemale, isTeen, umurBulan, tb]);
+  }, [chartType, gCode, isFemale, isOnlyImt, umurBulan, tb]);
 
   // Data kurva standar dari file JSON
   const rawTableData = useMemo(() => {
@@ -151,16 +178,91 @@ export default function GrowthChartPlotter({
     const numImt = (numBb > 0 && numTb > 0) ? (numBb / Math.pow(numTb / 100, 2)) : 0;
 
     if (chartType === 'tbu' || chartType === 'pbu') {
-      return { x: numAge, y: numTb, valid: numTb > 0 };
+      return { x: numAge, y: numTb, valid: numTb > 0, isCurrent: true, label: 'Saat Ini' };
     } else if (chartType === 'bbu') {
-      return { x: numAge, y: numBb, valid: numBb > 0 };
+      return { x: numAge, y: numBb, valid: numBb > 0, isCurrent: true, label: 'Saat Ini' };
     } else if (chartType === 'bbpb') {
-      return { x: numTb, y: numBb, valid: numTb > 0 && numBb > 0 };
+      return { x: numTb, y: numBb, valid: numTb > 0 && numBb > 0, isCurrent: true, label: 'Saat Ini' };
     } else {
       // imtu
-      return { x: numAge, y: parseFloat(numImt.toFixed(1)), valid: numImt > 0 };
+      return { x: numAge, y: parseFloat(numImt.toFixed(1)), valid: numImt > 0, isCurrent: true, label: 'Saat Ini' };
     }
   }, [chartType, umurBulan, tb, bb]);
+
+  // Evaluasi Titik-Titik Riwayat Pemeriksaan Lintas Bulan (KMS Buku KIA)
+  const trajectoryPoints = useMemo(() => {
+    const list = [];
+    const rawList = Array.isArray(riwayatPemeriksaan) ? riwayatPemeriksaan : [];
+
+    rawList.forEach((item, idx) => {
+      if (!item) return;
+      const hAge = parseFloat(item.usia_bulan || item.umurBulan || item.usia || 0);
+      const hBb = parseFloat(item.bb_kg || item.bb || 0);
+      const hTb = parseFloat(item.tb_cm || item.tb || item.pb || 0);
+      const hImt = (hBb > 0 && hTb > 0) ? (hBb / Math.pow(hTb / 100, 2)) : 0;
+      const tgl = item.tanggal || item.tglPemeriksaan || item.tglPeriksa || `Bulan ${idx + 1}`;
+
+      let p = null;
+      if (chartType === 'tbu' || chartType === 'pbu') {
+        if (hAge >= 0 && hTb > 0) p = { x: hAge, y: hTb, valid: true, tanggal: tgl, isCurrent: false, label: `Pemeriksaan ${tgl}` };
+      } else if (chartType === 'bbu') {
+        if (hAge >= 0 && hBb > 0) p = { x: hAge, y: hBb, valid: true, tanggal: tgl, isCurrent: false, label: `Pemeriksaan ${tgl}` };
+      } else if (chartType === 'bbpb') {
+        if (hTb > 0 && hBb > 0) p = { x: hTb, y: hBb, valid: true, tanggal: tgl, isCurrent: false, label: `Pemeriksaan ${tgl}` };
+      } else {
+        if (hAge >= 0 && hImt > 0) p = { x: hAge, y: parseFloat(hImt.toFixed(1)), valid: true, tanggal: tgl, isCurrent: false, label: `Pemeriksaan ${tgl}` };
+      }
+      if (p) list.push(p);
+    });
+
+    // Tambahkan titik saat ini jika valid
+    if (currentVal.valid) {
+      // Cek apakah titik saat ini belum terduplikasi
+      const isDuplicated = list.some(pt => pt.x === currentVal.x && Math.abs(pt.y - currentVal.y) < 0.05);
+      if (!isDuplicated) {
+        list.push(currentVal);
+      }
+    }
+
+    // Urutkan berdasarkan sumbu X (umur / TB)
+    return list.sort((a, b) => a.x - b.x);
+  }, [riwayatPemeriksaan, currentVal, chartType]);
+
+  // Hitung Tren Pertumbuhan N / T (Naik / Tidak Naik KMS)
+  const growthTrend = useMemo(() => {
+    if (trajectoryPoints.length < 2) {
+      return { code: 'N', label: 'Pengukuran Baru', isNaik: true, delta: 0, text: 'Data awal pemantauan pertumbuhan.' };
+    }
+    const last = trajectoryPoints[trajectoryPoints.length - 1];
+    const prev = trajectoryPoints[trajectoryPoints.length - 2];
+    const delta = parseFloat((last.y - prev.y).toFixed(2));
+
+    if (delta > 0) {
+      return { 
+        code: 'N', 
+        label: 'N (Naik)', 
+        isNaik: true, 
+        delta, 
+        text: `Pertumbuhan naik (+${delta} ${unitY}) mengikuti arah kurva standar.` 
+      };
+    } else if (delta === 0) {
+      return { 
+        code: 'T', 
+        label: 'T (Tetap / Mendatar)', 
+        isNaik: false, 
+        delta, 
+        text: 'Berat/tinggi badan mendatar dibanding bulan lalu. Perlu perhatian asupan gizi.' 
+      };
+    } else {
+      return { 
+        code: 'T', 
+        label: 'T (Turun)', 
+        isNaik: false, 
+        delta, 
+        text: `Terjadi penurunan (${delta} ${unitY}) dibanding bulan lalu. Waspada risiko gangguan pertumbuhan!` 
+      };
+    }
+  }, [trajectoryPoints, unitY]);
 
   // Evaluasi Klinis Z-Score Berdasarkan Permenkes 2/2020
   const evaluation = useMemo(() => {
@@ -210,6 +312,13 @@ export default function GrowthChartPlotter({
   const pathPlus2 = useMemo(() => generatePath('plus2'), [rawTableData, isImtTeen]);
   const pathPlus3 = useMemo(() => generatePath('plus3'), [rawTableData, isImtTeen]);
 
+  // Garis Penghubung Trajectory Pertumbuhan Anak Lintas Bulan (KMS Buku KIA)
+  const trajectoryPathD = useMemo(() => {
+    const validPts = trajectoryPoints.filter(p => p.x >= xMin && p.x <= xMax && p.y >= yMin && p.y <= yMax);
+    if (validPts.length < 2) return '';
+    return `M ${validPts.map(p => `${scaleX(p.x)},${scaleY(p.y)}`).join(' L ')}`;
+  }, [trajectoryPoints, xMin, xMax, yMin, yMax]);
+
   // Tema Warna (Pink untuk Perempuan sesuai Buku KIA Kemenkes, Biru untuk Laki-laki)
   const theme = isFemale ? {
     primary: '#e83e8c',
@@ -255,25 +364,30 @@ export default function GrowthChartPlotter({
       {/* Header Banner Khas Buku KIA Kemenkes / WHO */}
       <div className="p-3 border-bottom d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2" style={{ backgroundColor: theme.headerBg, borderTop: `4px solid ${theme.primary}` }}>
         <div>
-          <div className="d-flex align-items-center gap-2 mb-1">
+          <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
             <span className="badge px-2.5 py-1 rounded-pill fw-bold text-white small" style={{ backgroundColor: theme.primary }}>
               WHO &amp; Kemenkes RI
             </span>
             <span className="badge bg-white text-dark border px-2 py-0.5 rounded-pill small" style={{ fontSize: '0.75rem' }}>
               Permenkes No. 2 Tahun 2020
             </span>
+            {trajectoryPoints.length > 1 && (
+              <span className={`badge px-2.5 py-0.5 rounded-pill small fw-bold ${growthTrend.isNaik ? 'bg-success text-white' : 'bg-danger text-white'}`}>
+                Tren: {growthTrend.label}
+              </span>
+            )}
           </div>
           <h5 className="fw-bold mb-0 text-dark" style={{ letterSpacing: '-0.3px' }}>
             {chartTitle}
           </h5>
           <div className="text-muted small mt-0.5" style={{ fontSize: '0.8rem' }}>
-            Pengisian oleh kader didampingi tenaga kesehatan untuk memantau pertumbuhan &amp; deteksi dini stunting
+            Pemantauan kurva tumbuh kembang anak lintas bulan &amp; deteksi dini stunting (KMS Buku KIA)
           </div>
         </div>
 
         {/* Tipe Grafik Tabs */}
         <div className="btn-group btn-group-sm bg-white p-1 rounded-pill border shadow-xs" role="group">
-          {!isTeen && (
+          {!isOnlyImt ? (
             <>
               <button
                 type="button"
@@ -299,16 +413,25 @@ export default function GrowthChartPlotter({
               >
                 {umurBulan <= 24 ? 'BB/PB' : 'BB/TB'}
               </button>
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1 font-semibold ${chartType === 'imtu' ? 'text-white' : 'text-dark border-0'}`}
+                style={{ backgroundColor: chartType === 'imtu' ? theme.primary : 'transparent' }}
+                onClick={() => setChartType('imtu')}
+              >
+                IMT/U (Gizi)
+              </button>
             </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-sm rounded-pill px-3 py-1 font-semibold text-white"
+              style={{ backgroundColor: theme.primary }}
+              onClick={() => setChartType('imtu')}
+            >
+              IMT/U (Gizi 5–18 Tahun)
+            </button>
           )}
-          <button
-            type="button"
-            className={`btn btn-sm rounded-pill px-3 py-1 font-semibold ${chartType === 'imtu' ? 'text-white' : 'text-dark border-0'}`}
-            style={{ backgroundColor: chartType === 'imtu' ? theme.primary : 'transparent' }}
-            onClick={() => setChartType('imtu')}
-          >
-            IMT/U (Gizi)
-          </button>
         </div>
       </div>
 
@@ -420,6 +543,105 @@ export default function GrowthChartPlotter({
               );
             })()}
 
+            {/* Garis Trajectory Pertumbuhan Lintas Bulan (KMS Buku KIA) */}
+            {trajectoryPathD && (
+              <path 
+                d={trajectoryPathD} 
+                fill="none" 
+                stroke="#1d4ed8" 
+                strokeWidth="3.2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+              />
+            )}
+
+            {/* Titik-Titik Riwayat Pemeriksaan Lintas Bulan */}
+            {trajectoryPoints.map((pt, idx) => {
+              if (pt.x < xMin || pt.x > xMax || pt.y < yMin || pt.y > yMax) return null;
+              const isCurr = pt.isCurrent;
+              return (
+                <g 
+                  key={`pt-${idx}-${pt.x}`}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={() => setHoveredPoint(pt)}
+                  onMouseLeave={() => setHoveredPoint(null)}
+                >
+                  {isCurr ? (
+                    <>
+                      <circle 
+                        cx={scaleX(pt.x)} 
+                        cy={scaleY(pt.y)} 
+                        r="12" 
+                        fill={evaluation.color} 
+                        opacity="0.3"
+                      />
+                      <circle 
+                        cx={scaleX(pt.x)} 
+                        cy={scaleY(pt.y)} 
+                        r="6.5" 
+                        fill={evaluation.color} 
+                        stroke="#ffffff" 
+                        strokeWidth="2.5" 
+                      />
+                      <rect 
+                        x={scaleX(pt.x) - 40} 
+                        y={scaleY(pt.y) - 28} 
+                        width="80" 
+                        height="20" 
+                        rx="4" 
+                        fill="#0f172a" 
+                        opacity="0.88" 
+                      />
+                      <text 
+                        x={scaleX(pt.x)} 
+                        y={scaleY(pt.y) - 14} 
+                        textAnchor="middle" 
+                        fontSize="10" 
+                        fontWeight="bold" 
+                        fill="#ffffff"
+                      >
+                        {pt.y} {unitY}
+                      </text>
+                    </>
+                  ) : (
+                    <>
+                      <circle 
+                        cx={scaleX(pt.x)} 
+                        cy={scaleY(pt.y)} 
+                        r="4.5" 
+                        fill="#1d4ed8" 
+                        stroke="#ffffff" 
+                        strokeWidth="1.8" 
+                      />
+                      {hoveredPoint === pt && (
+                        <g>
+                          <rect 
+                            x={scaleX(pt.x) - 45} 
+                            y={scaleY(pt.y) - 30} 
+                            width="90" 
+                            height="22" 
+                            rx="4" 
+                            fill="#1e293b" 
+                            opacity="0.92" 
+                          />
+                          <text 
+                            x={scaleX(pt.x)} 
+                            y={scaleY(pt.y) - 15} 
+                            textAnchor="middle" 
+                            fontSize="9.5" 
+                            fontWeight="bold" 
+                            fill="#ffffff"
+                          >
+                            {pt.y} {unitY} ({pt.x} {unitX})
+                          </text>
+                        </g>
+                      )}
+                    </>
+                  )}
+                </g>
+              );
+            })}
+
             {/* Label Sumbu X & Y */}
             <text 
               x={padding.left + plotWidth / 2} 
@@ -443,58 +665,9 @@ export default function GrowthChartPlotter({
             >
               {yLabel}
             </text>
-
-            {/* Titik Plotting Hasil Pengukuran Saat Ini */}
-            {currentVal.valid && currentVal.x >= xMin && currentVal.x <= xMax && currentVal.y >= yMin && currentVal.y <= yMax && (
-              <g 
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={() => setHoveredPoint(currentVal)}
-                onMouseLeave={() => setHoveredPoint(null)}
-              >
-                {/* Glowing Outer Ring */}
-                <circle 
-                  cx={scaleX(currentVal.x)} 
-                  cy={scaleY(currentVal.y)} 
-                  r="12" 
-                  fill={evaluation.color} 
-                  opacity="0.25"
-                  className="animate-pulse"
-                />
-                {/* Solid Point */}
-                <circle 
-                  cx={scaleX(currentVal.x)} 
-                  cy={scaleY(currentVal.y)} 
-                  r="6.5" 
-                  fill={evaluation.color} 
-                  stroke="#ffffff" 
-                  strokeWidth="2.5" 
-                  className="shadow-sm"
-                />
-
-                {/* Point Label Marker */}
-                <rect 
-                  x={scaleX(currentVal.x) - 40} 
-                  y={scaleY(currentVal.y) - 28} 
-                  width="80" 
-                  height="20" 
-                  rx="4" 
-                  fill="#0f172a" 
-                  opacity="0.88" 
-                />
-                <text 
-                  x={scaleX(currentVal.x)} 
-                  y={scaleY(currentVal.y) - 14} 
-                  textAnchor="middle" 
-                  fontSize="10" 
-                  fontWeight="bold" 
-                  fill="#ffffff"
-                >
-                  {currentVal.y} {unitY}
-                </text>
-              </g>
-            )}
           </svg>
         </div>
+
 
         {/* Tabel Standar Permenkes No. 2 Tahun 2020 (Inset Legend Box seperti Gambar User) */}
         <div className="row g-3 mt-3 align-items-stretch">

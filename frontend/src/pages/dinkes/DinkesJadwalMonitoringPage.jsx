@@ -16,6 +16,7 @@ import {
   Users,
   FileText 
 } from 'lucide-react';
+import { initialJadwalList } from '../../data/mockData';
 
 export default function DinkesJadwalMonitoringPage({ 
   globalJadwalList = [] 

@@ -27,11 +27,6 @@ export const userService = {
     return await api.get('/users', { params });
   },
 
-  // Backward-compatible alias used by older pages.
-  getAllUsers: async (params = {}) => {
-    return await api.get('/users', { params });
-  },
-
   // 5. Ambil detail user berdasarkan ID
   getUserById: async (id) => {
     return await api.get(`/users/${id}`);
@@ -55,10 +50,6 @@ export const userService = {
   // 9. Ubah status user
   changeUserStatus: async (id, statusData) => {
     return await api.patch(`/users/${id}/status`, statusData);
-  },
-
-  setUserStatus: async (id, status) => {
-    return await api.patch(`/users/${id}/status`, { status });
   },
 
   // 10. Ganti Admin Puskesmas

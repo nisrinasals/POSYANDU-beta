@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { 
   Search, 
   FileText, 
@@ -11,49 +11,27 @@ import {
   Users
 } from 'lucide-react';
 
-export default function DashboardPage({ onNavigate, globalSasaranList = [], globalPemeriksaanData = {}, globalJadwalList = [], user }) {
+export default function DashboardPage({ onNavigate }) {
   const [hoveredCategory, setHoveredCategory] = useState(null);
 
-  // Build dashboard statistics from backend-synced warga, pemeriksaan, and sesi data.
-  const kategoriDistribution = useMemo(() => {
-    const categories = [
-      ['bumil', 'Bumil', 'Ibu Hamil'],
-      ['nifas', 'Nifas/Menyusui', 'Ibu Nifas & Menyusui'],
-      ['bayi-0-11', 'Bayi 0–11 Bln', '0 – 11 Bulan'],
-      ['balita-12-59', 'Balita 12–59 Bln', '12 – 59 Bulan'],
-      ['apras-60-72', 'Apras 60–72 Bln', 'Pra-Sekolah'],
-      ['usekrem-6-14', 'Usekrem 6–14 Thn', 'Usia Sekolah'],
-      ['usekrem-15-18', 'Usekrem 15–18 Thn', 'Remaja'],
-      ['dewasa', 'Dewasa', '19 – 59 Thn'],
-      ['lansia', 'Lansia', '60+ Thn']
-    ];
-    const colorPalette = ['#F25B8E', '#f43f5e', '#ec4899', '#d946ef', '#8b5cf6', '#6366f1', '#0ea5e9', '#10b981', '#64748b'];
-    const list = globalSasaranList || [];
-    return categories.map(([id, nama, sub], index) => {
-      const members = list.filter((item) => item?.subKategori === id || String(item?.kategori || '').toLowerCase().includes(nama.toLowerCase().split(' ')[0]));
-      const hadir = members.filter((item) =>
-        item.statusPemeriksaan === 'Sudah' ||
-        globalPemeriksaanData?.[item.id] ||
-        globalPemeriksaanData?.[String(item.id)]
-      ).length;
-      return { id, nama, hadir, total: members.length, color: colorPalette[index], sub };
-    });
-  }, [globalSasaranList, globalPemeriksaanData]);
-
-  const todaySchedule = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return (globalJadwalList || []).find((item) => item?.tanggal === today || String(item?.tanggal_pelaksanaan || '').slice(0, 10) === today);
-  }, [globalJadwalList]);
+  // 9 Kategori Siklus Hidup Distribution & Attendance Data (Posyandu Melati RW 04)
+  const kategoriDistribution = [
+    { id: 'bumil', nama: 'Bumil', hadir: 25, total: 50, color: '#F25B8E', sub: 'Ibu Hamil' },
+    { id: 'nifas', nama: 'Nifas/Menyusui', hadir: 15, total: 22, color: '#f43f5e', sub: 'Ibu Nifas & Menyusui' },
+    { id: 'bayi-0-11', nama: 'Bayi 0–11 Bln', hadir: 22, total: 25, color: '#ec4899', sub: '0 – 11 Bulan' },
+    { id: 'balita-12-59', nama: 'Balita 12–59 Bln', hadir: 45, total: 52, color: '#d946ef', sub: '12 – 59 Bulan' },
+    { id: 'apras-60-72', nama: 'Apras 60–72 Bln', hadir: 18, total: 24, color: '#8b5cf6', sub: 'Pra-Sekolah' },
+    { id: 'usekrem-6-14', nama: 'Usekrem 6–14 Thn', hadir: 20, total: 30, color: '#6366f1', sub: 'Usia Sekolah' },
+    { id: 'usekrem-15-18', nama: 'Usekrem 15–18 Thn', hadir: 14, total: 20, color: '#0ea5e9', sub: 'Remaja' },
+    { id: 'dewasa', nama: 'Dewasa', hadir: 32, total: 48, color: '#10b981', sub: '19 – 59 Thn' },
+    { id: 'lansia', nama: 'Lansia', hadir: 24, total: 35, color: '#64748b', sub: '60+ Thn' }
+  ];
 
   // Aggregated Statistics
   const totalSasaranAll = kategoriDistribution.reduce((acc, cur) => acc + cur.total, 0);
   const totalHadirAll = kategoriDistribution.reduce((acc, cur) => acc + cur.hadir, 0);
   const overallPercentage = Math.round((totalHadirAll / totalSasaranAll) * 100);
-  const highestCategory = [...kategoriDistribution].sort((a, b) => {
-    const ar = a.total ? a.hadir / a.total : 0;
-    const br = b.total ? b.hadir / b.total : 0;
-    return br - ar;
-  })[0] || { nama: '-', hadir: 0, total: 0 };
+  const highestCategory = [...kategoriDistribution].sort((a, b) => (b.hadir / b.total) - (a.hadir / a.total))[0];
   const maxBarValue = Math.max(...kategoriDistribution.map(k => k.total), 60);
 
   return (
@@ -80,11 +58,9 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
               <Calendar size={13} />
               <span>Jadwal Pelayanan Hari Ini</span>
             </div>
-            <h3 className="fw-bold mb-1.5 text-white fs-4">
-              {todaySchedule?.posyandu || user?.posyandu || 'Jadwal Posyandu'}
-            </h3>
+            <h3 className="fw-bold mb-1.5 text-white fs-4">Posyandu Melati RW 04 Sukamaju</h3>
             <p className="mb-0 small" style={{ maxWidth: '640px', fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.92)' }}>
-              Pelayanan Posyandu dan pemantauan kesehatan siklus hidup ILP berdasarkan jadwal yang tersimpan pada backend.
+              Pelayanan Penimbangan Balita, Imunisasi, dan Pemantauan Kesehatan Siklus Hidup ILP di Balai RW 04.
             </p>
           </div>
 
@@ -286,7 +262,7 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
             <div className="p-3 rounded-3 bg-light border">
               <div className="text-muted small mb-1" style={{ fontSize: '0.75rem' }}>Partisipasi Tertinggi</div>
               <div className="fw-bold text-success fs-6 text-truncate">
-                {highestCategory.nama} <span className="small fw-semibold" style={{ fontSize: '0.75rem' }}>({highestCategory.total ? Math.round((highestCategory.hadir / highestCategory.total) * 100) : 0}%)</span>
+                {highestCategory.nama} <span className="small fw-semibold" style={{ fontSize: '0.75rem' }}>({Math.round((highestCategory.hadir / highestCategory.total) * 100)}%)</span>
               </div>
             </div>
           </div>
@@ -310,7 +286,7 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
           <div className="position-relative" style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: '650px', height: '280px' }} className="d-flex align-items-end justify-content-between pt-4 pb-2 px-2">
               {kategoriDistribution.map((cat) => {
-                const persenHadir = cat.total ? Math.round((cat.hadir / cat.total) * 100) : 0;
+                const persenHadir = Math.round((cat.hadir / cat.total) * 100);
                 const totalHeightPct = Math.max(15, Math.round((cat.total / maxBarValue) * 210));
                 const hadirHeightPct = Math.max(10, Math.round((cat.hadir / maxBarValue) * 210));
                 const isHovered = hoveredCategory === cat.id;

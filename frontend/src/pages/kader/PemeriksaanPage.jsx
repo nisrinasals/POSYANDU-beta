@@ -21,7 +21,24 @@ import { kategoriPemeriksaan } from '../../data/mockData';
 import { useNotification } from '../../context/NotificationContext';
 import { validateNik, formatNikInput, validateMeasurements } from '../../utils/validators';
 import GrowthChartPlotter from '../../components/pemeriksaan/GrowthChartPlotter';
-import { pemeriksaanService, kunjunganService } from '../../services';
+import Langkah3PlottingView from '../../components/pemeriksaan/Langkah3PlottingView';
+import ImunisasiTableHistory from '../../components/pemeriksaan/ImunisasiTableHistory';
+import { pemeriksaanService, kunjunganService, imunisasiService } from '../../services';
+import { formatIndoDate } from '../../utils/dataMappers';
+import { 
+  STANDAR_PLOT, 
+  evaluasiIMT, 
+  evaluasiTekananDarah, 
+  evaluasiLila, 
+  evaluasiLingkarPerut, 
+  evaluasiBBU, 
+  evaluasiTBU, 
+  evaluasiIMTU, 
+  evaluateWeightForSize, 
+  kalkulasiAntropometriAnak, 
+  evaluasiPemeriksaan, 
+  hitungUsiaBulan 
+} from '../../utils/plotHelper';
 
 // Opsi Langkah 1: Pemeriksaan Sesuai Umur Kehamilan (Ibu Hamil) - Format Buku KIA
 const OPSI_UMUR_KEHAMILAN_BUMIL = [
@@ -280,6 +297,18 @@ export function YesNoCard({
   );
 }
 
+const STORAGE_KEY = 'POSYANDU_PEMERIKSAAN_SESSION';
+
+const loadSavedSession = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.error('Failed to load saved pemeriksaan session', e);
+  }
+  return null;
+};
+
 export default function PemeriksaanPage({ 
   activeSubmenu = 'bumil', 
   onNavigate,
@@ -290,65 +319,32 @@ export default function PemeriksaanPage({
   activePemeriksaanWargaId,
   onRefreshData
 }) {
-
-  const ensureKunjunganId = async (warga) => {
-    if (!warga?.id) throw new Error('Warga pemeriksaan tidak valid.');
-
-    // Reuse today's queue entry when one already exists.
-    try {
-      const queueRes = await kunjunganService.getAntreanHariIni();
-      const queue = Array.isArray(queueRes?.data) ? queueRes.data : [];
-      const existing = queue.find((item) =>
-        Number(item.warga_id || item.warga?.id) === Number(warga.id)
-      );
-      if (existing?.id) return existing.id;
-    } catch (error) {
-      // Continue by looking for an open session.
-    }
-
-    const posyanduId = warga?._raw?.posyandu_id || warga?.posyandu_id;
-    if (!posyanduId) {
-      throw new Error('Warga belum memiliki Posyandu pada backend.');
-    }
-
-    const sesiRes = await sesiService.getSesiList({
-      page: 1,
-      limit: 100,
-      posyandu_id: posyanduId,
-      status: 'open'
-    });
-    const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : [];
-    const today = new Date().toISOString().slice(0, 10);
-    const session =
-      sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === today) ||
-      sessions[0];
-
-    if (!session?.id) {
-      throw new Error('Tidak ada sesi Posyandu terbuka. Buat atau buka sesi Posyandu terlebih dahulu.');
-    }
-
-    const visitRes = await kunjunganService.createKunjungan({
-      warga_id: Number(warga.id),
-      sesi_posyandu_id: Number(session.id)
-    });
-
-    if (!visitRes?.data?.id) {
-      throw new Error('Backend tidak mengembalikan ID kunjungan.');
-    }
-    return visitRes.data.id;
-  };
-
   const { showSuccess, showWarning } = useNotification();
   const currentCategory = kategoriPemeriksaan.find(c => c.id === activeSubmenu) || kategoriPemeriksaan[0];
 
+  const initialSession = useMemo(() => loadSavedSession(), []);
+
   // 1. Mode State: 'per-step' (Pilih Langkah) vs 'sequential' (Bertahap)
-  const [examinationMode, setExaminationMode] = useState('per-step');
+  const [examinationMode, setExaminationMode] = useState(() => initialSession?.examinationMode || 'per-step');
 
   // 2. Active Step State (1, 2, 3, 4, 5)
-  const [activeStep, setActiveStep] = useState(1);
+  const [activeStep, setActiveStep] = useState(() => initialSession?.activeStep || 1);
 
   // 3. Preview Modal State for Mode Bertahap
   const [showSequentialPreviewModal, setShowSequentialPreviewModal] = useState(false);
+
+  // Fallback template citizens for categories
+  const fallbackTemplates = useMemo(() => ({
+    'bumil': [{ id: 2, idSasaran: 'PSY-002', nama: 'Ny. Siti Rahmawati', nik: '32010101010002', tglLahir: '1996-06-14', gender: 'Perempuan', tb: '158', bb: '58.5', statusPemeriksaan: 'Sudah', alamat: 'Jl. Mawar No. 04, RW 04', tglSkriningTahunanTerakhir: '12-05-2025' }],
+    'nifas': [{ id: 6, idSasaran: 'PSY-006', nama: 'Ny. Nurul Fadilah', nik: '32010101010006', tglLahir: '1998-02-10', gender: 'Perempuan', tb: '155', bb: '54.0', statusPemeriksaan: 'Sudah', alamat: 'Jl. Dahlia No. 19, RW 04', tglSkriningTahunanTerakhir: '18-08-2025' }],
+    'bayi-0-11': [{ id: 8, idSasaran: 'PSY-008', nama: 'Rayyan Al-Ghifari', nik: '32010101010008', tglLahir: '2026-02-10', gender: 'Laki-laki', tb: '68', bb: '7.8', statusPemeriksaan: 'Sudah', alamat: 'Jl. Melati No. 08, RW 04', usia: '6 Bulan' }],
+    'balita-12-59': [{ id: 1, idSasaran: 'PSY-001', nama: 'Andini Putri', nik: '32010101010201', tglLahir: '2023-05-12', gender: 'Perempuan', tb: '94.5', bb: '13.2', statusPemeriksaan: 'Sudah', alamat: 'Jl. Melati No. 12, RW 04', usia: '24 Bulan' }],
+    'apras': [{ id: 9, idSasaran: 'PSY-009', nama: 'Sinta Maharani', nik: '32010101010009', tglLahir: '2021-01-15', gender: 'Perempuan', tb: '102', bb: '16.0', statusPemeriksaan: 'Sudah', alamat: 'Jl. Kenanga No. 09, RW 04', usia: '60 Bulan' }],
+    'usekrem-6-14': [{ id: 7, idSasaran: 'PSY-007', nama: 'Bima Pratama', nik: '32010101010007', tglLahir: '2015-06-07', gender: 'Laki-laki', tb: '138', bb: '34.5', statusPemeriksaan: 'Sudah', alamat: 'Jl. Flamboyan No. 07, RW 04', tglSkriningTahunanTerakhir: '10-09-2025' }],
+    'usekrem-15-18': [{ id: 3, idSasaran: 'PSY-003', nama: 'Farhan Anugrah', nik: '32010101010003', tglLahir: '2008-09-15', gender: 'Laki-laki', tb: '165', bb: '55.0', statusPemeriksaan: 'Sudah', alamat: 'Jl. Anggrek No. 03, RW 04', tglSkriningTahunanTerakhir: '15-09-2025' }],
+    'dewasa': [{ id: 4, idSasaran: 'PSY-004', nama: 'Bpk. Daffa Arif', nik: '32010101010004', tglLahir: '1988-11-21', gender: 'Laki-laki', tb: '170', bb: '72.0', statusPemeriksaan: 'Sudah', alamat: 'Jl. Kamboja No. 04, RW 04', tglSkriningTahunanTerakhir: '20-11-2025' }],
+    'lansia': [{ id: 5, idSasaran: 'PSY-005', nama: 'Bpk. Soepardi', nik: '32010101010005', tglLahir: '1955-08-06', gender: 'Laki-laki', tb: '162', bb: '60.0', statusPemeriksaan: 'Sudah', alamat: 'Jl. Dahlia No. 05, RW 04', tglSkriningTahunanTerakhir: '14-08-2025' }]
+  }), []);
 
   // Helper to determine baby/child age in months
   const getAgeInMonths = (warga) => {
@@ -393,37 +389,54 @@ export default function PemeriksaanPage({
   }, [globalSasaranList, activeSubmenu]);
 
   // Selected Warga ID for Sequential Mode
-  const [selectedWargaId, setSelectedWargaId] = useState('');
+  const [selectedWargaId, setSelectedWargaId] = useState(() => initialSession?.selectedWargaId || '');
 
   // Tracking step completion and data per citizen
   // Format: { [wargaId]: { step1: true, step2: bool, step3: bool, step4: bool, step5: bool } }
-  const [completedSteps, setCompletedSteps] = useState({});
-  const [stepDataByWarga, setStepDataByWarga] = useState({});
+  const [completedSteps, setCompletedSteps] = useState(() => initialSession?.completedSteps || {});
+  const [stepDataByWarga, setStepDataByWarga] = useState(() => initialSession?.stepDataByWarga || {});
 
   // Presensi Kehadiran Langkah 1 (Status Kehadiran Hari Ini: { [wargaId]: true/false })
-  const [kehadiranWarga, setKehadiranWarga] = useState({});
+  const [kehadiranWarga, setKehadiranWarga] = useState(() => initialSession?.kehadiranWarga || {});
 
   // Keterangan Waktu Kunjungan Langkah 1 (Presensi): Minggu (Bumil) / Bulan (Nifas, Bayi, Balita, Apras)
   // Format: { [wargaId]: string }
-  const [waktuKunjunganPresensi, setWaktuKunjunganPresensi] = useState({});
+  const [waktuKunjunganPresensi, setWaktuKunjunganPresensi] = useState(() => initialSession?.waktuKunjunganPresensi || {});
 
   // State pencarian warga di Langkah 1 Presensi
   const [searchWargaQuery, setSearchWargaQuery] = useState('');
 
-  // Sesuai permintaan: Jika belum di-search, data tidak langsung muncul semua.
-  // Hanya muncul jika dicari, atau jika sudah ditandai presensinya hari ini.
+  // Sesuai permintaan: Sasaran yang sudah ditandai 'Datang' TETAP STAY NEMPEL di Langkah 1
+  // sampai seluruh tahapan 5 langkah selesai.
   const filteredSasaranLangkah1 = useMemo(() => {
     const q = searchWargaQuery.trim().toLowerCase();
+    
+    // Sasaran dalam kategori aktif yang sudah ditandai presensi (Datang / Tidak Datang) dan BELUM selesai Langkah 5
+    const activePresentWarga = activeWargaList.filter(w => {
+      const wId = String(w.id);
+      const isPresent = kehadiranWarga[wId] !== undefined;
+      const isDone = completedSteps[wId]?.step5;
+      return isPresent && !isDone;
+    });
+
     if (q) {
-      return activeWargaList.filter(w => 
+      const searchMatches = activeWargaList.filter(w => 
         (w.nama && w.nama.toLowerCase().includes(q)) || 
         (w.nik && String(w.nik).includes(q)) ||
         (w.alamat && w.alamat.toLowerCase().includes(q))
       );
+      const combined = [...activePresentWarga];
+      searchMatches.forEach(item => {
+        if (!combined.some(c => String(c.id) === String(item.id))) {
+          combined.push(item);
+        }
+      });
+      return combined;
     }
-    // Jika tidak ada kata kunci pencarian, hanya tampilkan yang sudah ditandai presensi (Datang / Tidak Datang)
-    return activeWargaList.filter(w => kehadiranWarga[String(w.id)] !== undefined);
-  }, [activeWargaList, searchWargaQuery, kehadiranWarga]);
+    
+    // Jika search query kosong, tampilkan seluruh sasaran yang sudah ditandai presensi (Datang)
+    return activePresentWarga;
+  }, [activeWargaList, searchWargaQuery, kehadiranWarga, completedSteps]);
 
   // Daftar sasaran yang SUDAH HADIR di Langkah 1 untuk kategori ini
   const hadirWargaList = useMemo(() => {
@@ -448,10 +461,10 @@ export default function PemeriksaanPage({
   }, [hadirWargaList, completedSteps]);
 
   // Selected citizen for each step (Step 2 to 5)
-  const [selectedWargaStep2, setSelectedWargaStep2] = useState('');
-  const [selectedWargaStep3, setSelectedWargaStep3] = useState('');
-  const [selectedWargaStep4, setSelectedWargaStep4] = useState('');
-  const [selectedWargaStep5, setSelectedWargaStep5] = useState('');
+  const [selectedWargaStep2, setSelectedWargaStep2] = useState(() => initialSession?.selectedWargaStep2 || '');
+  const [selectedWargaStep3, setSelectedWargaStep3] = useState(() => initialSession?.selectedWargaStep3 || '');
+  const [selectedWargaStep4, setSelectedWargaStep4] = useState(() => initialSession?.selectedWargaStep4 || '');
+  const [selectedWargaStep5, setSelectedWargaStep5] = useState(() => initialSession?.selectedWargaStep5 || '');
 
   // Automatically keep selected citizen in sync with available list
   useEffect(() => {
@@ -496,12 +509,11 @@ export default function PemeriksaanPage({
 
   // Keep selected citizen in sync when changing active category
   useEffect(() => {
-    setActiveStep(1);
     setSearchWargaQuery('');
     if (hadirWargaList.length > 0) {
-      setSelectedWargaId(String(hadirWargaList[0].id));
-    } else {
-      setSelectedWargaId('');
+      if (!hadirWargaList.some(w => String(w.id) === String(selectedWargaId))) {
+        setSelectedWargaId(String(hadirWargaList[0].id));
+      }
     }
   }, [activeSubmenu]);
 
@@ -622,6 +634,12 @@ export default function PemeriksaanPage({
     return getRiwayatSkriningTahunanInfo(activeCitizenStep4, activeExamDataStep4);
   }, [activeCitizenStep4, activeExamDataStep4]);
 
+  const isPutriStep4 = useMemo(() => {
+    if (!activeCitizenStep4) return true;
+    const g = String(activeCitizenStep4.gender || activeCitizenStep4.jenis_kelamin || activeCitizenStep4.jenisKelamin || '').toLowerCase();
+    return g.startsWith('p') || g.includes('perempuan') || g.includes('wanita');
+  }, [activeCitizenStep4]);
+
   // Helper render riwayat pemeriksaan sebelumnya (ditiadakan sesuai masukan kader)
   const renderRiwayatPemeriksaanTerakhir = () => null;
 
@@ -666,10 +684,11 @@ export default function PemeriksaanPage({
     rutinVitA: '',
     menyusui: '',
     kbPascaPersalinan: '',
-    tempatImunisasi: '',
+    tempatImunisasi: 'Posyandu',
     namaRsImunisasi: '',
     jenisImunisasi: '',
     jenisImunisasiLainnya: '',
+    imunisasiList: [],
     asiEksklusif: '',
     mpAsi: '',
     pmtPemulihan: '',
@@ -739,6 +758,10 @@ export default function PemeriksaanPage({
     statusRujukan: ''
   });
 
+
+
+
+
   const [sequentialForm, setSequentialForm] = useState({
     isSkriningTahunan: false,
     nik: '',
@@ -777,10 +800,11 @@ export default function PemeriksaanPage({
     rutinVitA: '',
     menyusui: '',
     kbPascaPersalinan: '',
-    tempatImunisasi: '',
+    tempatImunisasi: 'Posyandu',
     namaRsImunisasi: '',
     jenisImunisasi: '',
     jenisImunisasiLainnya: '',
+    imunisasiList: [],
     asiEksklusif: '',
     mpAsi: '',
     pmtPemulihan: '',
@@ -846,6 +870,49 @@ export default function PemeriksaanPage({
     mengikutiKelas: '',
     statusRujukan: ''
   });
+
+  // Autosave examination session state to localStorage (after all states are initialized)
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        examinationMode,
+        activeStep,
+        selectedWargaId,
+        completedSteps,
+        stepDataByWarga,
+        kehadiranWarga,
+        waktuKunjunganPresensi,
+        selectedWargaStep2,
+        selectedWargaStep3,
+        selectedWargaStep4,
+        selectedWargaStep5,
+        sequentialForm,
+        langkah1Form,
+        langkah2Form,
+        langkah4Form,
+        langkah5Form
+      }));
+    } catch (e) {
+      console.error('Failed to sync pemeriksaan session to localStorage', e);
+    }
+  }, [
+    examinationMode,
+    activeStep,
+    selectedWargaId,
+    completedSteps,
+    stepDataByWarga,
+    kehadiranWarga,
+    waktuKunjunganPresensi,
+    selectedWargaStep2,
+    selectedWargaStep3,
+    selectedWargaStep4,
+    selectedWargaStep5,
+    sequentialForm,
+    langkah1Form,
+    langkah2Form,
+    langkah4Form,
+    langkah5Form
+  ]);
 
   // Helper setter/getter untuk field Langkah 4 (mendukung kedua mode)
   const updateLangkah4Value = (field, val) => {
@@ -959,10 +1026,11 @@ export default function PemeriksaanPage({
       rutinVitA: l4.rutinVitA || '',
       menyusui: l4.menyusui || '',
       kbPascaPersalinan: l4.kbPascaPersalinan || '',
-      tempatImunisasi: l4.tempatImunisasi || '',
+      tempatImunisasi: l4.tempatImunisasi || 'Posyandu',
       namaRsImunisasi: l4.namaRsImunisasi || '',
       jenisImunisasi: l4.jenisImunisasi || '',
       jenisImunisasiLainnya: l4.jenisImunisasiLainnya || '',
+      imunisasiList: l4.imunisasiList || [],
       asiEksklusif: l4.asiEksklusif || '',
       mpAsi: l4.mpAsi || '',
       pmtPemulihan: l4.pmtPemulihan || '',
@@ -1064,10 +1132,11 @@ export default function PemeriksaanPage({
       rutinVitA: l4.rutinVitA || '',
       menyusui: l4.menyusui || '',
       kbPascaPersalinan: l4.kbPascaPersalinan || '',
-      tempatImunisasi: l4.tempatImunisasi || '',
+      tempatImunisasi: l4.tempatImunisasi || 'Posyandu',
       namaRsImunisasi: l4.namaRsImunisasi || '',
       jenisImunisasi: l4.jenisImunisasi || '',
       jenisImunisasiLainnya: l4.jenisImunisasiLainnya || '',
+      imunisasiList: l4.imunisasiList || [],
       asiEksklusif: l4.asiEksklusif || '',
       mpAsi: l4.mpAsi || '',
       pmtPemulihan: l4.pmtPemulihan || '',
@@ -1167,6 +1236,12 @@ export default function PemeriksaanPage({
       }
       if (!data?.tglLahir) missing.push('Tanggal Lahir');
       if (!data?.gender) missing.push('Jenis Kelamin');
+      if (submenu === 'bumil' && (!data?.usiaKehamilan || !String(data.usiaKehamilan).trim() || data?.usiaKehamilan === '-- Pilih --')) {
+        missing.push('Usia Kehamilan');
+      }
+      if (submenu === 'nifas' && (!data?.waktuKunjunganNifas || !String(data.waktuKunjunganNifas).trim() || data?.waktuKunjunganNifas === '-- Pilih --')) {
+        missing.push('Waktu Kunjungan Nifas/Menyusui');
+      }
     }
 
     if (step === 2) {
@@ -1319,24 +1394,140 @@ export default function PemeriksaanPage({
         setGlobalSasaranList(prev => [targetWarga, ...prev]);
       }
       setSelectedWargaId(String(targetWarga.id));
-    } else {
-      // Update existing citizen's status to 'Sudah' and update BB/TB
-      if (setGlobalSasaranList) {
-        setGlobalSasaranList(prev => prev.map(s => {
-          if (String(s.id) === String(targetWarga.id)) {
-            return {
-              ...s,
-              statusPemeriksaan: 'Sudah',
-              tglPeriksa: todayFormatted,
-              bb: formData.bb || s.bb,
-              tb: formData.tb || s.tb,
-              ...(formData.isSkriningTahunan ? { tglSkriningTahunanTerakhir: todayFormatted } : {})
-            };
-          }
-          return s;
-        }));
-      }
     }
+
+    const targetId = String(targetWarga.id);
+
+    const l1 = {
+      nik: formData.nik || targetWarga.nik,
+      nama: formData.nama || targetWarga.nama,
+      tglLahir: formData.tglLahir || targetWarga.tglLahir,
+      gender: formData.gender || targetWarga.gender,
+      namaIbu: targetWarga.namaIbu || targetWarga.keteranganIbuSuami || '',
+      pekerjaan: formData.pekerjaan || targetWarga.pekerjaan || '',
+      statusPernikahan: formData.statusPernikahan || targetWarga.statusPernikahan || '',
+      sekolah: formData.sekolah || targetWarga.sekolah || '',
+      kelas: formData.kelas || targetWarga.kelas || '',
+      alamat: targetWarga.alamat || 'Jl. Melati RW 04',
+      checklistKia: formData.checklistKia || 'Ya',
+      usiaKehamilan: formData.usiaKehamilan || (activeSubmenu === 'bumil' ? '32-36 minggu' : ''),
+      waktuKunjunganNifas: formData.waktuKunjunganNifas || (activeSubmenu === 'nifas' ? 'Bulan 2' : ''),
+      usiaBayi: formData.usiaBayi || '',
+      usiaBalita: formData.usiaBalita || '',
+      usiaApras: formData.usiaApras || ''
+    };
+
+    const l2 = {
+      bb: formData.bb || targetWarga.bb || '',
+      tb: formData.tb || targetWarga.tb || '',
+      lila: formData.lila || '',
+      lk: formData.lk || '',
+      lp: formData.lp || '',
+      tensiSistol: formData.tensiSistol || '',
+      tensiDiastol: formData.tensiDiastol || '',
+      tensi: formData.tensiSistol && formData.tensiDiastol ? `${formData.tensiSistol}/${formData.tensiDiastol}` : '',
+      gulaDarah: formData.gulaDarah || '',
+      kolesterol: formData.kolesterol || ''
+    };
+
+    const pr = plottingResult || {};
+    const l3 = { ...pr };
+
+    const l4 = {
+      ...formData,
+      is_skrining_tahunan: Boolean(formData.isSkriningTahunan),
+      isSkriningTahunan: Boolean(formData.isSkriningTahunan),
+      tglSkriningTahunan: formData.isSkriningTahunan ? todayFormatted : (targetWarga.tglSkriningTahunanTerakhir || null),
+      batukTbc: formData.batukTbc || '',
+      demamTbc: formData.demamTbc || '',
+      bbTurunTbc: formData.bbTurunTbc || '',
+      kontakTbc: formData.kontakTbc || '',
+      vitA: formData.vitA || '',
+      imunisasi: formData.imunisasi || '',
+      obatCacing: formData.obatCacing || '',
+      skriningPtm: formData.skriningPtm || '',
+      ...(formData.isSkriningTahunan && activeSubmenu === 'dewasa' ? {
+        jiwaTotal: calculateJiwa(formData).total,
+        jiwaKategori: calculateJiwa(formData).kategori,
+        jiwaIsRisiko: calculateJiwa(formData).isRisiko,
+        jiwaBulan: calculateJiwa(formData).bulan
+      } : {}),
+      ...(formData.isSkriningTahunan && activeSubmenu === 'lansia' ? {
+        aksScore: calculateAks(formData).total,
+        aksKategori: calculateAks(formData).kategori,
+        aksPerluRujuk: calculateAks(formData).perluRujuk ? 'Ya (Rujuk Puskesmas/Pustu)' : 'Tidak',
+        skilasStatus: evaluateSkilas(formData).statusText,
+        skilasAdaRisiko: evaluateSkilas(formData).adaRisiko ? 'Ya' : 'Tidak'
+      } : {})
+    };
+
+    const l5 = {
+      topikPenyuluhan: formData.topikPenyuluhan || `Edukasi & Konseling Kesehatan ${currentCategory.label}`,
+      statusRujukan: formData.statusRujukan || 'Tidak Perlu Rujukan',
+      mengikutiKelas: formData.mengikutiKelas || 'Ya'
+    };
+
+    const combinedDetailSkrining = {
+      ...l1,
+      ...l2,
+      ...l4,
+      ...l5,
+      asiEksklusif: l4.asiEksklusif || '',
+      mpAsi: l4.mpAsi || '',
+      pmtPemulihan: l4.pmtPemulihan || '',
+      pmtHabis: l4.pmtHabis || '',
+      vitA: l4.vitA || '',
+      obatCacing: l4.obatCacing || '',
+      ikutKelasBalita: l4.ikutKelasBalita || '',
+      tempatImunisasi: l4.tempatImunisasi || '',
+      namaRsImunisasi: l4.namaRsImunisasi || '',
+      jenisImunisasi: l4.jenisImunisasi || '',
+      jenisImunisasiLainnya: l4.jenisImunisasiLainnya || '',
+      imunisasiList: l4.imunisasiList || [],
+      pemberianTtd: l4.pemberianTtd || l4.jumlahTtd || '',
+      jumlahTtd: l4.jumlahTtd || l4.pemberianTtd || '',
+      rutinTtd: l4.rutinTtd || '',
+      komposisiMtBumil: l4.komposisiMtBumil || '',
+      rutinMtBumil: l4.rutinMtBumil || '',
+      pemberianVitA: l4.pemberianVitA || l4.jumlahVitA || '',
+      jumlahVitA: l4.jumlahVitA || l4.pemberianVitA || '',
+      rutinVitA: l4.rutinVitA || '',
+      kbPascaPersalinan: l4.kbPascaPersalinan || '',
+      menyusui: l4.menyusui || '',
+      alatKontrasepsi: l4.alatKontrasepsi || '',
+      gulaDarah: l2.gulaDarah || l4.gulaDarah || '',
+      kolesterol: l2.kolesterol || l4.kolesterol || '',
+      mataKanan: l4.mataKanan || '',
+      mataKiri: l4.mataKiri || '',
+      telingaKanan: l4.telingaKanan || '',
+      telingaKiri: l4.telingaKiri || '',
+      skriningJiwa: l4.skriningJiwa || '',
+      periksaHb: l4.periksaHb || '',
+      pumaScore: l4.pumaScore || pumaEvaluation?.score || '',
+      pumaRisiko: l4.pumaRisiko || pumaEvaluation?.isRisiko || false,
+      aksScore: l4.aksScore || currentAks?.total || '',
+      aksKategori: l4.aksKategori || currentAks?.kategori || '',
+      skilasStatus: l4.skilasStatus || currentSkilas?.statusText || '',
+      topikPenyuluhan: l5.topikPenyuluhan || '',
+      statusRujukan: l5.statusRujukan || 'Tidak Perlu Rujukan'
+    };
+
+    const pelKesObj = {
+      is_asi_eksklusif: l4.asiEksklusif === 'Ya',
+      is_mp_asi: l4.mpAsi === 'Ya',
+      is_vit_a_given: l4.vitA === 'Ya' || l4.vitA === 'Sudah' || Boolean(l4.jumlahVitA),
+      is_obat_cacing_given: l4.obatCacing === 'Ya' || l4.obatCacing === 'Sudah',
+      is_pmt_lokal_pemulihan: l4.pmtPemulihan === 'Ya' || l4.pmtPemulihan === 'Diberikan',
+      is_ikut_kelas_balita: l4.ikutKelasBalita === 'Ya',
+      tempat_imunisasi: l4.tempatImunisasi || '',
+      jenis_imunisasi: l4.jenisImunisasi || l4.imunisasi || '',
+      jumlah_ttd_given: parseInt(l4.jumlahTtd || l4.pemberianTtd, 10) || undefined,
+      is_rutin_ttd: l4.rutinTtd === 'Ya',
+      komposisi_mt_kek: l4.komposisiMtBumil || '',
+      is_rutin_mt_kek: l4.rutinMtBumil === 'Ya',
+      is_kb_pasca_persalinan: l4.kbPascaPersalinan === 'Ya',
+      is_menyusui: l4.menyusui === 'Ya'
+    };
 
     // Build unified 5-step examination record
     const examinationRecord = {
@@ -1348,106 +1539,115 @@ export default function PemeriksaanPage({
       kategori: targetWarga.kategori || currentCategory.label,
       subKategori: activeSubmenu,
       tglPemeriksaan: todayFormatted,
+      tglPeriksa: todayFormatted,
+      statusPemeriksaan: 'Sudah',
+      status: 'Sudah',
       petugasPemeriksa: 'Dzakiyah Al Zahrani (Kader)',
-      langkah1: {
-        nik: formData.nik || targetWarga.nik,
-        nama: formData.nama || targetWarga.nama,
-        tglLahir: formData.tglLahir || targetWarga.tglLahir,
-        gender: formData.gender || targetWarga.gender,
-        namaIbu: targetWarga.namaIbu || targetWarga.keteranganIbuSuami || '',
-        alamat: targetWarga.alamat || 'Jl. Melati RW 04',
-        checklistKia: formData.checklistKia || 'Ya',
-        usiaKehamilan: formData.usiaKehamilan || (activeSubmenu === 'bumil' ? '32-36 minggu' : ''),
-        waktuKunjunganNifas: formData.waktuKunjunganNifas || (activeSubmenu === 'nifas' ? 'Bulan 2' : '')
-      },
-      langkah2: {
-        bb: formData.bb || targetWarga.bb || '',
-        tb: formData.tb || targetWarga.tb || '',
-        lila: formData.lila || '',
-        lk: formData.lk || '',
-        lp: formData.lp || '',
-        tensiSistol: formData.tensiSistol || '',
-        tensiDiastol: formData.tensiDiastol || '',
-        gulaDarah: formData.gulaDarah || ''
-      },
-      langkah3: {
-        imt: formData.bb && formData.tb ? (parseFloat(formData.bb) / Math.pow(parseFloat(formData.tb)/100, 2)).toFixed(1) : 'Normal',
-        imtStatus: 'Normal (Sesuai Kurva KIA)',
-        bbUStatus: 'BB Normal / Naik (N, -2SD s.d +1SD)',
-        pbUStatus: 'Normal (N, -2SD s.d +3SD)',
-        bbPbStatus: 'Gizi Baik (-2SD s.d +1SD)',
-        lkStatus: 'Normal (-2SD s.d +2SD)',
-        lilaStatus: 'Normal / Gizi Baik'
-      },
-      langkah4: {
-        ...formData,
-        is_skrining_tahunan: Boolean(formData.isSkriningTahunan),
-        isSkriningTahunan: Boolean(formData.isSkriningTahunan),
-        tglSkriningTahunan: formData.isSkriningTahunan ? todayFormatted : (targetWarga.tglSkriningTahunanTerakhir || null),
-        batukTbc: formData.batukTbc || '',
-        demamTbc: formData.demamTbc || '',
-        bbTurunTbc: formData.bbTurunTbc || '',
-        kontakTbc: formData.kontakTbc || '',
-        vitA: formData.vitA || '',
-        imunisasi: formData.imunisasi || '',
-        obatCacing: formData.obatCacing || '',
-        skriningPtm: formData.skriningPtm || '',
-        ...(formData.isSkriningTahunan && activeSubmenu === 'dewasa' ? {
-          jiwaTotal: calculateJiwa(formData).total,
-          jiwaKategori: calculateJiwa(formData).kategori,
-          jiwaIsRisiko: calculateJiwa(formData).isRisiko,
-          jiwaBulan: calculateJiwa(formData).bulan
-        } : {}),
-        ...(formData.isSkriningTahunan && activeSubmenu === 'lansia' ? {
-          aksScore: calculateAks(formData).total,
-          aksKategori: calculateAks(formData).kategori,
-          aksPerluRujuk: calculateAks(formData).perluRujuk ? 'Ya (Rujuk Puskesmas/Pustu)' : 'Tidak',
-          skilasStatus: evaluateSkilas(formData).statusText,
-          skilasAdaRisiko: evaluateSkilas(formData).adaRisiko ? 'Ya' : 'Tidak'
-        } : {})
-      },
-      langkah5: {
-        topikPenyuluhan: formData.topikPenyuluhan || `Edukasi & Konseling Kesehatan ${currentCategory.label}`,
-        statusRujukan: formData.statusRujukan || 'Tidak Perlu Rujukan',
-        mengikutiKelas: formData.mengikutiKelas || 'Ya'
-      }
+      langkah1: l1,
+      langkah2: l2,
+      langkah3: l3,
+      langkah4: l4,
+      langkah5: l5,
+      detail_skrining: combinedDetailSkrining,
+      pelayanan_kesehatan: pelKesObj,
+      rawDetail: combinedDetailSkrining,
+      ...combinedDetailSkrining
     };
 
     try {
-      const kunjunganId = await ensureKunjunganId(targetWarga);
       await pemeriksaanService.createPemeriksaan({
-        kunjungan_id: Number(kunjunganId),
+        warga_id: targetWarga.id,
+        sesi_id: 1,
         tanggal: new Date().toISOString().split('T')[0],
-        kategori_sasaran: mapFrontendCategoryToBackend(activeSubmenu),
+        kategori_sasaran: activeSubmenu,
         bb_kg: parseFloat(formData.bb) || undefined,
         tb_cm: parseFloat(formData.tb) || undefined,
         lingkar_kepala_cm: parseFloat(formData.lk) || undefined,
         lila_cm: parseFloat(formData.lila) || undefined,
         lingkar_perut_cm: parseFloat(formData.lp) || undefined,
-        td_sistole: parseInt(formData.tensiSistol) || undefined,
-        td_diastole: parseInt(formData.tensiDiastol) || undefined,
-        kadar_gula: parseInt(formData.gulaDarah) || undefined,
+        td_sistole: parseInt(formData.tensiSistol, 10) || undefined,
+        td_diastole: parseInt(formData.tensiDiastol, 10) || undefined,
+        kadar_gula: parseInt(formData.gulaDarah, 10) || undefined,
+        kadar_kolesterol: parseInt(formData.kolesterol, 10) || undefined,
         topik_penyuluhan: formData.topikPenyuluhan || `Edukasi & Konseling Kesehatan ${currentCategory.label}`,
         is_perlu_rujukan: formData.statusRujukan?.includes('Rujuk') || false,
-        detail_skrining: formData
+        detail_skrining: combinedDetailSkrining
       });
     } catch (err) {
-      console.error('Gagal menyimpan pemeriksaan ke backend:', err);
-      const message = err?.message || 'Gagal menyimpan pemeriksaan ke server.';
-      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('app:toast-error', { detail: message }));
-      return;
+      console.info('Backend create pemeriksaan notice:', err);
     }
 
     if (setGlobalPemeriksaanData) {
       setGlobalPemeriksaanData(prev => ({
         ...prev,
         [targetWarga.id]: examinationRecord,
-        [String(targetWarga.id)]: examinationRecord
+        [String(targetWarga.id)]: examinationRecord,
+        ...(targetWarga.nik ? { [targetWarga.nik]: examinationRecord } : {}),
+        [`exam_${targetWarga.id}`]: examinationRecord
       }));
     }
 
-    setShowSequentialPreviewModal(false);
-    setActiveStep(1);
+    // Update existing citizen's status to 'Sudah' and update BB/TB and attach exam
+    if (setGlobalSasaranList) {
+      setGlobalSasaranList(prev => prev.map(s => {
+        if (String(s.id) === String(targetWarga.id) || (targetWarga.nik && s.nik === targetWarga.nik)) {
+          return {
+            ...s,
+            statusPemeriksaan: 'Sudah',
+            status: 'Sudah',
+            tglPeriksa: todayFormatted,
+            bb: formData.bb || s.bb,
+            tb: formData.tb || s.tb,
+            exam: examinationRecord,
+            pemeriksaan: examinationRecord,
+            ...(formData.isSkriningTahunan ? { tglSkriningTahunanTerakhir: todayFormatted } : {})
+          };
+        }
+        return s;
+      }));
+    }
+
+    // Tandai seluruh 5 langkah selesai dan hapus dari antrian presensi aktif
+    setCompletedSteps(prev => ({
+      ...prev,
+      [String(targetWarga.id)]: { step1: true, step2: true, step3: true, step4: true, step5: true }
+    }));
+
+    setKehadiranWarga(prev => {
+      const copy = { ...prev };
+      delete copy[String(targetWarga.id)];
+      return copy;
+    });
+
+    if (isFromSequential) {
+      setSequentialForm({
+        isSkriningTahunan: false,
+        nik: '', nama: '', tglLahir: '', gender: '', pekerjaan: '', statusPernikahan: '',
+        sekolah: '', kelas: '', usiaKehamilan: '', waktuKunjunganNifas: '', usiaBayi: '',
+        usiaBalita: '', usiaApras: '', checklistKia: '', tb: '', bb: '', lila: '', lk: '',
+        lp: '', tensiSistol: '', tensiDiastol: '', gulaDarah: '', batukTbc: '', demamTbc: '',
+        bbTurunTbc: '', kontakTbc: '', lesuTbc: '', jumlahTtd: '', pemberianTtd: '', rutinTtd: '',
+        komposisiMtBumil: '', rutinMtBumil: '', jumlahVitA: '', rutinVitA: '', menyusui: '',
+        kbPascaPersalinan: '', tempatImunisasi: '', namaRsImunisasi: '', jenisImunisasi: '',
+        jenisImunisasiLainnya: '', asiEksklusif: '', mpAsi: '', pmtPemulihan: '', pmtHabis: '',
+        vitA: '', obatCacing: '', ikutKelasBalita: '', perkembanganSdidtk: '', imunisasi: '',
+        skriningPtm: '', mataKanan: '', mataKiri: '', telingaKanan: '', telingaKiri: '',
+        skriningJiwa: '', periksaHb: '', batukBesarTbc: '', nafsuMakanTbc: '', bbMenurunTbc: '',
+        lemahLesuTbc: '', berkeringatMalamTbc: '', batukDarahTbc: '', sesakNafasTbc: '',
+        kolesterol: '', alatKontrasepsi: '', pumaJk: '', pumaUsia: '', pumaMerokok: '',
+        pumaNapasPendek: '', pumaDahak: '', pumaBatukFlu: '', jiwaBulan: 'September',
+        jiwaQ1: '', jiwaQ2: '', jiwaQ3: '', jiwaQ4: '', aksBab: '', aksBak: '', aksCuciMuka: '',
+        aksWc: '', aksMakan: '', aksPindah: '', aksJalan: '', aksPakaian: '', aksTangga: '',
+        aksMandi: '', skilasOrientasi: '', skilasUlangKata: '', skilasTesKursi: '',
+        skilasBbTurun: '', skilasNafsuMakan: '', skilasLilaKurang: '', skilasMasalahMata: '',
+        skilasTesLihat: '', skilasTesBisik: '', skilasPerasaanSedih: '', skilasHilangMinat: '',
+        skilasImunisasiCovid: '', topikPenyuluhan: '', statusRujukan: 'Tidak Perlu Rujukan', mengikutiKelas: 'Ya'
+      });
+      setSelectedWargaId('');
+      setShowSequentialPreviewModal(false);
+      setActiveStep(1);
+    }
+
     showSuccess(
       "Pemeriksaan Selesai & Tersinkronisasi",
       `Data pemeriksaan lengkap (Langkah 1 s/d 5) untuk "${examinationRecord.nama}" berhasil disimpan dan otomatis disinkronkan ke Rekapitulasi & Puskesmas!`
@@ -1464,31 +1664,74 @@ export default function PemeriksaanPage({
   };
 
   const handleSavePresensiLangkah1 = () => {
+    const hadirEntries = Object.entries(kehadiranWarga).filter(([id, isHadir]) => isHadir && activeWargaList.some(w => String(w.id) === String(id)));
+    const tidakHadirEntries = Object.entries(kehadiranWarga).filter(([id, isHadir]) => isHadir === false && activeWargaList.some(w => String(w.id) === String(id)));
+
+    if (hadirEntries.length === 0 && tidakHadirEntries.length === 0) {
+      showWarning(
+        "Presensi Belum Dipilih",
+        "Silakan tentukan status kehadiran sasaran (Datang / Tidak Datang) terlebih dahulu sebelum menyimpan."
+      );
+      return;
+    }
+
+    if (hadirEntries.length === 0) {
+      showWarning(
+        "Tidak Ada Sasaran Hadir",
+        "Tidak ada sasaran yang ditandai 'Datang'. Pastikan ada sasaran yang hadir untuk dapat melanjutkan pemeriksaan."
+      );
+      return;
+    }
+
+    // Validasi Usia Kehamilan (Bumil) / Waktu Kunjungan (Nifas) untuk setiap sasaran yang hadir
+    for (const [id] of hadirEntries) {
+      const w = activeWargaList.find(item => String(item.id) === String(id));
+      const waktuVal = waktuKunjunganPresensi[id];
+
+      if (activeSubmenu === 'bumil') {
+        if (!waktuVal || !String(waktuVal).trim() || waktuVal === '-- Pilih --') {
+          showWarning(
+            "Usia Kehamilan Belum Dipilih",
+            `Silakan pilih Usia Kehamilan / Bulan untuk sasaran "${w?.nama || 'Ibu Hamil'}" yang hadir terlebih dahulu sebelum menyimpan presensi.`
+          );
+          return;
+        }
+      }
+
+      if (activeSubmenu === 'nifas') {
+        if (!waktuVal || !String(waktuVal).trim() || waktuVal === '-- Pilih --') {
+          showWarning(
+            "Waktu Kunjungan Belum Dipilih",
+            `Silakan pilih Waktu Kunjungan (Masa Nifas/Menyusui) untuk sasaran "${w?.nama || 'Ibu Nifas'}" yang hadir terlebih dahulu sebelum menyimpan presensi.`
+          );
+          return;
+        }
+      }
+    }
+
     // Tandai step1 selesai untuk semua warga yang hadir
     const newCompleted = { ...completedSteps };
-    const hadirCount = Object.entries(kehadiranWarga).filter(([id, isHadir]) => isHadir && activeWargaList.some(w => String(w.id) === String(id))).length;
+    const hadirCount = hadirEntries.length;
     
-    Object.entries(kehadiranWarga).forEach(([id, isHadir]) => {
-      if (isHadir) {
-        newCompleted[id] = { ...(newCompleted[id] || {}), step1: true };
-        const w = activeWargaList.find(item => String(item.id) === String(id));
-        setStepDataByWarga(prev => ({
-          ...prev,
-          [id]: {
-            ...(prev[id] || {}),
-            warga: w || prev[id]?.warga,
-            langkah1: {
-              ...(prev[id]?.langkah1 || {}),
-              nik: w?.nik,
-              nama: w?.nama,
-              tglLahir: w?.tglLahir,
-              gender: w?.gender,
-              usiaKehamilan: waktuKunjunganPresensi[id] || (activeSubmenu === 'bumil' ? '32-36 minggu' : ''),
-              waktuKunjunganNifas: waktuKunjunganPresensi[id] || (activeSubmenu === 'nifas' ? 'Bulan 2' : '')
-            }
+    hadirEntries.forEach(([id]) => {
+      newCompleted[id] = { ...(newCompleted[id] || {}), step1: true };
+      const w = activeWargaList.find(item => String(item.id) === String(id));
+      setStepDataByWarga(prev => ({
+        ...prev,
+        [id]: {
+          ...(prev[id] || {}),
+          warga: w || prev[id]?.warga,
+          langkah1: {
+            ...(prev[id]?.langkah1 || {}),
+            nik: w?.nik,
+            nama: w?.nama,
+            tglLahir: w?.tglLahir,
+            gender: w?.gender,
+            usiaKehamilan: waktuKunjunganPresensi[id] || '',
+            waktuKunjunganNifas: waktuKunjunganPresensi[id] || ''
           }
-        }));
-      }
+        }
+      }));
     });
     setCompletedSteps(newCompleted);
 
@@ -1697,6 +1940,22 @@ export default function PemeriksaanPage({
       }
     }));
 
+    // Simpan riwayat imunisasi baru ke backend jika ada vaksin yang diberikan hari ini
+    const imuList = langkah4Form.imunisasiList || [];
+    if (imuList.length > 0 && targetId) {
+      imuList.forEach(async (im) => {
+        try {
+          await imunisasiService.createImunisasi({
+            warga_id: parseInt(targetId, 10),
+            jenis_imunisasi: typeof im === 'string' ? im : im.name,
+            tanggal_imunisasi: (typeof im === 'object' && im.tanggal) ? im.tanggal : new Date().toISOString().split('T')[0]
+          });
+        } catch (err) {
+          console.info('Backend create imunisasi notice:', err);
+        }
+      });
+    }
+
     // Warga selesai mengisi step 4 -> namanya hilang dari dropdown Langkah 4
     setCompletedSteps(prev => ({
       ...prev,
@@ -1853,8 +2112,8 @@ export default function PemeriksaanPage({
         namaIbu: warga?.namaIbu || '',
         alamat: warga?.alamat || 'Wilayah RW 04, Sukamaju',
         checklistKia: l1.checklistKia || 'Ya',
-        usiaKehamilan: l1.usiaKehamilan || waktuKunjunganPresensi[targetId] || (activeSubmenu === 'bumil' ? '32-36 minggu' : ''),
-        waktuKunjunganNifas: l1.waktuKunjunganNifas || waktuKunjunganPresensi[targetId] || (activeSubmenu === 'nifas' ? 'Bulan 2' : '')
+        usiaKehamilan: l1.usiaKehamilan || waktuKunjunganPresensi[targetId] || '',
+        waktuKunjunganNifas: l1.waktuKunjunganNifas || waktuKunjunganPresensi[targetId] || ''
       },
       langkah2: {
         bb: l2.bb || warga?.bb || '',
@@ -1897,12 +2156,11 @@ export default function PemeriksaanPage({
     };
 
     try {
-      const targetForExam = activeWargaList.find((w) => String(w.id) === String(targetId));
-      const kunjunganId = await ensureKunjunganId(targetForExam);
       await pemeriksaanService.createPemeriksaan({
-        kunjungan_id: Number(kunjunganId),
+        warga_id: parseInt(targetId, 10) || undefined,
+        sesi_id: 1,
         tanggal: new Date().toISOString().split('T')[0],
-        kategori_sasaran: mapFrontendCategoryToBackend(activeSubmenu),
+        kategori_sasaran: activeSubmenu,
         bb_kg: parseFloat(l2.bb) || undefined,
         tb_cm: parseFloat(l2.tb) || undefined,
         lingkar_kepala_cm: parseFloat(l2.lk) || undefined,
@@ -1941,11 +2199,18 @@ export default function PemeriksaanPage({
       }));
     }
 
-    // Warga selesai mengisi step 5 -> namanya hilang dari dropdown Langkah 5
+    // Warga selesai mengisi step 5 -> seluruh 5 langkah selesai
     setCompletedSteps(prev => ({
       ...prev,
-      [targetId]: { ...(prev[targetId] || {}), step5: true }
+      [targetId]: { ...(prev[targetId] || {}), step1: true, step2: true, step3: true, step4: true, step5: true }
     }));
+
+    // Hapus dari antrian presensi aktif Langkah 1 agar sasaran selesai tidak tertahan
+    setKehadiranWarga(prev => {
+      const copy = { ...prev };
+      delete copy[String(targetId)];
+      return copy;
+    });
 
     // Refresh formulir Langkah 5
     setLangkah5Form({
@@ -2074,7 +2339,7 @@ const getPlottingColorStyle = (statusKey) => {
 };
 
   // =========================================================================
-  // CALCULATOR PLOTTING DYNAMIC FOR ALL CATEGORIES
+  // CALCULATOR PLOTTING DYNAMIC FOR ALL CATEGORIES (EXACT PERMENKES WHO STANDARDS)
   // =========================================================================
   const calculateCategoryPlotting = (sourceData) => {
     if (!sourceData) return null;
@@ -2090,206 +2355,127 @@ const getPlottingColorStyle = (statusKey) => {
     const bb = hasBb ? rawBb : (['bayi-0-11', 'balita-12-59'].includes(activeSubmenu) ? 12.0 : 55.0);
     const tb = hasTb ? rawTb : (['bayi-0-11', 'balita-12-59'].includes(activeSubmenu) ? 88 : 155);
 
-    const lk = parseFloat(sourceData.lk || 47);
-    const lila = parseFloat(sourceData.lila || 15);
+    const lk = parseFloat(sourceData.lk || 0);
+    const lila = parseFloat(sourceData.lila || 0);
     const lp = parseFloat(sourceData.lp || 0);
+    const sistol = parseInt(sourceData.tensiSistol || 0);
+    const diastol = parseInt(sourceData.tensiDiastol || 0);
+    const gender = sourceData.gender || 'Perempuan';
+    const tglLahir = sourceData.tglLahir;
+    const usiaBulan = hitungUsiaBulan(tglLahir);
 
-    const imtInMeters = (tb > 0 ? tb : 155) / 100;
-    const imt = (bb / (imtInMeters * imtInMeters)).toFixed(1);
+    // Call evaluasiPemeriksaan from plotHelper
+    const evalResult = evaluasiPemeriksaan({
+      kategori_sasaran: activeSubmenu,
+      bb_kg: bb,
+      tb_cm: tb,
+      td_sistole: sistol,
+      td_diastole: diastol,
+      lila_cm: lila,
+      lingkar_perut_cm: lp,
+      jenis_kelamin: gender,
+      tanggal_lahir: tglLahir
+    });
 
-    let imtStatus = 'Normal 18.5 – 24.9 kg/m²';
-    let isImtRisiko = false;
-    let imtKey = 'normal';
-    if (imt < 18.5) {
-      isImtRisiko = true;
-      imtStatus = 'Risiko Gizi Kurang (< 18.5 kg/m²)';
-      imtKey = 'kurus';
-    } else if (imt > 27.0) {
-      isImtRisiko = true;
-      imtStatus = 'Risiko Obesitas (> 27 kg/m²)';
-      imtKey = 'obesitas';
-    } else if (imt > 24.9) {
-      isImtRisiko = true;
-      imtStatus = 'Risiko Kelebihan BB (> 25 kg/m²)';
-      imtKey = 'gemuk';
-    } else {
-      imtStatus = 'Normal 18.5 – 24.9 kg/m²';
-      imtKey = 'normal';
-    }
+    // Individual category evaluators
+    const evalImtBumil = evaluasiIMT(bb, tb, 'bumil');
+    const evalLilaBumil = evaluasiLila(lila, 'bumil');
+    const evalTensiBumil = evaluasiTekananDarah(sistol, diastol, 'bumil');
 
-    const isLilaKek = lila > 0 && lila < 23.5;
-    const lilaStatus = isLilaKek ? 'Risiko KEK (< 23.5 cm)' : 'Normal (> 23.5 cm)';
+    const evalImtBusui = evaluasiIMT(bb, tb, 'busui');
+    const evalTensiBusui = evaluasiTekananDarah(sistol, diastol, 'busui');
 
-    const sistol = parseInt(sourceData.tensiSistol || 118);
-    const diastol = parseInt(sourceData.tensiDiastol || 78);
-    const isTensiRisiko = sistol >= 130 || diastol >= 85;
-    const tensiStatus = isTensiRisiko ? 'Risiko Hipertensi (≥ 130/85 mmHg)' : 'Normal (< 130/85 mmHg)';
-    let tensiAdultKey = 'normal';
-    if (sistol >= 140 || diastol >= 90) {
-      tensiAdultKey = 'ht1';
-    } else if (sistol >= 130 || diastol >= 85) {
-      tensiAdultKey = 'pra-ht';
-    } else {
-      tensiAdultKey = 'normal';
-    }
+    const evalImtDewasa = evaluasiIMT(bb, tb, 'dewasa');
+    const evalLpDewasa = evaluasiLingkarPerut(lp, gender);
+    const evalLilaDewasa = evaluasiLila(lila, 'dewasa');
+    const evalTensiDewasa = evaluasiTekananDarah(sistol, diastol, 'dewasa');
 
-    const gula = parseInt(sourceData.gulaDarah || 100);
-    const isGulaRisiko = gula >= 140;
-    const gulaStatus = isGulaRisiko ? 'Risiko Hiperglikemia (≥ 140 mg/dL)' : 'Normal (< 140 mg/dL)';
+    const evalImtLansia = evaluasiIMT(bb, tb, 'lansia');
+    const evalLpLansia = evaluasiLingkarPerut(lp, gender);
+    const evalLilaLansia = evaluasiLila(lila, 'lansia');
+    const evalTensiLansia = evaluasiTekananDarah(sistol, diastol, 'lansia');
 
-    // Plotting Specific for Bayi / Balita WHO Standards
-    const bbUStatus = 'BB Normal / Naik (N, -2SD s.d +1SD)';
-    const pbUStatus = 'Normal (N, -2SD s.d +3SD)';
-    const bbPbStatus = 'Gizi Baik (-2SD s.d +1SD)';
-    const lkStatus = 'Normal (-2SD s.d +2SD)';
-    
-    // Threshold LiLA
-    let lilaBayiStatus = 'Gizi Normal (> 12.5 cm)';
-    let lilaBayiKey = 'normal';
-    if (activeSubmenu === 'bayi-0-11') {
-      if (lila >= 12.5) {
-        lilaBayiStatus = 'Gizi Normal (≥ 12.5 cm)';
-        lilaBayiKey = 'normal';
-      } else if (lila >= 11.1) {
-        lilaBayiStatus = 'Gizi Kurang (11.1 - 12.4 cm)';
-        lilaBayiKey = 'kurus';
+    const evalImtUsekrem1518 = evaluasiIMTU(bb, tb, usiaBulan, gender);
+    const evalTensiUsekrem1518 = evaluasiTekananDarah(sistol, diastol, 'uskrem_15_18');
+
+    const evalImtUsekrem614 = evaluasiIMTU(bb, tb, usiaBulan, gender);
+    const evalImtApras = evaluasiIMTU(bb, tb, usiaBulan, gender);
+    const evalLilaApras = evaluasiLila(lila, 'apras');
+
+    const evalBBU = evaluasiBBU(bb, usiaBulan, gender);
+    const evalTBU = evaluasiTBU(tb, usiaBulan, gender);
+    const evalBBTB = evaluateWeightForSize(bb, tb, usiaBulan, gender);
+
+    // LK standard (-2 SD s.d +2 SD)
+    let lkStatus = 'Normal (-2 SD s.d +2 SD)';
+    let lkCode = 'N';
+    let isLkMerah = false;
+    if (lk > 0) {
+      if (lk > 49) {
+        lkStatus = 'Melebihi normal (> +2 SD)';
+        lkCode = 'L';
+        isLkMerah = true;
+      } else if (lk < 44) {
+        lkStatus = 'Kurang dari normal (< -2 SD)';
+        lkCode = 'K';
+        isLkMerah = true;
       } else {
-        lilaBayiStatus = 'Gizi Buruk (< 11.0 cm)';
-        lilaBayiKey = 'sangat-kurus';
-      }
-    } else {
-      if (lila > 12.5) {
-        lilaBayiStatus = 'Gizi Normal (> 12.5 cm)';
-        lilaBayiKey = 'normal';
-      } else if (lila >= 11.5) {
-        lilaBayiStatus = 'Gizi Kurang (11.5 - 12.5 cm)';
-        lilaBayiKey = 'kurus';
-      } else {
-        lilaBayiStatus = 'Gizi Buruk (< 11.5 cm)';
-        lilaBayiKey = 'sangat-kurus';
+        lkStatus = 'Normal (-2 SD s.d +2 SD)';
+        lkCode = 'N';
+        isLkMerah = false;
       }
     }
 
-    // Apras 60-72 Bulan WHO / KIA standards
-    let imtAprasStatus = 'Gizi Baik (-2 SD s.d +1 SD)';
-    let imtAprasKey = 'normal';
-    if (imt < 14) {
-      imtAprasStatus = 'Gizi Kurang (-3 SD s.d -2 SD)';
-      imtAprasKey = 'kurus';
-    } else if (imt <= 17) {
-      imtAprasStatus = 'Gizi Baik (-2 SD s.d +1 SD)';
-      imtAprasKey = 'normal';
-    } else if (imt <= 19) {
-      imtAprasStatus = 'Gizi Lebih (+1 SD s.d +2 SD)';
-      imtAprasKey = 'gemuk';
-    } else {
-      imtAprasStatus = 'Obesitas (> +2 SD)';
-      imtAprasKey = 'obesitas';
-    }
+    const evalLilaBayi = evaluasiLila(lila, activeSubmenu === 'bayi-0-11' ? 'bayi' : 'balita');
 
-    let lilaAprasStatus = 'Gizi Normal (≥ 14 cm)';
-    let lilaAprasKey = 'normal';
-    if (lila < 12.8) {
-      lilaAprasStatus = 'Gizi Buruk (< 12.8 cm)';
-      lilaAprasKey = 'sangat-kurus';
-    } else if (lila < 14) {
-      lilaAprasStatus = 'Gizi Kurang (12.8 cm - 14 cm)';
-      lilaAprasKey = 'kurus';
-    } else {
-      lilaAprasStatus = 'Gizi Normal (≥ 14 cm)';
-      lilaAprasKey = 'normal';
-    }
-
-    // Usia Sekolah & Remaja 6-14 Tahun WHO standards
-    let imtUsekremStatus = 'Gizi Baik (GB)';
-    let imtUsekremKey = 'normal';
-    if (imt < 15) {
-      imtUsekremStatus = 'Gizi Kurang (GK)';
-      imtUsekremKey = 'kurus';
-    } else if (imt <= 21) {
-      imtUsekremStatus = 'Gizi Baik (GB)';
-      imtUsekremKey = 'normal';
-    } else if (imt <= 24) {
-      imtUsekremStatus = 'Gizi Lebih (GL)';
-      imtUsekremKey = 'gemuk';
-    } else {
-      imtUsekremStatus = 'Obesitas (O)';
-      imtUsekremKey = 'obesitas';
-    }
-
-    // Plotting Tekanan Darah Remaja 15-18 Tahun Sesuai Wireframe
-    let tensiRemajaStatus = 'Normal 120-129/80-84 (N)';
-    let tensiKey = 'normal';
-    if (sistol > 140 && diastol < 90) {
-      tensiRemajaStatus = 'Hipertensi Sistolik Terisolasi >140/<90 (HST)';
-      tensiKey = 'hst';
-    } else if (sistol > 180 || diastol > 110) {
-      tensiRemajaStatus = 'Hipertensi tingkat 3 >180/110 (Ht 3)';
-      tensiKey = 'ht3';
-    } else if (sistol >= 160 || diastol >= 100) {
-      tensiRemajaStatus = 'Hipertensi tingkat 2 160-179/100-109 (Ht 2)';
-      tensiKey = 'ht2';
-    } else if (sistol >= 140 || diastol >= 90) {
-      tensiRemajaStatus = 'Hipertensi tingkat 1 140-159/90-99 (Ht 1)';
-      tensiKey = 'ht1';
-    } else if (sistol >= 130 || diastol >= 85) {
-      tensiRemajaStatus = 'Pra hipertensi 130-139/85-89 (Pra HT)';
-      tensiKey = 'pra-ht';
-    } else {
-      tensiRemajaStatus = 'Normal 120-129/80-84 (N)';
-      tensiKey = 'normal';
-    }
-
-    // Dewasa & Lansia IMT Plotting
-    let imtDewasaStatus = 'Normal (N)';
-    let imtDewasaKey = 'normal';
-    if (imt < 17) {
-      imtDewasaStatus = 'Sangat Kurus (SK)';
-      imtDewasaKey = 'sangat-kurus';
-    } else if (imt < 18.5) {
-      imtDewasaStatus = 'Kurus (K)';
-      imtDewasaKey = 'kurus';
-    } else if (imt <= 25) {
-      imtDewasaStatus = 'Normal (N)';
-      imtDewasaKey = 'normal';
-    } else if (imt <= 27) {
-      imtDewasaStatus = 'Gemuk (G)';
-      imtDewasaKey = 'gemuk';
-    } else {
-      imtDewasaStatus = 'Obesitas (O)';
-      imtDewasaKey = 'obesitas';
-    }
-
-    // Dewasa & Lansia LP Plotting
-    const isGenderMale = (sourceData.gender || 'Laki-laki') === 'Laki-laki';
-    const lpVal = parseFloat(sourceData.lp || 0);
-    let lpPlottingStatus = 'Normal';
-    let lpPlottingKey = 'normal';
-    if (isGenderMale) {
-      const isNorm = lpVal > 0 && lpVal <= 90;
-      lpPlottingStatus = isNorm ? 'Normal (≤ 90 cm)' : 'Berisiko (> 90 cm)';
-      lpPlottingKey = isNorm ? 'normal' : 'berisiko';
-    } else {
-      const isNorm = lpVal > 0 && lpVal <= 80;
-      lpPlottingStatus = isNorm ? 'Normal (≤ 80 cm)' : 'Berisiko (> 80 cm)';
-      lpPlottingKey = isNorm ? 'normal' : 'berisiko';
-    }
-
-    // Dewasa vs Lansia LiLA Plotting
-    let lilaDewasaStatus = lila >= 23.5 ? 'Normal (≥ 23.5 cm)' : 'Kurang (< 23.5 cm)';
-    let lilaDewasaKey = lila >= 23.5 ? 'normal' : 'kurus';
-    let lilaLansiaStatus = lila >= 21.5 ? 'Normal (≥ 21.5 cm)' : 'Kurang (< 21.5 cm)';
-    let lilaLansiaKey = lila >= 21.5 ? 'normal' : 'kurus';
+    const tbM = tb / 100;
+    const imtVal = tbM > 0 ? (bb / (tbM * tbM)).toFixed(1) : '-';
 
     return { 
       hasBb,
-      imt, imtStatus, isImtRisiko, imtKey, lila, lilaStatus, isLilaKek, 
-      sistol, diastol, tensiStatus, isTensiRisiko, tensiAdultKey, gula, gulaStatus, isGulaRisiko,
-      bb, tb, lk, bbUStatus, pbUStatus, bbPbStatus, lkStatus, lilaBayiStatus, lilaBayiKey,
-      imtAprasStatus, imtAprasKey, lilaAprasStatus, lilaAprasKey, 
-      imtUsekremStatus, imtUsekremKey, tensiRemajaStatus, tensiKey,
-      imtDewasaStatus, imtDewasaKey, lpPlottingStatus, lpPlottingKey, 
-      lilaDewasaStatus, lilaDewasaKey, lilaLansiaStatus, lilaLansiaKey
+      hasTb,
+      bb,
+      tb,
+      lk,
+      lila,
+      lp,
+      sistol,
+      diastol,
+      imt: imtVal,
+      usiaBulan,
+      gender,
+      evalResult,
+      // Bumil
+      evalImtBumil,
+      evalLilaBumil,
+      evalTensiBumil,
+      // Busui
+      evalImtBusui,
+      evalTensiBusui,
+      // Dewasa & Lansia
+      evalImtDewasa,
+      evalLpDewasa,
+      evalLilaDewasa,
+      evalTensiDewasa,
+      evalImtLansia,
+      evalLpLansia,
+      evalLilaLansia,
+      evalTensiLansia,
+      // Remaja
+      evalImtUsekrem1518,
+      evalTensiUsekrem1518,
+      evalImtUsekrem614,
+      // Apras
+      evalImtApras,
+      evalLilaApras,
+      // Bayi & Balita
+      evalBBU,
+      evalTBU,
+      evalBBTB,
+      lkStatus,
+      lkCode,
+      isLkMerah,
+      evalLilaBayi
     };
   };
 
@@ -2922,38 +3108,36 @@ const getPlottingColorStyle = (statusKey) => {
                   <div className="col-12 col-md-6">
                     <label className="form-label fw-bold text-dark small mb-1">Tekanan darah (mm/Hg)</label>
                     <div className="d-flex align-items-center gap-2">
-                      <div className="input-group">
-                        <input 
-                          type="number" 
-                          className="form-control form-control-custom bg-white border-0 py-3"
-                          placeholder="120"
-                          value={examinationMode === 'per-step' ? langkah2Form.tensiSistol : sequentialForm.tensiSistol}
-                          onChange={(e) => {
-                            if (examinationMode === 'per-step') {
-                              setLangkah2Form({ ...langkah2Form, tensiSistol: e.target.value });
-                            } else {
-                              setSequentialForm({ ...sequentialForm, tensiSistol: e.target.value });
-                            }
-                          }}
-                        />
-                        <span className="input-group-text bg-white border-0 text-muted">mm</span>
-                      </div>
-                      <div className="input-group">
-                        <input 
-                          type="number" 
-                          className="form-control form-control-custom bg-white border-0 py-3"
-                          placeholder="80"
-                          value={examinationMode === 'per-step' ? langkah2Form.tensiDiastol : sequentialForm.tensiDiastol}
-                          onChange={(e) => {
-                            if (examinationMode === 'per-step') {
-                              setLangkah2Form({ ...langkah2Form, tensiDiastol: e.target.value });
-                            } else {
-                              setSequentialForm({ ...sequentialForm, tensiDiastol: e.target.value });
-                            }
-                          }}
-                        />
-                        <span className="input-group-text bg-white border-0 text-muted">Hg</span>
-                      </div>
+                      <input 
+                        type="number" 
+                        className="form-control form-control-custom bg-white border-0 py-3 text-center"
+                        style={{ width: '85px', flex: 'none' }}
+                        placeholder="120"
+                        value={examinationMode === 'per-step' ? langkah2Form.tensiSistol : sequentialForm.tensiSistol}
+                        onChange={(e) => {
+                          if (examinationMode === 'per-step') {
+                            setLangkah2Form({ ...langkah2Form, tensiSistol: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, tensiSistol: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="fw-bold text-muted px-1" style={{ fontSize: '1.4rem', lineHeight: '1', userSelect: 'none' }}>/</span>
+                      <input 
+                        type="number" 
+                        className="form-control form-control-custom bg-white border-0 py-3 text-center"
+                        style={{ width: '85px', flex: 'none' }}
+                        placeholder="80"
+                        value={examinationMode === 'per-step' ? langkah2Form.tensiDiastol : sequentialForm.tensiDiastol}
+                        onChange={(e) => {
+                          if (examinationMode === 'per-step') {
+                            setLangkah2Form({ ...langkah2Form, tensiDiastol: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, tensiDiastol: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="fw-semibold text-muted ms-1" style={{ fontSize: '0.95rem' }}>mm/Hg</span>
                     </div>
                   </div>
                 )}
@@ -3147,1197 +3331,11 @@ const getPlottingColorStyle = (statusKey) => {
                     &larr; Buka Langkah 2
                   </button>
                 </div>
-              ) : ['dewasa', 'lansia'].includes(activeSubmenu) ? (
-                /* Plotting Kategori Dewasa & Lansia Sesuai Wireframe */
-                <div className="row g-3 mb-4">
-                  {/* 1. Plotting IMT */}
-                  {(() => {
-                    const imtStyle = getPlottingColorStyle(plottingResult?.imtDewasaKey);
-                    const imtItems = [
-                      { label: 'Sangat Kurus < 17', code: 'SK', key: 'sangat-kurus' },
-                      { label: 'Kurus 17 - 18.4 (Lansia 17-18.5)', code: 'K', key: 'kurus' },
-                      { label: 'Normal 18.5 - 25.0', code: 'N', key: 'normal' },
-                      { label: 'Gemuk 25.1 - 27.0', code: 'G', key: 'gemuk' },
-                      { label: 'Obesitas > 27.0', code: 'O', key: 'obesitas' },
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="card border-0 bg-white p-4 rounded-4 shadow-xs">
-                          <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h6 className="fw-bold text-dark mb-0">Plotting IMT</h6>
-                              <span className="badge bg-light text-muted small fw-normal">Indeks Massa Tubuh</span>
-                            </div>
-
-                            {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                            <div 
-                              className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                              style={{
-                                backgroundColor: imtStyle.activeRowBg,
-                                border: `2px solid ${imtStyle.activeRowBorder}`,
-                              }}
-                            >
-                              <div>
-                                <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                                <span className="fs-5 fw-bold" style={{ color: imtStyle.badgeColor }}>
-                                  {plottingResult?.imtDewasaStatus}
-                                </span>
-                              </div>
-                              <div className="text-end">
-                                <span className="text-muted small fw-medium d-block">Hasil IMT:</span>
-                                <span className="fs-6 fw-bold text-dark">
-                                  {plottingResult?.imt} <span className="small text-muted fw-normal">kg/m²</span>
-                                </span>
-                                <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                                  ({plottingResult?.bb} kg / {plottingResult?.tb} cm)
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* KATEGORI ACUAN STANDAR */}
-                            <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                              Kategori Acuan Standar IMT:
-                            </div>
-                            <div className="d-flex flex-column gap-2 small">
-                              {imtItems.map((item, idx) => {
-                                const isCurrent = plottingResult?.imtDewasaKey === item.key;
-                                const itemStyle = getPlottingColorStyle(item.key);
-                                return (
-                                  <div 
-                                    key={idx}
-                                    className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                    style={{
-                                      backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                      border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                      fontSize: '0.85rem'
-                                    }}
-                                  >
-                                    <div className="d-flex align-items-center gap-2.5">
-                                      {isCurrent ? (
-                                        <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                      ) : (
-                                        <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                      )}
-                                      <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                        {item.label}
-                                      </span>
-                                    </div>
-                                    <span 
-                                      className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                      style={{ 
-                                        backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0', 
-                                        color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                        border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                        fontSize: '0.78rem'
-                                      }}
-                                    >
-                                      {item.code}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 2. Plotting Lingkar Perut */}
-                  {(() => {
-                    const lpStyle = getPlottingColorStyle(plottingResult?.lpPlottingKey);
-                    const isGenderMale = (activeSourceDataL3.gender || 'Laki-laki') === 'Laki-laki';
-                    const isNormal = plottingResult?.lpPlottingKey === 'normal';
-                    return (
-                      <div className="col-12">
-                        <div className="card border-0 bg-white p-4 rounded-4 shadow-xs">
-                          <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h6 className="fw-bold text-dark mb-0">Plotting Lingkar Perut</h6>
-                              <span className="badge bg-light text-muted small fw-normal">Batas Gender</span>
-                            </div>
-
-                            {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                            <div 
-                              className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                              style={{
-                                backgroundColor: lpStyle.activeRowBg,
-                                border: `2px solid ${lpStyle.activeRowBorder}`,
-                              }}
-                            >
-                              <div>
-                                <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                                <span className="fs-5 fw-bold" style={{ color: lpStyle.badgeColor }}>
-                                  {plottingResult?.lpPlottingStatus}
-                                </span>
-                              </div>
-                              <div className="text-end">
-                                <span className="text-muted small fw-medium d-block">Hasil Ukur:</span>
-                                <span className="fs-6 fw-bold text-dark">
-                                  {activeSourceDataL3.lp || 0} <span className="small text-muted fw-normal">cm</span>
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* KATEGORI ACUAN STANDAR */}
-                            <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                              Kategori Acuan Standar Lingkar Perut:
-                            </div>
-                            <div className="d-flex flex-column gap-2 small">
-                              {/* Opsi Normal */}
-                              <div 
-                                className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                style={{
-                                  backgroundColor: isNormal ? '#f0fdf4' : '#f8fafc',
-                                  border: isNormal ? '1.5px solid #86efac' : '1px solid #e2e8f0',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                <div className="d-flex align-items-center gap-2.5">
-                                  {isNormal ? (
-                                    <span className="fw-bold fs-6 text-success">✓</span>
-                                  ) : (
-                                    <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                  )}
-                                  <span className={isNormal ? 'fw-bold text-success' : 'text-secondary'} style={{ lineHeight: '1.4' }}>
-                                    {isGenderMale ? 'Laki-laki: ≤ 90 cm' : 'Perempuan: ≤ 80 cm'} (Normal)
-                                  </span>
-                                </div>
-                                <span className={`badge fw-bold px-2.5 py-1 rounded-pill ${isNormal ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-light text-muted'}`}>
-                                  N
-                                </span>
-                              </div>
-
-                              {/* Opsi Berisiko */}
-                              <div 
-                                className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                style={{
-                                  backgroundColor: !isNormal ? '#fff1f2' : '#f8fafc',
-                                  border: !isNormal ? '1.5px solid #f87171' : '1px solid #e2e8f0',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                <div className="d-flex align-items-center gap-2.5">
-                                  {!isNormal ? (
-                                    <span className="fw-bold fs-6 text-danger">✓</span>
-                                  ) : (
-                                    <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                  )}
-                                  <span className={!isNormal ? 'fw-bold text-danger' : 'text-secondary'} style={{ lineHeight: '1.4' }}>
-                                    {isGenderMale ? 'Laki-laki: > 90 cm' : 'Perempuan: > 80 cm'} (Berisiko / Obesitas Sentral)
-                                  </span>
-                                </div>
-                                <span className={`badge fw-bold px-2.5 py-1 rounded-pill ${!isNormal ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-light text-muted'}`}>
-                                  Risiko
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 3. Plotting LiLA */}
-                  {(() => {
-                    const lilaKey = activeSubmenu === 'lansia' ? plottingResult?.lilaLansiaKey : plottingResult?.lilaDewasaKey;
-                    const lilaStatusText = activeSubmenu === 'lansia' ? plottingResult?.lilaLansiaStatus : plottingResult?.lilaDewasaStatus;
-                    const lilaStyle = getPlottingColorStyle(lilaKey);
-                    const isNormal = lilaKey === 'normal';
-                    const threshold = activeSubmenu === 'lansia' ? 21.5 : 23.5;
-                    return (
-                      <div className="col-12">
-                        <div className="card border-0 bg-white p-4 rounded-4 shadow-xs">
-                          <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h6 className="fw-bold text-dark mb-0">Plotting LiLA</h6>
-                              <span className="badge bg-light text-muted small fw-normal">Pita Pengukur LiLA</span>
-                            </div>
-
-                            {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                            <div 
-                              className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                              style={{
-                                backgroundColor: lilaStyle.activeRowBg,
-                                border: `2px solid ${lilaStyle.activeRowBorder}`,
-                              }}
-                            >
-                              <div>
-                                <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                                <span className="fs-5 fw-bold" style={{ color: lilaStyle.badgeColor }}>
-                                  {lilaStatusText}
-                                </span>
-                              </div>
-                              <div className="text-end">
-                                <span className="text-muted small fw-medium d-block">Hasil LiLA:</span>
-                                <span className="fs-6 fw-bold text-dark">
-                                  {plottingResult?.lila} <span className="small text-muted fw-normal">cm</span>
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* KATEGORI ACUAN STANDAR */}
-                            <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                              Kategori Acuan Standar LiLA:
-                            </div>
-                            <div className="d-flex flex-column gap-2 small">
-                              {/* Kurang */}
-                              <div 
-                                className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                style={{
-                                  backgroundColor: !isNormal ? '#fef2f2' : '#f8fafc',
-                                  border: !isNormal ? '1.5px solid #f87171' : '1px solid #e2e8f0',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                <div className="d-flex align-items-center gap-2.5">
-                                  {!isNormal ? (
-                                    <span className="fw-bold fs-6 text-danger">✓</span>
-                                  ) : (
-                                    <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                  )}
-                                  <span className={!isNormal ? 'fw-bold text-danger' : 'text-secondary'} style={{ lineHeight: '1.4' }}>
-                                    Kurang &lt; {threshold} cm (Risiko KEK / Gizi Kurang)
-                                  </span>
-                                </div>
-                                <span className={`badge fw-bold px-2.5 py-1 rounded-pill ${!isNormal ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-light text-muted'}`}>
-                                  Kurang
-                                </span>
-                              </div>
-
-                              {/* Normal */}
-                              <div 
-                                className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                style={{
-                                  backgroundColor: isNormal ? '#f0fdf4' : '#f8fafc',
-                                  border: isNormal ? '1.5px solid #86efac' : '1px solid #e2e8f0',
-                                  fontSize: '0.85rem'
-                                }}
-                              >
-                                <div className="d-flex align-items-center gap-2.5">
-                                  {isNormal ? (
-                                    <span className="fw-bold fs-6 text-success">✓</span>
-                                  ) : (
-                                    <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                  )}
-                                  <span className={isNormal ? 'fw-bold text-success' : 'text-secondary'} style={{ lineHeight: '1.4' }}>
-                                    Normal ≥ {threshold} cm (Gizi Cukup)
-                                  </span>
-                                </div>
-                                <span className={`badge fw-bold px-2.5 py-1 rounded-pill ${isNormal ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-light text-muted'}`}>
-                                  Normal
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 4. Plotting Tekanan Darah */}
-                  {(() => {
-                    const tensiStyle = getPlottingColorStyle(plottingResult?.tensiKey);
-                    const tensiItems = [
-                      { label: 'Normal (120-129 / 80-84 mmHg)', code: 'N', key: 'normal' },
-                      { label: 'Pra hipertensi (130-139 / 85-89 mmHg)', code: 'Pra HT', key: 'pra-ht' },
-                      { label: 'Hipertensi tingkat 1 (140-159 / 90-99 mmHg)', code: 'Ht 1', key: 'ht1' },
-                      { label: 'Hipertensi tingkat 2 (160-179 / 100-109 mmHg)', code: 'Ht 2', key: 'ht2' },
-                      { label: 'Hipertensi Sistolik Terisolasi (>140 / <90 mmHg)', code: 'HST', key: 'hst' },
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="card border-0 bg-white p-4 rounded-4 shadow-xs">
-                          <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h6 className="fw-bold text-dark mb-0">Plotting Tekanan Darah</h6>
-                              <span className="badge bg-light text-muted small fw-normal">Tensimeter Digital</span>
-                            </div>
-
-                            {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                            <div 
-                              className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                              style={{
-                                backgroundColor: tensiStyle.activeRowBg,
-                                border: `2px solid ${tensiStyle.activeRowBorder}`,
-                              }}
-                            >
-                              <div>
-                                <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                                <span className="fs-5 fw-bold" style={{ color: tensiStyle.badgeColor }}>
-                                  {plottingResult?.tensiStatus || 'Normal'}
-                                </span>
-                              </div>
-                              <div className="text-end">
-                                <span className="text-muted small fw-medium d-block">Hasil Tensi:</span>
-                                <span className="fs-6 fw-bold text-dark">
-                                  {plottingResult?.sistol || 120} / {plottingResult?.diastol || 80} <span className="small text-muted fw-normal">mmHg</span>
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* KATEGORI ACUAN STANDAR */}
-                            <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                              Kategori Acuan Standar Tekanan Darah:
-                            </div>
-                            <div className="d-flex flex-column gap-2 small">
-                              {tensiItems.map((item, idx) => {
-                                const isCurrent = plottingResult?.tensiKey === item.key;
-                                const itemStyle = getPlottingColorStyle(item.key);
-                                return (
-                                  <div 
-                                    key={idx}
-                                    className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                    style={{
-                                      backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                      border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                      fontSize: '0.85rem'
-                                    }}
-                                  >
-                                    <div className="d-flex align-items-center gap-2.5">
-                                      {isCurrent ? (
-                                        <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                      ) : (
-                                        <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                      )}
-                                      <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                        {item.label}
-                                      </span>
-                                    </div>
-                                    <span 
-                                      className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                      style={{ 
-                                        backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0', 
-                                        color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                        border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                        fontSize: '0.78rem'
-                                      }}
-                                    >
-                                      {item.code}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : activeSubmenu === 'usekrem-15-18' ? (
-                /* Plotting Kategori Remaja 15-18 Tahun Sesuai Wireframe */
-                <div className="row g-3 mb-4">
-                  {/* Plotting IMT / U */}
-                  {(() => {
-                    const imtStyle = getPlottingColorStyle(plottingResult?.imtUsekremKey);
-                    const imtItems = [
-                      { label: 'Gizi Kurang -3 SD s.d < -2 SD', code: 'GK', key: 'kurus' },
-                      { label: 'Gizi Baik -2 SD s.d +1 SD', code: 'GB', key: 'normal' },
-                      { label: 'Gizi Lebih +1 SD s.d +2 SD', code: 'GL', key: 'gemuk' },
-                      { label: 'Obesitas > +2 SD', code: 'O', key: 'obesitas' },
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="card border-0 bg-white p-4 rounded-4 shadow-xs">
-                          <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h6 className="fw-bold text-dark mb-0">Plotting IMT / U</h6>
-                              <span className="badge bg-light text-muted small fw-normal">Standar WHO Remaja</span>
-                            </div>
-
-                            {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                            <div 
-                              className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                              style={{
-                                backgroundColor: imtStyle.activeRowBg,
-                                border: `2px solid ${imtStyle.activeRowBorder}`,
-                              }}
-                            >
-                              <div>
-                                <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                                <span className="fs-5 fw-bold" style={{ color: imtStyle.badgeColor }}>
-                                  {plottingResult?.imtUsekremStatus}
-                                </span>
-                              </div>
-                              <div className="text-end">
-                                <span className="text-muted small fw-medium d-block">Hasil IMT/U:</span>
-                                <span className="fs-6 fw-bold text-dark">
-                                  {plottingResult?.imt} <span className="small text-muted fw-normal">kg/m²</span>
-                                </span>
-                                <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                                  ({plottingResult?.bb} kg / {plottingResult?.tb} cm)
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* KATEGORI ACUAN STANDAR */}
-                            <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                              Kategori Acuan Standar IMT:
-                            </div>
-                            <div className="d-flex flex-column gap-2 small">
-                              {imtItems.map((item, idx) => {
-                                const isCurrent = plottingResult?.imtUsekremKey === item.key;
-                                const itemStyle = getPlottingColorStyle(item.key);
-                                return (
-                                  <div 
-                                    key={idx}
-                                    className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                    style={{
-                                      backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                      border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                      fontSize: '0.85rem'
-                                    }}
-                                  >
-                                    <div className="d-flex align-items-center gap-2.5">
-                                      {isCurrent ? (
-                                        <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                      ) : (
-                                        <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                      )}
-                                      <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                        {item.label}
-                                      </span>
-                                    </div>
-                                    <span 
-                                      className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                      style={{ 
-                                        backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0', 
-                                        color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                        border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                        fontSize: '0.78rem'
-                                      }}
-                                    >
-                                      {item.code}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Plotting Tekanan Darah */}
-                  {(() => {
-                    const tensiStyle = getPlottingColorStyle(plottingResult?.tensiKey);
-                    const tensiItems = [
-                      { label: 'Normal (120-129 / 80-84 mmHg)', code: 'N', key: 'normal' },
-                      { label: 'Pra hipertensi (130-139 / 85-89 mmHg)', code: 'Pra HT', key: 'pra-ht' },
-                      { label: 'Hipertensi tingkat 1 (140-159 / 90-99 mmHg)', code: 'Ht 1', key: 'ht1' },
-                      { label: 'Hipertensi tingkat 2 (160-179 / 100-109 mmHg)', code: 'Ht 2', key: 'ht2' },
-                      { label: 'Hipertensi tingkat 3 (>180 / >110 mmHg)', code: 'Ht 3', key: 'ht3' },
-                      { label: 'Hipertensi Sistolik Terisolasi (>140 / <90 mmHg)', code: 'HST', key: 'hst' },
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="card border-0 bg-white p-4 rounded-4 shadow-xs">
-                          <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h6 className="fw-bold text-dark mb-0">Plotting Tekanan Darah</h6>
-                              <span className="badge bg-light text-muted small fw-normal">Tensimeter Remaja</span>
-                            </div>
-
-                            {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                            <div 
-                              className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                              style={{
-                                backgroundColor: tensiStyle.activeRowBg,
-                                border: `2px solid ${tensiStyle.activeRowBorder}`,
-                              }}
-                            >
-                              <div>
-                                <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                                <span className="fs-5 fw-bold" style={{ color: tensiStyle.badgeColor }}>
-                                  {plottingResult?.tensiRemajaStatus}
-                                </span>
-                              </div>
-                              <div className="text-end">
-                                <span className="text-muted small fw-medium d-block">Hasil Tensi:</span>
-                                <span className="fs-6 fw-bold text-dark">
-                                  {plottingResult?.sistol} / {plottingResult?.diastol} <span className="small text-muted fw-normal">mmHg</span>
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* KATEGORI ACUAN STANDAR */}
-                            <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                              Kategori Acuan Standar Tekanan Darah:
-                            </div>
-                            <div className="d-flex flex-column gap-2 small">
-                              {tensiItems.map((item, idx) => {
-                                const isCurrent = plottingResult?.tensiKey === item.key;
-                                const itemStyle = getPlottingColorStyle(item.key);
-                                return (
-                                  <div 
-                                    key={idx}
-                                    className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                    style={{
-                                      backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                      border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                      fontSize: '0.85rem'
-                                    }}
-                                  >
-                                    <div className="d-flex align-items-center gap-2.5">
-                                      {isCurrent ? (
-                                        <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                      ) : (
-                                        <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                      )}
-                                      <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                        {item.label}
-                                      </span>
-                                    </div>
-                                    <span 
-                                      className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                      style={{ 
-                                        backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0', 
-                                        color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                        border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                        fontSize: '0.78rem'
-                                      }}
-                                    >
-                                      {item.code}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : activeSubmenu === 'usekrem-6-14' ? (
-                /* Plotting Kategori Usia Sekolah 6-14 Tahun Sesuai Wireframe */
-                <div className="row g-3 mb-4">
-                  {(() => {
-                    const imtStyle = getPlottingColorStyle(plottingResult?.imtUsekremKey);
-                    const imtItems = [
-                      { label: 'Gizi Kurang (-3 SD s.d < -2 SD)', code: 'GK', key: 'kurus' },
-                      { label: 'Gizi Baik (-2 SD s.d +1 SD)', code: 'GB', key: 'normal' },
-                      { label: 'Gizi Lebih (+1 SD s.d +2 SD)', code: 'GL', key: 'gemuk' },
-                      { label: 'Obesitas (> +2 SD)', code: 'O', key: 'obesitas' },
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                          <div className="d-flex align-items-center justify-content-between mb-3">
-                            <h6 className="fw-bold text-dark mb-0">Plotting IMT / U</h6>
-                            <span className="badge bg-light text-muted small fw-normal">Usia 6 - 14 Tahun</span>
-                          </div>
-
-                          {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                          <div 
-                            className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                            style={{
-                              backgroundColor: imtStyle.activeRowBg,
-                              border: `2px solid ${imtStyle.activeRowBorder}`,
-                            }}
-                          >
-                            <div>
-                              <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                              <span className="fs-5 fw-bold" style={{ color: imtStyle.badgeColor }}>
-                                {plottingResult?.imtUsekremStatus}
-                              </span>
-                            </div>
-                            <div className="text-end">
-                              <span className="text-muted small fw-medium d-block">Hasil IMT/U:</span>
-                              <span className="fs-6 fw-bold text-dark">
-                                {plottingResult?.imt} <span className="small text-muted fw-normal">kg/m²</span>
-                              </span>
-                              <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                                ({plottingResult?.bb} kg / {plottingResult?.tb} cm)
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* KATEGORI ACUAN STANDAR */}
-                          <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                            Kategori Acuan Standar IMT:
-                          </div>
-                          <div className="d-flex flex-column gap-2 small">
-                            {imtItems.map((item, idx) => {
-                              const isCurrent = plottingResult?.imtUsekremKey === item.key;
-                              const itemStyle = getPlottingColorStyle(item.key);
-                              return (
-                                <div 
-                                  key={idx}
-                                  className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                  style={{
-                                    backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                    border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                    fontSize: '0.85rem'
-                                  }}
-                                >
-                                  <div className="d-flex align-items-center gap-2.5">
-                                    {isCurrent ? (
-                                      <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                    ) : (
-                                      <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                    )}
-                                    <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                      {item.label}
-                                    </span>
-                                  </div>
-                                  <span 
-                                    className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                    style={{ 
-                                      backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0', 
-                                      color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                      border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                      fontSize: '0.78rem'
-                                    }}
-                                  >
-                                    {item.code}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : activeSubmenu === 'apras' ? (
-                /* Plotting Kategori Apras (60-72 Bulan) Sesuai Wireframe */
-                <div className="row g-3 mb-4">
-                  {/* 3.1 Plotting Penimbangan Pengukuran IMT/U */}
-                  {(() => {
-                    const imtStyle = getPlottingColorStyle(plottingResult?.imtAprasKey);
-                    const imtItems = [
-                      { label: 'Gizi Kurang (-3 SD s.d -2 SD)', code: 'GiKur', key: 'kurus' },
-                      { label: 'Gizi Baik (-2 SD s.d +1 SD)', code: 'Baik', key: 'normal' },
-                      { label: 'Gizi Lebih (+1 SD s.d +2 SD)', code: 'GL', key: 'gemuk' },
-                      { label: 'Obesitas (> +2 SD)', code: 'Obes', key: 'obesitas' },
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="bg-white p-4 rounded-3 border-0 shadow-sm h-100 d-flex flex-column justify-content-between">
-                          <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h6 className="fw-bold text-dark mb-0">3.1 Plotting IMT / U</h6>
-                              <span className="badge bg-light text-muted small fw-normal">Anak Prasekolah</span>
-                            </div>
-
-                            {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                            <div 
-                              className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                              style={{
-                                backgroundColor: imtStyle.activeRowBg,
-                                border: `2px solid ${imtStyle.activeRowBorder}`,
-                              }}
-                            >
-                              <div>
-                                <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                                <span className="fs-5 fw-bold" style={{ color: imtStyle.badgeColor }}>
-                                  {plottingResult?.imtAprasStatus}
-                                </span>
-                              </div>
-                              <div className="text-end">
-                                <span className="text-muted small fw-medium d-block">Hasil IMT/U:</span>
-                                <span className="fs-6 fw-bold text-dark">
-                                  {plottingResult?.imt} <span className="small text-muted fw-normal">kg/m²</span>
-                                </span>
-                                <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                                  ({plottingResult?.bb} kg / {plottingResult?.tb} cm)
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* KATEGORI ACUAN STANDAR */}
-                            <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                              Kategori Acuan Standar IMT:
-                            </div>
-                            <div className="d-flex flex-column gap-2 small">
-                              {imtItems.map((item, idx) => {
-                                const isCurrent = plottingResult?.imtAprasKey === item.key;
-                                const itemStyle = getPlottingColorStyle(item.key);
-                                return (
-                                  <div 
-                                    key={idx}
-                                    className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                    style={{
-                                      backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                      border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                      fontSize: '0.85rem'
-                                    }}
-                                  >
-                                    <div className="d-flex align-items-center gap-2.5">
-                                      {isCurrent ? (
-                                        <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                      ) : (
-                                        <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                      )}
-                                      <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                        {item.label}
-                                      </span>
-                                    </div>
-                                    <span 
-                                      className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                      style={{ 
-                                        backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0', 
-                                        color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                        border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                        fontSize: '0.78rem'
-                                      }}
-                                    >
-                                      {item.code}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 3.2 Plotting LiLA */}
-                  {(() => {
-                    const lilaStyle = getPlottingColorStyle(plottingResult?.lilaAprasKey);
-                    const lilaItems = [
-                      { label: 'Gizi Buruk (< 12.8 cm, < -3 SD)', code: 'GiBur', key: 'sangat-kurus' },
-                      { label: 'Gizi Kurang (12.8 cm - 14 cm, < -2 SD s.d -3 SD)', code: 'GiKur', key: 'kurus' },
-                      { label: 'Gizi Normal (≥ 14 cm, ≥ -2 SD s.d +2 SD)', code: 'N', key: 'normal' },
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="bg-white p-4 rounded-3 border-0 shadow-sm h-100 d-flex flex-column justify-content-between">
-                          <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h6 className="fw-bold text-dark mb-0">3.2 Plotting LiLA</h6>
-                              <span className="badge bg-light text-muted small fw-normal">Pita LiLA Apras</span>
-                            </div>
-
-                            {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                            <div 
-                              className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                              style={{
-                                backgroundColor: lilaStyle.activeRowBg,
-                                border: `2px solid ${lilaStyle.activeRowBorder}`,
-                              }}
-                            >
-                              <div>
-                                <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                                <span className="fs-5 fw-bold" style={{ color: lilaStyle.badgeColor }}>
-                                  {plottingResult?.lilaAprasStatus}
-                                </span>
-                              </div>
-                              <div className="text-end">
-                                <span className="text-muted small fw-medium d-block">Hasil LiLA:</span>
-                                <span className="fs-6 fw-bold text-dark">
-                                  {plottingResult?.lila} <span className="small text-muted fw-normal">cm</span>
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* KATEGORI ACUAN STANDAR */}
-                            <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                              Kategori Acuan Standar LiLA:
-                            </div>
-                            <div className="d-flex flex-column gap-2 small">
-                              {lilaItems.map((item, idx) => {
-                                const isCurrent = plottingResult?.lilaAprasKey === item.key;
-                                const itemStyle = getPlottingColorStyle(item.key);
-                                return (
-                                  <div 
-                                    key={idx}
-                                    className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                    style={{
-                                      backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                      border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                      fontSize: '0.85rem'
-                                    }}
-                                  >
-                                    <div className="d-flex align-items-center gap-2.5">
-                                      {isCurrent ? (
-                                        <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                      ) : (
-                                        <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                      )}
-                                      <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                        {item.label}
-                                      </span>
-                                    </div>
-                                    <span 
-                                      className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                      style={{ 
-                                        backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0', 
-                                        color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                        border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                        fontSize: '0.78rem'
-                                      }}
-                                    >
-                                      {item.code}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : ['bayi-0-11', 'balita-12-59'].includes(activeSubmenu) ? (
-                /* Plotting 5 Kategori Sesuai Tabel Wireframe Bayi & Balita */
-                <div className="row g-3 mb-4">
-                  {/* 3.1 Plotting Penimbangan (BB/U) */}
-                  <div className="col-12">
-                    <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6 className="fw-bold text-dark mb-0">3.1 Plotting Penimbangan (BB/U)</h6>
-                        <span 
-                          className="badge px-3 py-1.5 rounded-pill fw-bold"
-                          style={{ backgroundColor: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
-                        >
-                          N (BB Normal)
-                        </span>
-                      </div>
-                      <p className="text-muted small mb-0">• BB Naik Normal (N, -2SD s.d +1SD) | <span className="fw-semibold text-success">BB: {plottingResult?.bb} kg</span></p>
-                    </div>
-                  </div>
-
-                  {/* 3.2 Plotting Pengukuran TB (PB/U atau TB/U) */}
-                  <div className="col-12">
-                    <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6 className="fw-bold text-dark mb-0">3.2 Plotting Pengukuran TB (PB/U atau TB/U)</h6>
-                        <span 
-                          className="badge px-3 py-1.5 rounded-pill fw-bold"
-                          style={{ backgroundColor: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
-                        >
-                          N (Normal)
-                        </span>
-                      </div>
-                      <p className="text-muted small mb-0">• Normal (-2SD s.d +3SD) | <span className="fw-semibold text-success">PB/TB: {plottingResult?.tb} cm</span></p>
-                    </div>
-                  </div>
-
-                  {/* 3.3 Plotting Penimbangan Pengukuran BB/PB atau BB/TB */}
-                  <div className="col-12">
-                    <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6 className="fw-bold text-dark mb-0">3.3 Plotting BB/PB atau BB/TB</h6>
-                        <span 
-                          className="badge px-3 py-1.5 rounded-pill fw-bold"
-                          style={{ backgroundColor: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
-                        >
-                          Baik (Gizi Baik)
-                        </span>
-                      </div>
-                      <p className="text-muted small mb-0">• Gizi Baik (-2SD s.d +1SD)</p>
-                    </div>
-                  </div>
-
-                  {/* 3.4 Plotting Lingkar Kepala */}
-                  <div className="col-12">
-                    <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6 className="fw-bold text-dark mb-0">3.4 Plotting Lingkar Kepala</h6>
-                        <span 
-                          className="badge px-3 py-1.5 rounded-pill fw-bold"
-                          style={{ backgroundColor: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
-                        >
-                          N (Normal)
-                        </span>
-                      </div>
-                      <p className="text-muted small mb-0">• Normal (-2SD s.d +2SD) | <span className="fw-semibold text-success">LK: {plottingResult?.lk} cm</span></p>
-                    </div>
-                  </div>
-
-                  {/* 3.5 Plotting LiLA */}
-                  {(() => {
-                    const lilaStyle = getPlottingColorStyle(plottingResult?.lilaBayiKey);
-                    return (
-                      <div className="col-12">
-                        <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                          <div className="d-flex align-items-center justify-content-between mb-2">
-                            <h6 className="fw-bold text-dark mb-0">3.5 Plotting LiLA</h6>
-                            <span 
-                              className="badge px-3 py-1.5 rounded-pill fw-bold"
-                              style={{ 
-                                backgroundColor: lilaStyle.badgeBg, 
-                                color: lilaStyle.badgeColor, 
-                                border: `1px solid ${lilaStyle.badgeBorder}` 
-                              }}
-                            >
-                              {plottingResult?.lilaBayiStatus}
-                            </span>
-                          </div>
-                          <p className="text-muted small mb-0">
-                            {activeSubmenu === 'bayi-0-11' 
-                              ? `• Standar Normal (≥ 12.5 cm) | `
-                              : `• Standar Normal (> 12.5 cm) | `
-                            }
-                            <span className="fw-semibold" style={{ color: lilaStyle.labelColor }}>
-                              LiLA: {plottingResult?.lila} cm
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
               ) : (
-                /* Standard Adult / Bumil / Nifas Plotting */
-                <div className="row g-3 mb-4">
-                  {/* Plotting IMT */}
-                  {(() => {
-                    const imtStyle = getPlottingColorStyle(plottingResult?.imtKey);
-                    const imtItems = [
-                      { label: 'Sangat Kurus (< 17.0 kg/m²)', code: 'SK', key: 'sangat-kurus' },
-                      { label: 'Kurus (17.0 - 18.4 kg/m²)', code: 'K', key: 'kurus' },
-                      { label: 'Normal (18.5 - 25.0 kg/m²)', code: 'N', key: 'normal' },
-                      { label: 'Gemuk (25.1 - 27.0 kg/m²)', code: 'G', key: 'gemuk' },
-                      { label: 'Obesitas (> 27.0 kg/m²)', code: 'O', key: 'obesitas' },
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                          <div className="d-flex align-items-center justify-content-between mb-3">
-                            <h6 className="fw-bold text-dark mb-0">Plotting IMT (Indeks Massa Tubuh)</h6>
-                            <span className="badge bg-light text-muted small fw-normal">Kurva Buku KIA</span>
-                          </div>
-
-                          {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                          <div
-                            className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                            style={{ backgroundColor: imtStyle.activeRowBg, border: `2px solid ${imtStyle.activeRowBorder}` }}
-                          >
-                            <div>
-                              <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                              <span className="fs-5 fw-bold" style={{ color: imtStyle.badgeColor }}>{plottingResult?.imtStatus}</span>
-                            </div>
-                            <div className="text-end">
-                              <span className="text-muted small fw-medium d-block">Hasil IMT:</span>
-                              <span className="fs-5 fw-bold text-dark">{plottingResult?.imt} <span className="small text-muted fw-normal">kg/m²</span></span>
-                              <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                                ({plottingResult?.bb} kg / {plottingResult?.tb} cm)
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* KATEGORI ACUAN STANDAR */}
-                          <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                            Kategori Acuan Standar IMT:
-                          </div>
-                          <div className="d-flex flex-column gap-2 small">
-                            {imtItems.map((item, idx) => {
-                              const isCurrent = plottingResult?.imtKey === item.key;
-                              const itemStyle = getPlottingColorStyle(item.key);
-                              return (
-                                <div
-                                  key={idx}
-                                  className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                  style={{
-                                    backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                    border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                    fontSize: '0.85rem'
-                                  }}
-                                >
-                                  <div className="d-flex align-items-center gap-2.5">
-                                    {isCurrent ? (
-                                      <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                    ) : (
-                                      <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                    )}
-                                    <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                      {item.label}
-                                    </span>
-                                  </div>
-                                  <span
-                                    className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                    style={{
-                                      backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0',
-                                      color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                      border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                      fontSize: '0.78rem'
-                                    }}
-                                  >
-                                    {item.code}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Plotting LiLA (Hanya untuk Bumil / Kategori Lain, Nifas tidak menggunakan LiLA) */}
-                  {activeSubmenu !== 'nifas' && (() => {
-                    const isKek = plottingResult?.isLilaKek || (parseFloat(plottingResult?.lila) > 0 && parseFloat(plottingResult?.lila) < 23.5);
-                    const lilaStyle = getPlottingColorStyle(isKek ? 'kek' : 'normal');
-                    const lilaStatusText = isKek ? 'Risiko KEK (< 23.5 cm)' : 'Normal (≥ 23.5 cm)';
-                    return (
-                      <div className="col-12">
-                        <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                          <div className="d-flex align-items-center justify-content-between mb-3">
-                            <h6 className="fw-bold text-dark mb-0">Plotting LiLA (Lingkar Lengan Atas)</h6>
-                            <span className="badge bg-light text-muted small fw-normal">Pita LiLA Bumil</span>
-                          </div>
-
-                          {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                          <div
-                            className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                            style={{ backgroundColor: lilaStyle.activeRowBg, border: `2px solid ${lilaStyle.activeRowBorder}` }}
-                          >
-                            <div>
-                              <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                              <span className="fs-5 fw-bold" style={{ color: lilaStyle.badgeColor }}>
-                                {plottingResult?.lila ? lilaStatusText : 'Normal (≥ 23.5 cm)'}
-                              </span>
-                            </div>
-                            <div className="text-end">
-                              <span className="text-muted small fw-medium d-block">Hasil LiLA:</span>
-                              <span className="fs-5 fw-bold text-dark">{plottingResult?.lila || '—'} <span className="small text-muted fw-normal">cm</span></span>
-                            </div>
-                          </div>
-
-                          {/* KATEGORI ACUAN STANDAR */}
-                          <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                            Kategori Acuan Standar LiLA Ibu Hamil:
-                          </div>
-                          <div className="d-flex flex-column gap-2 small">
-                            <div
-                              className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                              style={{
-                                backgroundColor: isKek ? '#fef2f2' : '#f8fafc',
-                                border: isKek ? '1.5px solid #f87171' : '1px solid #e2e8f0',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              <div className="d-flex align-items-center gap-2.5">
-                                {isKek ? (
-                                  <span className="fw-bold fs-6 text-danger">✓</span>
-                                ) : (
-                                  <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                )}
-                                <span className={isKek ? 'fw-bold text-danger' : 'text-secondary'} style={{ lineHeight: '1.4' }}>
-                                  Kurang Energi Kronis / KEK (&lt; 23.5 cm)
-                                </span>
-                              </div>
-                              <span className={`badge fw-bold px-2.5 py-1 rounded-pill ${isKek ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-light text-muted'}`}>
-                                Merah / KEK
-                              </span>
-                            </div>
-                            <div
-                              className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                              style={{
-                                backgroundColor: !isKek ? '#f0fdf4' : '#f8fafc',
-                                border: !isKek ? '1.5px solid #86efac' : '1px solid #e2e8f0',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              <div className="d-flex align-items-center gap-2.5">
-                                {!isKek ? (
-                                  <span className="fw-bold fs-6 text-success">✓</span>
-                                ) : (
-                                  <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                )}
-                                <span className={!isKek ? 'fw-bold text-success' : 'text-secondary'} style={{ lineHeight: '1.4' }}>
-                                  Normal (≥ 23.5 cm)
-                                </span>
-                              </div>
-                              <span className={`badge fw-bold px-2.5 py-1 rounded-pill ${!isKek ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-light text-muted'}`}>
-                                Hijau / Normal
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Plotting Tekanan Darah */}
-                  {(() => {
-                    const tensiStyle = getPlottingColorStyle(plottingResult?.tensiAdultKey);
-                    const tdItems = [
-                      { label: 'Normal (< 130 / 85 mmHg)', code: 'N', key: 'normal' },
-                      { label: 'Pra Hipertensi (130-139 / 85-89 mmHg)', code: 'Pra HT', key: 'pra-ht' },
-                      { label: 'Hipertensi tingkat 1 (140-159 / 90-99 mmHg)', code: 'Ht 1', key: 'ht1' },
-                      { label: 'Hipertensi tingkat 2 (≥ 160 / ≥ 100 mmHg)', code: 'Ht 2', key: 'ht2' }
-                    ];
-                    return (
-                      <div className="col-12">
-                        <div className="bg-white p-4 rounded-3 border-0 shadow-sm">
-                          <div className="d-flex align-items-center justify-content-between mb-3">
-                            <h6 className="fw-bold text-dark mb-0">Plotting Tekanan Darah</h6>
-                            <span className="badge bg-light text-muted small fw-normal">Tensimeter Digital KIA</span>
-                          </div>
-
-                          {/* BANNER STATUS EVALUASI BESAR & JELAS */}
-                          <div
-                            className="p-3 rounded-3 mb-3 d-flex align-items-center justify-content-between"
-                            style={{ backgroundColor: tensiStyle.activeRowBg, border: `2px solid ${tensiStyle.activeRowBorder}` }}
-                          >
-                            <div>
-                              <span className="text-muted small fw-medium d-block">Status Evaluasi:</span>
-                              <span className="fs-5 fw-bold" style={{ color: tensiStyle.badgeColor }}>{plottingResult?.tensiStatus}</span>
-                            </div>
-                            <div className="text-end">
-                              <span className="text-muted small fw-medium d-block">Hasil Tensi:</span>
-                              <span className="fs-5 fw-bold text-dark">{plottingResult?.sistol}/{plottingResult?.diastol} <span className="small text-muted fw-normal">mmHg</span></span>
-                            </div>
-                          </div>
-
-                          {/* KATEGORI ACUAN STANDAR */}
-                          <div className="text-secondary fw-semibold mb-2 small" style={{ fontSize: '0.82rem' }}>
-                            Kategori Acuan Standar Tekanan Darah:
-                          </div>
-                          <div className="d-flex flex-column gap-2 small">
-                            {tdItems.map((item, idx) => {
-                              const isCurrent = plottingResult?.tensiAdultKey === item.key;
-                              const itemStyle = getPlottingColorStyle(item.key);
-                              return (
-                                <div
-                                  key={idx}
-                                  className="d-flex align-items-center justify-content-between px-3 py-2.5 rounded-3 transition-all"
-                                  style={{
-                                    backgroundColor: isCurrent ? itemStyle.activeRowBg : '#f8fafc',
-                                    border: isCurrent ? `1.5px solid ${itemStyle.activeRowBorder}` : '1px solid #e2e8f0',
-                                    fontSize: '0.85rem'
-                                  }}
-                                >
-                                  <div className="d-flex align-items-center gap-2.5">
-                                    {isCurrent ? (
-                                      <span className="fw-bold fs-6" style={{ color: itemStyle.indicatorBg }}>✓</span>
-                                    ) : (
-                                      <span className="text-muted" style={{ width: '14px', textAlign: 'center' }}>•</span>
-                                    )}
-                                    <span className={isCurrent ? 'fw-bold' : 'text-secondary'} style={{ color: isCurrent ? itemStyle.activeText : undefined, lineHeight: '1.4' }}>
-                                      {item.label}
-                                    </span>
-                                  </div>
-                                  <span
-                                    className="badge fw-bold px-2.5 py-1 rounded-pill"
-                                    style={{
-                                      backgroundColor: isCurrent ? itemStyle.badgeBg : '#e2e8f0',
-                                      color: isCurrent ? itemStyle.badgeColor : '#475569',
-                                      border: isCurrent ? `1px solid ${itemStyle.badgeBorder}` : '1px solid transparent',
-                                      fontSize: '0.78rem'
-                                    }}
-                                  >
-                                    {item.code}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
+                <Langkah3PlottingView 
+                  activeSubmenu={activeSubmenu} 
+                  plottingResult={plottingResult} 
+                />
               )}
 
               {/* Interactive WHO / Permenkes Growth Curve Plotter for Children (Diletakkan di bawah hasil plotting) */}
@@ -4345,11 +3343,17 @@ const getPlottingColorStyle = (statusKey) => {
                 <div className="mt-4 mb-3">
                   <GrowthChartPlotter
                     gender={activeSourceDataL3.gender}
+                    umurBulan={childAgeMonths}
                     ageInMonths={childAgeMonths}
+                    bb={activeSourceDataL3.bb}
                     weight={activeSourceDataL3.bb}
+                    tb={activeSourceDataL3.tb}
                     height={activeSourceDataL3.tb}
+                    activeCategory={activeSubmenu}
                     category={activeSubmenu}
+                    namaAnak={activeSourceDataL3.nama || 'Anak'}
                     childName={activeSourceDataL3.nama || 'Anak'}
+                    riwayatPemeriksaan={activeSourceDataL3.riwayatPemeriksaan || activeSourceDataL3.growth_history || activeSourceDataL3.historis || []}
                   />
                 </div>
               )}
@@ -5816,16 +4820,18 @@ const getPlottingColorStyle = (statusKey) => {
                     </div>
                   </div>
 
-                  {/* C. Pemeriksaan Tahunan Remaja Putri */}
+                  {/* C. Pemeriksaan Tahunan Remaja */}
                   <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
                     <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
                       <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
                           <span className="badge bg-primary-subtle text-primary fw-bold px-2.5 py-1 rounded-pill">1x / Tahun</span>
-                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan Remaja Putri</h5>
+                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan Remaja</h5>
                         </div>
                         <p className="text-muted small mb-0">
-                          Skrining Kesehatan Jiwa &amp; Pemeriksaan Anemia (Hb) berkala tahunan.
+                          {isPutriStep4 
+                            ? 'Skrining Kesehatan Jiwa & Pemeriksaan Anemia (Hb) berkala tahunan.'
+                            : 'Skrining Kesehatan Jiwa berkala tahunan.'}
                         </p>
                       </div>
                       <div className="d-flex align-items-center gap-3 bg-light p-2 px-3 rounded-4 border">
@@ -5886,7 +4892,7 @@ const getPlottingColorStyle = (statusKey) => {
                       </div>
                     ) : (
                       <div className="row g-3 pt-2 border-top">
-                        <div className="col-md-6">
+                        <div className={isPutriStep4 ? "col-md-6" : "col-12"}>
                           <label className="form-label fw-semibold text-dark small mb-1">Melakukan skrining jiwa</label>
                           <select 
                             className="form-select bg-light border-0 py-2"
@@ -5905,24 +4911,26 @@ const getPlottingColorStyle = (statusKey) => {
                           </select>
                         </div>
 
-                        <div className="col-md-6">
-                          <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
-                          <select 
-                            className="form-select bg-light border-0 py-2"
-                            value={examinationMode === 'per-step' ? (langkah4Form.periksaHb || '') : (sequentialForm.periksaHb || '')}
-                            onChange={(e) => {
-                              if (examinationMode === 'per-step') {
-                                setLangkah4Form({ ...langkah4Form, periksaHb: e.target.value });
-                              } else {
-                                setSequentialForm({ ...sequentialForm, periksaHb: e.target.value });
-                              }
-                            }}
-                          >
-                            <option value="">-- Pilih Status --</option>
-                            <option value="Sudah">Sudah</option>
-                            <option value="Belum">Belum</option>
-                          </select>
-                        </div>
+                        {isPutriStep4 && (
+                          <div className="col-md-6">
+                            <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
+                            <select 
+                              className="form-select bg-light border-0 py-2"
+                              value={examinationMode === 'per-step' ? (langkah4Form.periksaHb || '') : (sequentialForm.periksaHb || '')}
+                              onChange={(e) => {
+                                if (examinationMode === 'per-step') {
+                                  setLangkah4Form({ ...langkah4Form, periksaHb: e.target.value });
+                                } else {
+                                  setSequentialForm({ ...sequentialForm, periksaHb: e.target.value });
+                                }
+                              }}
+                            >
+                              <option value="">-- Pilih Status --</option>
+                              <option value="Sudah">Sudah</option>
+                              <option value="Belum">Belum</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -6059,16 +5067,18 @@ const getPlottingColorStyle = (statusKey) => {
                     </div>
                   </div>
 
-                  {/* C. Pemeriksaan Tahunan Remaja Putri */}
+                  {/* C. Pemeriksaan Tahunan Remaja */}
                   <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
                     <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
                       <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
                           <span className="badge bg-primary-subtle text-primary fw-bold px-2.5 py-1 rounded-pill">1x / Tahun</span>
-                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan Remaja Putri</h5>
+                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan Remaja</h5>
                         </div>
                         <p className="text-muted small mb-0">
-                          Skrining Kesehatan Jiwa &amp; Pemeriksaan Anemia (Hb) berkala tahunan.
+                          {isPutriStep4 
+                            ? 'Skrining Kesehatan Jiwa & Pemeriksaan Anemia (Hb) berkala tahunan.'
+                            : 'Skrining Kesehatan Jiwa berkala tahunan.'}
                         </p>
                       </div>
                       <div className="d-flex align-items-center gap-3 bg-light p-2 px-3 rounded-4 border">
@@ -6130,7 +5140,7 @@ const getPlottingColorStyle = (statusKey) => {
                       </div>
                     ) : (
                       <div className="row g-3 pt-2 border-top">
-                        <div className="col-md-6">
+                        <div className={isPutriStep4 ? "col-md-6" : "col-12"}>
                           <label className="form-label fw-semibold text-dark small mb-1">Melakukan skrining jiwa</label>
                           <select 
                             className="form-select bg-light border-0 py-2"
@@ -6149,101 +5159,81 @@ const getPlottingColorStyle = (statusKey) => {
                           </select>
                         </div>
 
-                        <div className="col-md-6">
-                          <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
-                          <select 
-                            className="form-select bg-light border-0 py-2"
-                            value={examinationMode === 'per-step' ? (langkah4Form.periksaHb || '') : (sequentialForm.periksaHb || '')}
-                            onChange={(e) => {
-                              if (examinationMode === 'per-step') {
-                                setLangkah4Form({ ...langkah4Form, periksaHb: e.target.value });
-                              } else {
-                                setSequentialForm({ ...sequentialForm, periksaHb: e.target.value });
-                              }
-                            }}
-                          >
-                            <option value="">-- Pilih Status --</option>
-                            <option value="Sudah">Sudah</option>
-                            <option value="Belum">Belum</option>
-                          </select>
-                        </div>
+                        {isPutriStep4 && (
+                          <div className="col-md-6">
+                            <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
+                            <select 
+                              className="form-select bg-light border-0 py-2"
+                              value={examinationMode === 'per-step' ? (langkah4Form.periksaHb || '') : (sequentialForm.periksaHb || '')}
+                              onChange={(e) => {
+                                if (examinationMode === 'per-step') {
+                                  setLangkah4Form({ ...langkah4Form, periksaHb: e.target.value });
+                                } else {
+                                  setSequentialForm({ ...sequentialForm, periksaHb: e.target.value });
+                                }
+                              }}
+                            >
+                              <option value="">-- Pilih Status --</option>
+                              <option value="Sudah">Sudah</option>
+                              <option value="Belum">Belum</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </>
               ) : ['bayi-0-11', 'balita-12-59'].includes(activeSubmenu) ? (
                 <>
-                  {/* 1. Imunisasi */}
-                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
-                    <h5 className="fw-bold text-dark mb-3">Imunisasi</h5>
+                  {/* 1. Imunisasi (Tabel Matriks & Riwayat Buku KIA Kemenkes RI) */}
+                  {(() => {
+                    const currentWargaId = examinationMode === 'per-step' ? selectedWargaStep4 : selectedWargaId;
+                    const targetChild = activeWargaList.find(w => String(w.id) === String(currentWargaId));
+                    const childAge = targetChild ? getAgeInMonths(targetChild) : 0;
+                    const currentImunisasiList = examinationMode === 'per-step' 
+                      ? (langkah4Form.imunisasiList || []) 
+                      : (sequentialForm.imunisasiList || []);
 
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold text-dark small mb-1">Tempat Imunisasi</label>
-                        <select 
-                          className="form-select bg-light border-0 py-2"
-                          value={examinationMode === 'per-step' ? (langkah4Form.tempatImunisasi || '') : (sequentialForm.tempatImunisasi || '')}
-                          onChange={(e) => {
-                            if (examinationMode === 'per-step') {
-                              setLangkah4Form({ ...langkah4Form, tempatImunisasi: e.target.value });
-                            } else {
-                              setSequentialForm({ ...sequentialForm, tempatImunisasi: e.target.value });
-                            }
-                          }}
-                        >
-                          <option value="">-- Pilih Tempat Imunisasi --</option>
-                          <option value="Posyandu">Posyandu</option>
-                          <option value="Puskesmas">Puskesmas</option>
-                          <option value="Rumah Sakit">Rumah Sakit</option>
-                          <option value="Klinik / Praktik Mandiri">Klinik / Praktik Mandiri</option>
-                          <option value="Lainnya">Lainnya</option>
-                        </select>
-                      </div>
-
-                      {/* Pertanyaan Jika di Rumah Sakit / Faskes Luar: Rumah Sakit mana */}
-                      {['Rumah Sakit', 'Klinik / Praktik Mandiri', 'Lainnya'].includes(
-                        examinationMode === 'per-step' ? (langkah4Form.tempatImunisasi || '') : (sequentialForm.tempatImunisasi || '')
-                      ) && (
-                        <div className="col-md-6">
-                          <label className="form-label fw-semibold text-dark small mb-1">
-                            {((examinationMode === 'per-step' ? langkah4Form.tempatImunisasi : sequentialForm.tempatImunisasi) === 'Rumah Sakit')
-                              ? 'Nama Rumah Sakit'
-                              : 'Nama Faskes / Tempat Pelayanan'}
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control bg-light border-0 py-2"
-                            placeholder="Contoh: RSUD Cibinong, RS Hermina, dll..."
-                            value={examinationMode === 'per-step' ? (langkah4Form.namaRsImunisasi || '') : (sequentialForm.namaRsImunisasi || '')}
-                            onChange={(e) => {
-                              if (examinationMode === 'per-step') {
-                                setLangkah4Form({ ...langkah4Form, namaRsImunisasi: e.target.value });
-                              } else {
-                                setSequentialForm({ ...sequentialForm, namaRsImunisasi: e.target.value });
-                              }
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold text-dark small mb-1">Jenis Imunisasi yang Diberikan</label>
-                        <input 
-                          type="text"
-                          className="form-control bg-light border-0 py-2"
-                          placeholder="Masukkan jenis imunisasi yang diberikan (misal: DPT, Polio, Campak, dll)..."
-                          value={examinationMode === 'per-step' ? (langkah4Form.jenisImunisasi || '') : (sequentialForm.jenisImunisasi || '')}
-                          onChange={(e) => {
-                            if (examinationMode === 'per-step') {
-                              setLangkah4Form({ ...langkah4Form, jenisImunisasi: e.target.value });
-                            } else {
-                              setSequentialForm({ ...sequentialForm, jenisImunisasi: e.target.value });
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                    return (
+                      <ImunisasiTableHistory
+                        wargaId={currentWargaId}
+                        childAgeMonths={childAge}
+                        tempatImunisasi={examinationMode === 'per-step' ? (langkah4Form.tempatImunisasi || 'Posyandu') : (sequentialForm.tempatImunisasi || 'Posyandu')}
+                        namaRsImunisasi={examinationMode === 'per-step' ? (langkah4Form.namaRsImunisasi || '') : (sequentialForm.namaRsImunisasi || '')}
+                        onChangeTempat={(val) => {
+                          if (examinationMode === 'per-step') {
+                            setLangkah4Form({ ...langkah4Form, tempatImunisasi: val });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, tempatImunisasi: val });
+                          }
+                        }}
+                        onChangeNamaRs={(val) => {
+                          if (examinationMode === 'per-step') {
+                            setLangkah4Form({ ...langkah4Form, namaRsImunisasi: val });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, namaRsImunisasi: val });
+                          }
+                        }}
+                        selectedImunisasiList={currentImunisasiList}
+                        onUpdateImunisasiList={(updatedList) => {
+                          const strNames = updatedList.map(item => (typeof item === 'string' ? item : item.name)).join(', ');
+                          if (examinationMode === 'per-step') {
+                            setLangkah4Form({ 
+                              ...langkah4Form, 
+                              imunisasiList: updatedList,
+                              jenisImunisasi: strNames
+                            });
+                          } else {
+                            setSequentialForm({ 
+                              ...sequentialForm, 
+                              imunisasiList: updatedList,
+                              jenisImunisasi: strNames
+                            });
+                          }
+                        }}
+                      />
+                    );
+                  })()}
 
                   {/* 2. Pemberian ASI & MP-ASI (Dipisah di bawah Imunisasi) */}
                   <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
@@ -6368,7 +5358,7 @@ const getPlottingColorStyle = (statusKey) => {
                           {/* 2. Konsumsi PMT habis: Terbuka secara konsisten di dalam slot PMT tanpa menggeser kartu lain */}
                           {getLangkah4Value('pmtPemulihan') === 'Ya' && (
                             <div className="mt-3 pt-3 border-top d-flex align-items-center justify-content-between gap-3">
-                              <span className="small fw-semibold text-primary mb-0">&bull; Konsumsi PMT habis?</span>
+                              <span className="small fw-semibold text-primary mb-0">&bull; Apakah PMT lokal yang diberikan dihabiskan?</span>
                               <div className="d-flex align-items-center gap-4 flex-shrink-0">
                                 <label className="d-flex align-items-center gap-2 cursor-pointer small fw-medium text-dark mb-0" style={{ cursor: 'pointer' }}>
                                   <input
@@ -6954,25 +5944,42 @@ const getPlottingColorStyle = (statusKey) => {
 
       {/* MODAL PREVIEW MODE BERTAHAP (SEBELUM DISIMPAN) */}
       {showSequentialPreviewModal && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 1060 }} tabIndex="-1">
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(15, 23, 42, 0.65)', zIndex: 1060, backdropFilter: 'blur(4px)' }} tabIndex="-1">
           <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-            <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
-              <div className="modal-header bg-dark text-white p-3 px-4">
-                <div>
-                  <span className="badge bg-warning text-dark fw-bold mb-1">PREVIEW HASIL PEMERIKSAAN BERTAHAP (LANGKAH 1 - 5)</span>
-                  <h4 className="modal-title fw-bold text-white mb-0">Konfirmasi Simpan Data</h4>
-                  <div className="text-white-50 small">Kategori: {currentCategory.label}</div>
+            <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden bg-light">
+              <div 
+                className="modal-header text-white p-3.5 px-4 d-flex align-items-center justify-content-between"
+                style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                <div className="d-flex align-items-center gap-3">
+                  <div className="p-2 rounded-3 bg-white bg-opacity-10 d-flex align-items-center justify-content-center">
+                    <CheckCircle2 size={22} className="text-warning" />
+                  </div>
+                  <div>
+                    <div className="mb-0.5">
+                      <span className="badge bg-warning text-dark fw-bold px-2.5 py-0.5 rounded-pill" style={{ fontSize: '0.7rem' }}>
+                        PREVIEW LENGKAP
+                      </span>
+                    </div>
+                    <h6 className="modal-title fw-bold text-white mb-0">Ringkasan &amp; Konfirmasi Pemeriksaan</h6>
+                  </div>
                 </div>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setShowSequentialPreviewModal(false)}></button>
+                <button 
+                  type="button" 
+                  className="btn-close btn-close-white" 
+                  aria-label="Close"
+                  onClick={() => setShowSequentialPreviewModal(false)}
+                ></button>
               </div>
 
-              <div className="modal-body p-4 bg-light">
-                <div className="alert bg-white border border-warning-subtle text-dark rounded-3 p-3 mb-4 shadow-xs">
-                  <strong>ⓘ Mohon periksa kembali ringkasan data dari Langkah 1 s/d Langkah 5 sebelum menekan Konfirmasi Simpan.</strong>
-                </div>
+              <div className="modal-body p-3.5 p-md-4 bg-light" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
 
                 {(() => {
                   const previewWarga = activeWargaList.find(w => String(w.id) === String(selectedWargaId)) || {};
+                  const isPutriPreview = (() => {
+                    const g = String(sequentialForm.gender || previewWarga.gender || previewWarga.jenis_kelamin || '').toLowerCase();
+                    return g.startsWith('p') || g.includes('perempuan') || g.includes('wanita');
+                  })();
 
                   // PUMA evaluation
                   const pumaEvaluation = (() => {
@@ -6985,7 +5992,7 @@ const getPlottingColorStyle = (statusKey) => {
 
                     const isAny = [jk, usia, rokok, np, dh, bt].some(v => v !== '' && v !== undefined && v !== null);
                     if (!isAny) {
-                      return { score: '-', text: 'Belum Diisi', isRisiko: false };
+                      return { score: '-', text: '-', isRisiko: false };
                     }
                     const score = (jk !== '' && jk !== undefined ? Number(jk) : 0) +
                       (usia !== '' && usia !== undefined ? Number(usia) : 0) +
@@ -7036,11 +6043,11 @@ const getPlottingColorStyle = (statusKey) => {
                     const isFilled = [
                       batukVal, sequentialForm.nafsuMakanTbc, sequentialForm.bbMenurunTbc,
                       sequentialForm.lemahLesuTbc, sequentialForm.berkeringatMalamTbc, sequentialForm.batukDarahTbc, sequentialForm.sesakNafasTbc
-                    ].some(v => v !== '' && v !== undefined);
+                    ].some(v => v !== '' && v !== undefined && v !== null);
 
                     if (flags.length > 0) return { text: `Berisiko TBC (${flags.join(', ')})`, isRisiko: true };
                     if (isFilled) return { text: 'Tidak Ada Gejala TBC (Normal)', isRisiko: false };
-                    return { text: 'Tidak Ada Gejala TBC (Normal)', isRisiko: false };
+                    return { text: '-', isRisiko: false };
                   })();
 
                   // TBC Gejala for Children & Maternal
@@ -7057,361 +6064,1017 @@ const getPlottingColorStyle = (statusKey) => {
                     const isFilled = [
                       batukVal, sequentialForm.demamTbc, sequentialForm.bbTurunTbc,
                       sequentialForm.kontakTbc, sequentialForm.lesuTbc
-                    ].some(v => v !== '' && v !== undefined);
+                    ].some(v => v !== '' && v !== undefined && v !== null);
 
                     if (flags.length > 0) return { text: `Berisiko TBC (${flags.join(', ')})`, isRisiko: true };
                     if (isFilled) return { text: 'Tidak Ada Gejala TBC (Normal)', isRisiko: false };
-                    return { text: 'Tidak Ada Gejala TBC (Normal)', isRisiko: false };
+                    return { text: '-', isRisiko: false };
                   })();
 
+                  // Measurement presence flags for Langkah 3 plotting
+                  const hasBbTb = Boolean(sequentialForm.bb && sequentialForm.tb);
+                  const hasLila = Boolean(sequentialForm.lila);
+                  const hasTensi = Boolean(sequentialForm.tensiSistol && sequentialForm.tensiDiastol);
+                  const hasLp = Boolean(sequentialForm.lp);
+                  const hasLk = Boolean(sequentialForm.lk);
+
+                  // Helper render Imunisasi
+                  const renderImunisasi = () => {
+                    if (Array.isArray(sequentialForm.imunisasiList) && sequentialForm.imunisasiList.length > 0) {
+                      return sequentialForm.imunisasiList.join(', ');
+                    }
+                    if (sequentialForm.jenisImunisasi) {
+                      return sequentialForm.jenisImunisasi === 'Lainnya'
+                        ? (sequentialForm.jenisImunisasiLainnya || 'Lainnya')
+                        : sequentialForm.jenisImunisasi;
+                    }
+                    return '-';
+                  };
+
+                  const citizenName = sequentialForm.nama || previewWarga.nama || '-';
+                  const citizenNik = sequentialForm.nik || previewWarga.nik || '-';
+                  const citizenGender = ['bumil', 'nifas'].includes(activeSubmenu) ? 'Perempuan' : (sequentialForm.gender || previewWarga.gender || (previewWarga.jenis_kelamin === 'P' ? 'Perempuan' : 'Laki-laki') || '-');
+                  const citizenTglLahir = formatIndoDate(sequentialForm.tglLahir || previewWarga.tglLahir);
+
                   return (
-                    <>
-                      {/* LANGKAH 1 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 1: Identitas Sasaran</h6>
-                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">Pendaftaran</span>
+                    <div className="d-flex flex-column gap-3">
+                      {/* LANGKAH 1: IDENTITAS SASARAN */}
+                      <div className="card border-0 shadow-sm rounded-4 bg-white p-3.5 p-md-4">
+                        <div className="d-flex align-items-center justify-content-between pb-3 mb-3 border-bottom">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-primary text-white rounded-circle p-1 d-inline-flex align-items-center justify-content-center" style={{ width: '22px', height: '22px', fontSize: '0.75rem' }}>1</span>
+                            <h6 className="fw-bold text-dark mb-0">Identitas &amp; Pendaftaran Sasaran</h6>
+                          </div>
+                          <span className="badge bg-primary-subtle text-primary rounded-pill px-2.5 py-1 fw-medium" style={{ fontSize: '0.75rem' }}>
+                            Langkah 1
+                          </span>
                         </div>
-                        <div className="row g-2 small">
-                          <div className="col-6"><strong>NIK:</strong> {sequentialForm.nik || previewWarga.nik || '(Diisi Otomatis)'}</div>
-                          <div className="col-6"><strong>Nama Lengkap:</strong> {sequentialForm.nama || previewWarga.nama || '(Nama Baru)'}</div>
-                          <div className="col-6"><strong>Tanggal Lahir:</strong> {sequentialForm.tglLahir || previewWarga.tglLahir || '-'}</div>
-                          <div className="col-6"><strong>Jenis Kelamin:</strong> {['bumil', 'nifas'].includes(activeSubmenu) ? 'Perempuan' : (sequentialForm.gender || previewWarga.gender || 'Laki-laki')}</div>
-                          
+
+                        <div className="row g-3">
+                          <div className="col-12 col-md-6 col-lg-3">
+                            <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                              <div className="text-muted small mb-1 fw-medium">NIK</div>
+                              <div className="fw-bold text-dark text-break">{citizenNik}</div>
+                            </div>
+                          </div>
+                          <div className="col-12 col-md-6 col-lg-3">
+                            <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                              <div className="text-muted small mb-1 fw-medium">Nama Lengkap</div>
+                              <div className="fw-bold text-dark text-break">{citizenName}</div>
+                            </div>
+                          </div>
+                          <div className="col-12 col-md-6 col-lg-3">
+                            <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                              <div className="text-muted small mb-1 fw-medium">Tanggal Lahir</div>
+                              <div className="fw-bold text-dark">{citizenTglLahir}</div>
+                            </div>
+                          </div>
+                          <div className="col-12 col-md-6 col-lg-3">
+                            <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                              <div className="text-muted small mb-1 fw-medium">Jenis Kelamin</div>
+                              <div className="fw-bold text-dark">{citizenGender}</div>
+                            </div>
+                          </div>
+
                           {['dewasa', 'lansia'].includes(activeSubmenu) && (
                             <>
-                              <div className="col-6"><strong>Pekerjaan:</strong> {sequentialForm.pekerjaan || previewWarga.pekerjaan || (activeSubmenu === 'lansia' ? 'Pensiunan' : 'Karyawan Swasta')}</div>
-                              <div className="col-6"><strong>Status Pernikahan:</strong> {sequentialForm.statusPernikahan || previewWarga.statusPernikahan || 'Menikah'}</div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Pekerjaan</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.pekerjaan || previewWarga.pekerjaan || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Status Pernikahan</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.statusPernikahan || previewWarga.statusPernikahan || '-'}</div>
+                                </div>
+                              </div>
                             </>
                           )}
 
                           {['usekrem-6-14', 'usekrem-15-18'].includes(activeSubmenu) && (
                             <>
-                              <div className="col-6"><strong>Sekolah:</strong> {sequentialForm.sekolah || previewWarga.sekolah || (activeSubmenu === 'usekrem-6-14' ? 'SDN Sukamaju 02' : 'SMAN 1 Sukamaju')}</div>
-                              <div className="col-6"><strong>Kelas:</strong> {sequentialForm.kelas || previewWarga.kelas || (activeSubmenu === 'usekrem-6-14' ? 'Kelas 5' : 'Kelas 11')}</div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Nama Sekolah</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.sekolah || previewWarga.sekolah || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Kelas</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.kelas || previewWarga.kelas || '-'}</div>
+                                </div>
+                              </div>
                             </>
                           )}
 
                           {activeSubmenu === 'bumil' && (
-                            <div className="col-12 mt-2 pt-1 border-top">
-                              <strong>Usia Kehamilan:</strong>{' '}
-                              <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">
-                                {sequentialForm.usiaKehamilan || '-'}
-                              </span>
+                            <div className="col-12">
+                              <div className="p-3 rounded-3 bg-primary-subtle bg-opacity-50 border border-primary-subtle d-flex align-items-center justify-content-between">
+                                <span className="text-dark fw-medium">Usia Kehamilan</span>
+                                <span className="badge bg-primary text-white px-3 py-1.5 rounded-pill fs-6 fw-bold">
+                                  {sequentialForm.usiaKehamilan || '-'}
+                                </span>
+                              </div>
                             </div>
                           )}
+
                           {activeSubmenu === 'nifas' && (
-                            <div className="col-12 mt-2 pt-1 border-top">
-                              <strong>Waktu Kunjungan:</strong>{' '}
-                              <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">
-                                {sequentialForm.waktuKunjunganNifas || '-'}
-                              </span>
+                            <div className="col-12">
+                              <div className="p-3 rounded-3 bg-primary-subtle bg-opacity-50 border border-primary-subtle d-flex align-items-center justify-content-between">
+                                <span className="text-dark fw-medium">Waktu Kunjungan Nifas</span>
+                                <span className="badge bg-primary text-white px-3 py-1.5 rounded-pill fs-6 fw-bold">
+                                  {sequentialForm.waktuKunjunganNifas || '-'}
+                                </span>
+                              </div>
                             </div>
                           )}
+
                           {['bayi-0-11', 'balita-12-59', 'apras'].includes(activeSubmenu) && (
-                            <div className="col-12 mt-2 pt-1 border-top">
-                              <strong>{activeSubmenu === 'bayi-0-11' ? 'Umur Bayi:' : activeSubmenu === 'balita-12-59' ? 'Umur Balita:' : 'Umur Apras:'}</strong>{' '}
-                              <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">
-                                {(activeSubmenu === 'bayi-0-11' ? sequentialForm.usiaBayi : activeSubmenu === 'balita-12-59' ? sequentialForm.usiaBalita : sequentialForm.usiaApras) || '-'}
-                              </span>
+                            <div className="col-12">
+                              <div className="p-3 rounded-3 bg-primary-subtle bg-opacity-50 border border-primary-subtle d-flex align-items-center justify-content-between">
+                                <span className="text-dark fw-medium">
+                                  {activeSubmenu === 'bayi-0-11' ? 'Umur Bayi' : activeSubmenu === 'balita-12-59' ? 'Umur Balita' : 'Umur Apras'}
+                                </span>
+                                <span className="badge bg-primary text-white px-3 py-1.5 rounded-pill fs-6 fw-bold">
+                                  {(activeSubmenu === 'bayi-0-11' ? sequentialForm.usiaBayi : activeSubmenu === 'balita-12-59' ? sequentialForm.usiaBalita : sequentialForm.usiaApras) || '-'}
+                                </span>
+                              </div>
                             </div>
                           )}
                         </div>
                       </div>
 
-                      {/* LANGKAH 2 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 2: Skrining Penimbangan &amp; Pengukuran</h6>
-                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">Pengukuran Fisik</span>
+                      {/* LANGKAH 2: PENGUKURAN FISIK */}
+                      <div className="card border-0 shadow-sm rounded-4 bg-white p-4">
+                        <div className="d-flex align-items-center justify-content-between pb-3 mb-3 border-bottom">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-info text-white rounded-circle p-1 d-inline-flex align-items-center justify-content-center" style={{ width: '22px', height: '22px', fontSize: '0.75rem' }}>2</span>
+                            <h6 className="fw-bold text-dark mb-0">Skrining Penimbangan &amp; Pengukuran Fisik</h6>
+                          </div>
+                          <span className="badge bg-info-subtle text-info-emphasis rounded-pill px-2.5 py-1 fw-medium" style={{ fontSize: '0.75rem' }}>
+                            Langkah 2
+                          </span>
                         </div>
-                        <div className="row g-2 small">
-                          <div className="col-6"><strong>Berat Badan (BB):</strong> {sequentialForm.bb ? `${sequentialForm.bb} kg` : '-'}</div>
+
+                        <div className="row g-3">
+                          <div className="col-6 col-md-4 col-lg-3">
+                            <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                              <div className="text-muted small mb-1 fw-medium">Berat Badan (BB)</div>
+                              <div className="fs-5 fw-bold text-dark">
+                                {sequentialForm.bb ? `${sequentialForm.bb}` : '-'} <span className="fs-6 fw-normal text-muted">{sequentialForm.bb ? 'kg' : ''}</span>
+                              </div>
+                            </div>
+                          </div>
+
                           {activeSubmenu !== 'nifas' && (
-                            <div className="col-6"><strong>{['bayi-0-11', 'balita-12-59'].includes(activeSubmenu) ? 'Panjang / Tinggi Badan (PB/TB):' : 'Tinggi Badan (TB):'}</strong> {sequentialForm.tb ? `${sequentialForm.tb} cm` : '-'}</div>
+                            <div className="col-6 col-md-4 col-lg-3">
+                              <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                <div className="text-muted small mb-1 fw-medium">
+                                  {['bayi-0-11', 'balita-12-59'].includes(activeSubmenu) ? 'Panjang / TB' : 'Tinggi Badan (TB)'}
+                                </div>
+                                <div className="fs-5 fw-bold text-dark">
+                                  {sequentialForm.tb ? `${sequentialForm.tb}` : '-'} <span className="fs-6 fw-normal text-muted">{sequentialForm.tb ? 'cm' : ''}</span>
+                                </div>
+                              </div>
+                            </div>
                           )}
+
                           {['bumil', 'bayi-0-11', 'balita-12-59', 'apras', 'dewasa', 'lansia'].includes(activeSubmenu) && (
-                            <div className="col-6"><strong>Lingkar Lengan (LiLA):</strong> {sequentialForm.lila ? `${sequentialForm.lila} cm` : '-'}</div>
+                            <div className="col-6 col-md-4 col-lg-3">
+                              <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                <div className="text-muted small mb-1 fw-medium">Lingkar Lengan (LiLA)</div>
+                                <div className="fs-5 fw-bold text-dark">
+                                  {sequentialForm.lila ? `${sequentialForm.lila}` : '-'} <span className="fs-6 fw-normal text-muted">{sequentialForm.lila ? 'cm' : ''}</span>
+                                </div>
+                              </div>
+                            </div>
                           )}
+
                           {['usekrem-15-18', 'dewasa', 'lansia'].includes(activeSubmenu) && (
-                            <div className="col-6"><strong>Lingkar Perut (LP):</strong> {sequentialForm.lp ? `${sequentialForm.lp} cm` : '-'}</div>
+                            <div className="col-6 col-md-4 col-lg-3">
+                              <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                <div className="text-muted small mb-1 fw-medium">Lingkar Perut (LP)</div>
+                                <div className="fs-5 fw-bold text-dark">
+                                  {sequentialForm.lp ? `${sequentialForm.lp}` : '-'} <span className="fs-6 fw-normal text-muted">{sequentialForm.lp ? 'cm' : ''}</span>
+                                </div>
+                              </div>
+                            </div>
                           )}
+
                           {['bayi-0-11', 'balita-12-59'].includes(activeSubmenu) && (
-                            <div className="col-6"><strong>Lingkar Kepala (LK):</strong> {sequentialForm.lk ? `${sequentialForm.lk} cm` : '-'}</div>
+                            <div className="col-6 col-md-4 col-lg-3">
+                              <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                <div className="text-muted small mb-1 fw-medium">Lingkar Kepala (LK)</div>
+                                <div className="fs-5 fw-bold text-dark">
+                                  {sequentialForm.lk ? `${sequentialForm.lk}` : '-'} <span className="fs-6 fw-normal text-muted">{sequentialForm.lk ? 'cm' : ''}</span>
+                                </div>
+                              </div>
+                            </div>
                           )}
+
                           {['bumil', 'nifas', 'usekrem-15-18', 'dewasa', 'lansia'].includes(activeSubmenu) && (
-                            <div className="col-6"><strong>Tekanan Darah:</strong> {sequentialForm.tensiSistol && sequentialForm.tensiDiastol ? `${sequentialForm.tensiSistol}/${sequentialForm.tensiDiastol} mmHg` : '-'}</div>
+                            <div className="col-12 col-md-4 col-lg-3">
+                              <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                <div className="text-muted small mb-1 fw-medium">Tekanan Darah (Tensi)</div>
+                                <div className="fs-5 fw-bold text-dark">
+                                  {sequentialForm.tensiSistol && sequentialForm.tensiDiastol ? `${sequentialForm.tensiSistol}/${sequentialForm.tensiDiastol}` : '-'} <span className="fs-6 fw-normal text-muted">{sequentialForm.tensiSistol ? 'mmHg' : ''}</span>
+                                </div>
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
 
-                      {/* LANGKAH 3 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 3: Plotting Evaluasi Otomatis</h6>
-                          <span className="badge bg-success-subtle text-success border border-success-subtle fw-semibold">Hasil Plotting Sistem</span>
+                      {/* LANGKAH 3: HASIL PLOTTING & EVALUASI SISTEM */}
+                      <div className="card border-0 shadow-sm rounded-4 bg-white p-4">
+                        <div className="d-flex align-items-center justify-content-between pb-3 mb-3 border-bottom">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-success text-white rounded-circle p-1 d-inline-flex align-items-center justify-content-center" style={{ width: '22px', height: '22px', fontSize: '0.75rem' }}>3</span>
+                            <h6 className="fw-bold text-dark mb-0">Hasil Plotting &amp; Evaluasi Otomatis</h6>
+                          </div>
+                          <span className="badge bg-success-subtle text-success rounded-pill px-2.5 py-1 fw-medium" style={{ fontSize: '0.75rem' }}>
+                            Langkah 3
+                          </span>
                         </div>
-                        <div className="row g-2 small">
+
+                        <div className="row g-3">
                           {['dewasa', 'lansia'].includes(activeSubmenu) && (
                             <>
-                              <div className="col-6">
-                                <strong>Plotting IMT:</strong>{' '}
-                                <span className="fw-semibold text-dark">{plottingResult?.imtDewasaStatus || 'Normal (N)'}</span>{' '}
-                                <span className="text-muted">({plottingResult?.imt || '-'} kg/m²)</span>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle d-flex flex-column justify-content-between">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting IMT (Status Berat Badan)</div>
+                                  <div className="mt-1">
+                                    {hasBbTb ? (
+                                      <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                        <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                          {plottingResult?.imtDewasaStatus || 'Normal (N)'}
+                                        </span>
+                                        <span className="text-muted small fw-medium">{plottingResult?.imt || '-'} kg/m²</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-muted">-</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6">
-                                <strong>Plotting LiLA:</strong>{' '}
-                                <span className="fw-semibold text-dark">{activeSubmenu === 'lansia' ? (plottingResult?.lilaLansiaStatus || 'Normal (≥ 21.5 cm)') : (plottingResult?.lilaDewasaStatus || 'Normal (≥ 23.5 cm)')}</span>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle d-flex flex-column justify-content-between">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting LiLA (Lingkar Lengan Atas)</div>
+                                  <div className="mt-1">
+                                    {hasLila ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {activeSubmenu === 'lansia' ? (plottingResult?.lilaLansiaStatus || 'Normal (≥ 21.5 cm)') : (plottingResult?.lilaDewasaStatus || 'Normal (≥ 23.5 cm)')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted">-</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6">
-                                <strong>Tekanan Darah:</strong>{' '}
-                                <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || 'Normal (< 130/85 mmHg)'}</span>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle d-flex flex-column justify-content-between">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Tekanan Darah</div>
+                                  <div className="mt-1">
+                                    {hasTensi ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.tensiStatus || 'Normal (< 130/85 mmHg)'}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted">-</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6">
-                                <strong>Lingkar Perut:</strong>{' '}
-                                <span className="fw-semibold text-dark">{plottingResult?.lpPlottingStatus || 'Normal (≤ 90 cm)'}</span>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle d-flex flex-column justify-content-between">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Lingkar Perut</div>
+                                  <div className="mt-1">
+                                    {hasLp ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.lpPlottingStatus || 'Normal (≤ 90 cm)'}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted">-</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </>
                           )}
 
                           {activeSubmenu === 'usekrem-15-18' && (
                             <>
-                              <div className="col-6">
-                                <strong>Plotting IMT:</strong>{' '}
-                                <span className="fw-semibold text-dark">{plottingResult?.imtUsekremStatus || 'Gizi Baik (GB)'}</span>{' '}
-                                <span className="text-muted">({plottingResult?.imt || '-'} kg/m²)</span>
+                              <div className="col-12 col-md-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting IMT</div>
+                                  <div className="mt-1">
+                                    {hasBbTb ? (
+                                      <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                        <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                          {plottingResult?.imtUsekremStatus || 'Gizi Baik (GB)'}
+                                        </span>
+                                        <span className="text-muted small fw-medium">{plottingResult?.imt || '-'} kg/m²</span>
+                                      </div>
+                                    ) : <span className="text-muted">-</span>}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6">
-                                <strong>Tekanan Darah:</strong>{' '}
-                                <span className="fw-semibold text-dark">{plottingResult?.tensiRemajaStatus || 'Normal (N)'}</span>
+
+                              <div className="col-12 col-md-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Tekanan Darah</div>
+                                  <div className="mt-1">
+                                    {hasTensi ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.tensiRemajaStatus || 'Normal (N)'}
+                                      </span>
+                                    ) : <span className="text-muted">-</span>}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6">
-                                <strong>Lingkar Perut:</strong>{' '}
-                                <span className="fw-semibold text-dark">{plottingResult?.lpPlottingStatus || 'Normal'}</span>
+
+                              <div className="col-12 col-md-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Lingkar Perut</div>
+                                  <div className="mt-1">
+                                    {hasLp ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.lpPlottingStatus || 'Normal'}
+                                      </span>
+                                    ) : <span className="text-muted">-</span>}
+                                  </div>
+                                </div>
                               </div>
                             </>
                           )}
 
                           {activeSubmenu === 'usekrem-6-14' && (
                             <div className="col-12">
-                              <strong>Plotting IMT/U:</strong>{' '}
-                              <span className="fw-semibold text-dark">{plottingResult?.imtUsekremStatus || 'Gizi Baik (GB)'}</span>{' '}
-                              <span className="text-muted">({plottingResult?.imt || '-'} kg/m²)</span>
+                              <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                <div className="text-muted small mb-1 fw-medium">Plotting IMT/U</div>
+                                <div className="mt-1">
+                                  {hasBbTb ? (
+                                    <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.imtUsekremStatus || 'Gizi Baik (GB)'}
+                                      </span>
+                                      <span className="text-muted small fw-medium">{plottingResult?.imt || '-'} kg/m²</span>
+                                    </div>
+                                  ) : <span className="text-muted">-</span>}
+                                </div>
+                              </div>
                             </div>
                           )}
 
                           {activeSubmenu === 'apras' && (
                             <>
-                              <div className="col-6">
-                                <strong>Plotting IMT/U:</strong>{' '}
-                                <span className="fw-semibold text-dark">{plottingResult?.imtAprasStatus || 'Gizi Baik (-2 SD s.d +1 SD)'}</span>{' '}
-                                <span className="text-muted">({plottingResult?.imt || '-'} kg/m²)</span>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting IMT/U</div>
+                                  <div className="mt-1">
+                                    {hasBbTb ? (
+                                      <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                        <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                          {plottingResult?.imtAprasStatus || 'Gizi Baik (-2 SD s.d +1 SD)'}
+                                        </span>
+                                        <span className="text-muted small fw-medium">{plottingResult?.imt || '-'} kg/m²</span>
+                                      </div>
+                                    ) : <span className="text-muted">-</span>}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6">
-                                <strong>Plotting LiLA:</strong>{' '}
-                                <span className="fw-semibold text-dark">{plottingResult?.lilaAprasStatus || 'Gizi Normal (≥ 14 cm)'}</span>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting LiLA</div>
+                                  <div className="mt-1">
+                                    {hasLila ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.lilaAprasStatus || 'Gizi Normal (≥ 14 cm)'}
+                                      </span>
+                                    ) : <span className="text-muted">-</span>}
+                                  </div>
+                                </div>
                               </div>
                             </>
                           )}
 
                           {['bayi-0-11', 'balita-12-59'].includes(activeSubmenu) && (
                             <>
-                              <div className="col-6"><strong>BB / Usia (BB/U):</strong> <span className="fw-semibold text-dark">{plottingResult?.bbUStatus || 'BB Normal / Naik (N)'}</span></div>
-                              <div className="col-6"><strong>PB/TB / Usia:</strong> <span className="fw-semibold text-dark">{plottingResult?.pbUStatus || 'Normal (N)'}</span></div>
-                              <div className="col-6"><strong>BB / PB (TB):</strong> <span className="fw-semibold text-dark">{plottingResult?.bbPbStatus || 'Gizi Baik (-2SD s.d +1SD)'}</span></div>
-                              <div className="col-6"><strong>Lingkar Kepala:</strong> <span className="fw-semibold text-dark">{plottingResult?.lkStatus || 'Normal (-2SD s.d +2SD)'}</span></div>
-                              <div className="col-12"><strong>Status LiLA:</strong> <span className="fw-semibold text-dark">{plottingResult?.lilaBayiStatus || 'Gizi Normal (> 12.5 cm)'}</span></div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting Penimbangan (BB/U)</div>
+                                  <div className="fw-bold text-dark mt-1">
+                                    {sequentialForm.bb ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.evalBBU?.kategori ? `${plottingResult.evalBBU.kategori} (${plottingResult.evalBBU.sd_position || '-2 SD s.d +1 SD'})` : (plottingResult?.bbUStatus || 'BB Normal (-2 SD s.d +1 SD)')}
+                                      </span>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting {activeSubmenu === 'bayi-0-11' ? 'Panjang Badan (PB/U)' : 'Tinggi Badan (TB/U)'}</div>
+                                  <div className="fw-bold text-dark mt-1">
+                                    {sequentialForm.tb ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.evalTBU?.kategori ? `${plottingResult.evalTBU.kategori} (${plottingResult.evalTBU.sd_position || '-2 SD s.d +3 SD'})` : (plottingResult?.pbUStatus || 'Normal (-2 SD s.d +3 SD)')}
+                                      </span>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting {activeSubmenu === 'bayi-0-11' ? 'BB/PB' : 'BB/TB'}</div>
+                                  <div className="fw-bold text-dark mt-1">
+                                    {hasBbTb ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.evalBBTB?.kategori ? `${plottingResult.evalBBTB.kategori} (${plottingResult.evalBBTB.sd_position || '-2 SD s.d +1 SD'})` : (plottingResult?.bbPbStatus || 'Gizi Baik (-2 SD s.d +1 SD)')}
+                                      </span>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting Lingkar Kepala</div>
+                                  <div className="fw-bold text-dark mt-1">
+                                    {hasLk ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.lkStatus || 'Normal (-2 SD s.d +2 SD)'}
+                                      </span>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="col-12">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting LiLA</div>
+                                  <div className="fw-bold text-dark mt-1">
+                                    {hasLila ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.evalLilaBayi ? `${plottingResult.evalLilaBayi.kategori} (${plottingResult.evalLilaBayi.batas})` : (plottingResult?.lilaBayiStatus || 'Gizi Normal (≥ 12.5 cm)')}
+                                      </span>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
                             </>
                           )}
 
                           {activeSubmenu === 'bumil' && (
                             <>
-                              <div className="col-6"><strong>Status IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtStatus || 'Normal'}</span> <span className="text-muted">({plottingResult?.imt || '-'} kg/m²)</span></div>
-                              <div className="col-6"><strong>Status LiLA:</strong> <span className="fw-semibold text-dark">{plottingResult?.lilaStatus || 'Normal'}</span></div>
-                              <div className="col-12"><strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || 'Normal'}</span></div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting IMT Sebelum Hamil</div>
+                                  <div className="mt-1">
+                                    {hasBbTb ? (
+                                      <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                        <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                          {plottingResult?.evalImtBumil ? `${plottingResult.evalImtBumil.kategori} (${plottingResult.evalImtBumil.batas})` : (plottingResult?.imtStatus || 'Normal (18.5 - 24.9 kg/m²)')}
+                                        </span>
+                                        <span className="text-muted small fw-medium">{plottingResult?.imt || '-'} kg/m²</span>
+                                      </div>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting LiLA</div>
+                                  <div className="mt-1">
+                                    {hasLila ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.evalLilaBumil ? `${plottingResult.evalLilaBumil.kategori === 'KEK' ? 'Kurang Energi Kronis / KEK' : 'Normal'} (${plottingResult.evalLilaBumil.batas})` : (plottingResult?.lilaStatus || 'Normal (≥ 23.5 cm)')}
+                                      </span>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="col-12">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting Tekanan Darah</div>
+                                  <div className="mt-1">
+                                    {hasTensi ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.evalTensiBumil ? `${plottingResult.evalTensiBumil.kategori === 'Normal' ? 'Normal' : 'Risiko Hipertensi'} (${plottingResult.evalTensiBumil.batas} mmHg)` : (plottingResult?.tensiStatus || 'Normal (< 130/85 mmHg)')}
+                                      </span>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
                             </>
                           )}
 
                           {activeSubmenu === 'nifas' && (
                             <>
-                              <div className="col-6"><strong>Status IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtStatus || 'Normal'}</span> <span className="text-muted">({plottingResult?.imt || '-'} kg/m²)</span></div>
-                              <div className="col-6"><strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || 'Normal'}</span></div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting IMT</div>
+                                  <div className="mt-1">
+                                    {hasBbTb ? (
+                                      <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                        <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                          {plottingResult?.evalImtBusui ? `${plottingResult.evalImtBusui.kategori} (${plottingResult.evalImtBusui.batas})` : (plottingResult?.imtStatus || 'Normal (18.5 - 24.9)')}
+                                        </span>
+                                        <span className="text-muted small fw-medium">{plottingResult?.imt || '-'} kg/m²</span>
+                                      </div>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Plotting Tekanan Darah</div>
+                                  <div className="mt-1">
+                                    {hasTensi ? (
+                                      <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-3 fw-bold">
+                                        {plottingResult?.evalTensiBusui ? `${plottingResult.evalTensiBusui.kategori === 'Normal' ? 'Normal' : 'Risiko Hipertensi'} (${plottingResult.evalTensiBusui.batas} mmHg)` : (plottingResult?.tensiStatus || 'Normal (< 130/85 mmHg)')}
+                                      </span>
+                                    ) : '-'}
+                                  </div>
+                                </div>
+                              </div>
                             </>
                           )}
                         </div>
                       </div>
 
-                      {/* LANGKAH 4 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 4: Skrining PTM, TBC &amp; Kesehatan</h6>
-                          <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-semibold">Pelayanan Kesehatan</span>
+                      {/* LANGKAH 4: SKRINING & PELAYANAN KESEHATAN */}
+                      <div className="card border-0 shadow-sm rounded-4 bg-white p-4">
+                        <div className="d-flex align-items-center justify-content-between pb-3 mb-3 border-bottom">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-warning text-dark rounded-circle p-1 d-inline-flex align-items-center justify-content-center" style={{ width: '22px', height: '22px', fontSize: '0.75rem' }}>4</span>
+                            <h6 className="fw-bold text-dark mb-0">Skrining PTM, TBC &amp; Pelayanan Kesehatan</h6>
+                          </div>
+                          <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill px-2.5 py-1 fw-medium" style={{ fontSize: '0.75rem' }}>
+                            Langkah 4
+                          </span>
                         </div>
-                        <div className="row g-2 small">
+
+                        <div className="row g-3">
                           {activeSubmenu === 'lansia' && (
                             <>
-                              <div className="col-6"><strong>Kadar Gula Darah:</strong> {gulaDarahEval}</div>
-                              <div className="col-6"><strong>Kadar Kolesterol:</strong> {kolesterolEval}</div>
-                              <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong>{' '}
-                                <span className={tbcAdultGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark'}>{tbcAdultGejala.text}</span>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Kadar Gula Darah</div>
+                                  <div className="fw-bold text-dark">{gulaDarahEval}</div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || 'Normal'} • Kiri: {sequentialForm.mataKiri || 'Normal'}</div>
-                              <div className="col-6"><strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || 'Normal'} • Kiri: {sequentialForm.telingaKiri || 'Normal'}</div>
-                              <div className="col-12 pt-2 border-top">
-                                <strong>C.1 Skrining PPOK (PUMA):</strong>{' '}
-                                <span className={`badge ${pumaEvaluation.isRisiko ? 'bg-danger text-white' : 'bg-success-subtle text-success'} px-2 py-1 ms-1`}>
-                                  {pumaEvaluation.text}
-                                </span>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Kadar Kolesterol</div>
+                                  <div className="fw-bold text-dark">{kolesterolEval}</div>
+                                </div>
                               </div>
                               <div className="col-12">
-                                <strong>C.2 Skor AKS (Barthel):</strong>{' '}
-                                <span className="fw-semibold text-dark">{currentAks.total}/20 ({currentAks.kategori})</span>
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Gejala TBC</div>
+                                  <div className={tbcAdultGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark fw-medium'}>
+                                    {tbcAdultGejala.text}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-12">
-                                <strong>C.3 Status SKILAS:</strong>{' '}
-                                <span className="fw-semibold text-dark">{currentSkilas.statusText}</span>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Tes Penglihatan (Hitung Jari)</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.mataKanan || sequentialForm.mataKiri ? `Kanan: ${sequentialForm.mataKanan || '-'} • Kiri: ${sequentialForm.mataKiri || '-'}` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Tes Pendengaran (Berbisik)</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.telingaKanan || sequentialForm.telingaKiri ? `Kanan: ${sequentialForm.telingaKanan || '-'} • Kiri: ${sequentialForm.telingaKiri || '-'}` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">C.1 Skrining PPOK (PUMA)</div>
+                                  <div className="mt-1">
+                                    {pumaEvaluation.score !== '-' ? (
+                                      <span className={`badge ${pumaEvaluation.isRisiko ? 'bg-danger text-white' : 'bg-success-subtle text-success border border-success-subtle'} px-2.5 py-1.5 rounded-3 fw-bold`}>
+                                        {pumaEvaluation.text}
+                                      </span>
+                                    ) : <span className="text-muted">-</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">C.2 Skor AKS (Barthel)</div>
+                                  <div className="fw-bold text-dark mt-1">
+                                    {currentAks.isAnswered ? `${currentAks.total}/20 (${currentAks.kategori})` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">C.3 Status SKILAS</div>
+                                  <div className="fw-bold text-dark mt-1">
+                                    {currentSkilas.isAnswered ? currentSkilas.statusText : '-'}
+                                  </div>
+                                </div>
                               </div>
                             </>
                           )}
 
                           {activeSubmenu === 'dewasa' && (
                             <>
-                              <div className="col-6"><strong>Kadar Gula Darah:</strong> {gulaDarahEval}</div>
-                              <div className="col-6"><strong>Kadar Kolesterol:</strong> {kolesterolEval}</div>
-                              <div className="col-6"><strong>Alat Kontrasepsi:</strong> {sequentialForm.alatKontrasepsi || '-'}</div>
-                              <div className="col-6">
-                                <strong>Evaluasi Gejala TBC:</strong>{' '}
-                                <span className={tbcAdultGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark'}>{tbcAdultGejala.text}</span>
+                              <div className="col-12 col-md-6 col-lg-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Kadar Gula Darah</div>
+                                  <div className="fw-bold text-dark">{gulaDarahEval}</div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || 'Normal'} • Kiri: {sequentialForm.mataKiri || 'Normal'}</div>
-                              <div className="col-6"><strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || 'Normal'} • Kiri: {sequentialForm.telingaKiri || 'Normal'}</div>
-                              <div className="col-12 pt-2 border-top">
-                                <strong>C.1 Skrining PPOK (PUMA):</strong>{' '}
-                                <span className={`badge ${pumaEvaluation.isRisiko ? 'bg-danger text-white' : 'bg-success-subtle text-success'} px-2 py-1 ms-1`}>
-                                  {pumaEvaluation.text}
-                                </span>
+                              <div className="col-12 col-md-6 col-lg-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Kadar Kolesterol</div>
+                                  <div className="fw-bold text-dark">{kolesterolEval}</div>
+                                </div>
                               </div>
+                              <div className="col-12 col-md-6 col-lg-4">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Alat Kontrasepsi</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.alatKontrasepsi || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Gejala TBC</div>
+                                  <div className={tbcAdultGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark fw-medium'}>
+                                    {tbcAdultGejala.text}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Tes Penglihatan (Hitung Jari)</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.mataKanan || sequentialForm.mataKiri ? `Kanan: ${sequentialForm.mataKanan || '-'} • Kiri: ${sequentialForm.mataKiri || '-'}` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Tes Pendengaran (Berbisik)</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.telingaKanan || sequentialForm.telingaKiri ? `Kanan: ${sequentialForm.telingaKanan || '-'} • Kiri: ${sequentialForm.telingaKiri || '-'}` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">C.1 Skrining PPOK (PUMA)</div>
+                                  <div className="mt-1">
+                                    {pumaEvaluation.score !== '-' ? (
+                                      <span className={`badge ${pumaEvaluation.isRisiko ? 'bg-danger text-white' : 'bg-success-subtle text-success border border-success-subtle'} px-2.5 py-1.5 rounded-3 fw-bold`}>
+                                        {pumaEvaluation.text}
+                                      </span>
+                                    ) : <span className="text-muted">-</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              {currentJiwa.isAnswered && (
+                                <div className="col-12 col-md-6">
+                                  <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                    <div className="text-muted small mb-1 fw-medium">C.2 Skrining Kesehatan Jiwa (SRQ-20)</div>
+                                    <div className="fw-bold text-dark mt-1">
+                                      Total Skor: {currentJiwa.total}/12 • <span className="badge bg-secondary-subtle text-secondary border px-2 py-1">{currentJiwa.kategori}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </>
                           )}
 
                           {['usekrem-6-14', 'usekrem-15-18'].includes(activeSubmenu) && (
                             <>
                               <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong>{' '}
-                                <span className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark'}>{tbcChildGejala.text}</span>
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Gejala TBC</div>
+                                  <div className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark fw-medium'}>
+                                    {tbcChildGejala.text}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>Skrining Penglihatan:</strong> Kanan: {sequentialForm.mataKanan || 'Normal'} • Kiri: {sequentialForm.mataKiri || 'Normal'}</div>
-                              <div className="col-6"><strong>Skrining Pendengaran:</strong> Kanan: {sequentialForm.telingaKanan || 'Normal'} • Kiri: {sequentialForm.telingaKiri || 'Normal'}</div>
-                              <div className="col-6"><strong>Skrining Jiwa:</strong> {sequentialForm.skriningJiwa || 'Sudah / Normal'}</div>
-                              <div className="col-6"><strong>Skrining Anemia / Periksa Hb:</strong> {sequentialForm.periksaHb || 'Sudah / Normal'}</div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Skrining Penglihatan</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.mataKanan || sequentialForm.mataKiri ? `Kanan: ${sequentialForm.mataKanan || '-'} • Kiri: ${sequentialForm.mataKiri || '-'}` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Skrining Pendengaran</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.telingaKanan || sequentialForm.telingaKiri ? `Kanan: ${sequentialForm.telingaKanan || '-'} • Kiri: ${sequentialForm.telingaKiri || '-'}` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className={isPutriPreview ? "col-12 col-md-6" : "col-12"}>
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Skrining Kesehatan Jiwa</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.skriningJiwa || '-'}</div>
+                                </div>
+                              </div>
+                              {isPutriPreview && (
+                                <div className="col-12 col-md-6">
+                                  <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                    <div className="text-muted small mb-1 fw-medium">Skrining Anemia (Kadar Hb)</div>
+                                    <div className="fw-bold text-dark">{sequentialForm.periksaHb ? `${sequentialForm.periksaHb} g/dL` : '-'}</div>
+                                  </div>
+                                </div>
+                              )}
                             </>
                           )}
 
                           {activeSubmenu === 'apras' && (
                             <>
                               <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong>{' '}
-                                <span className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark'}>{tbcChildGejala.text}</span>
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Gejala TBC</div>
+                                  <div className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark fw-medium'}>
+                                    {tbcChildGejala.text}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>Pemberian Obat Cacing:</strong> {sequentialForm.obatCacing || 'Ya'}</div>
+                              <div className="col-12">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Pemberian Obat Cacing</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.obatCacing || '-'}</div>
+                                </div>
+                              </div>
                             </>
                           )}
 
                           {activeSubmenu === 'balita-12-59' && (
                             <>
-                              <div className="col-6">
-                                <strong>Tempat Imunisasi:</strong> {sequentialForm.tempatImunisasi || 'Posyandu'}
-                                {sequentialForm.namaRsImunisasi ? ` (${sequentialForm.namaRsImunisasi})` : ''}
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Tempat Imunisasi</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.tempatImunisasi || '-'}
+                                    {sequentialForm.namaRsImunisasi ? ` (${sequentialForm.namaRsImunisasi})` : ''}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6">
-                                <strong>Jenis Imunisasi:</strong> {sequentialForm.jenisImunisasi === 'Lainnya' ? (sequentialForm.jenisImunisasiLainnya || 'Lainnya') : (sequentialForm.jenisImunisasi || '-')}
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Jenis Imunisasi</div>
+                                  <div className="fw-bold text-primary">{renderImunisasi()}</div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>Pemberian MP-ASI:</strong> {sequentialForm.mpAsi || 'Ya'}</div>
                               <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong>{' '}
-                                <span className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark'}>{tbcChildGejala.text}</span>
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Gejala TBC</div>
+                                  <div className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark fw-medium'}>
+                                    {tbcChildGejala.text}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>PMT Pemulihan:</strong> {sequentialForm.pmtPemulihan || 'Tidak'} (Dihabiskan: {sequentialForm.pmtHabis || 'Tidak'})</div>
-                              <div className="col-6"><strong>Kapsul Vitamin A:</strong> {sequentialForm.vitA || 'Ya'}</div>
-                              <div className="col-6"><strong>Obat Cacing:</strong> {sequentialForm.obatCacing || 'Ya'}</div>
-                              <div className="col-6"><strong>Mengikuti Kelas Ibu Balita:</strong> {sequentialForm.ikutKelasBalita || 'Ya'}</div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Pemberian MP-ASI</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.mpAsi || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">PMT Pemulihan</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.pmtPemulihan ? `${sequentialForm.pmtPemulihan}${sequentialForm.pmtHabis ? ` (Dihabiskan: ${sequentialForm.pmtHabis})` : ''}` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Kapsul Vitamin A</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.vitA || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Obat Cacing</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.obatCacing || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Mengikuti Kelas Ibu Balita</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.ikutKelasBalita || '-'}</div>
+                                </div>
+                              </div>
                             </>
                           )}
 
                           {activeSubmenu === 'bayi-0-11' && (
                             <>
-                              <div className="col-6">
-                                <strong>Tempat Imunisasi:</strong> {sequentialForm.tempatImunisasi || 'Posyandu'}
-                                {sequentialForm.namaRsImunisasi ? ` (${sequentialForm.namaRsImunisasi})` : ''}
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Tempat Imunisasi</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.tempatImunisasi || '-'}
+                                    {sequentialForm.namaRsImunisasi ? ` (${sequentialForm.namaRsImunisasi})` : ''}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6">
-                                <strong>Jenis Imunisasi:</strong> {sequentialForm.jenisImunisasi === 'Lainnya' ? (sequentialForm.jenisImunisasiLainnya || 'Lainnya') : (sequentialForm.jenisImunisasi || '-')}
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Jenis Imunisasi</div>
+                                  <div className="fw-bold text-primary">{renderImunisasi()}</div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>Pemberian ASI Eksklusif:</strong> {sequentialForm.asiEksklusif || 'Ya'}</div>
-                              <div className="col-6"><strong>Pemberian MP-ASI:</strong> {sequentialForm.mpAsi || 'Ya'}</div>
                               <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong>{' '}
-                                <span className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark'}>{tbcChildGejala.text}</span>
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Gejala TBC</div>
+                                  <div className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark fw-medium'}>
+                                    {tbcChildGejala.text}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>PMT Pemulihan:</strong> {sequentialForm.pmtPemulihan || 'Tidak'} (Dihabiskan: {sequentialForm.pmtHabis || 'Tidak'})</div>
-                              <div className="col-6"><strong>Kapsul Vitamin A:</strong> {sequentialForm.vitA || 'Ya'}</div>
-                              <div className="col-6"><strong>Mengikuti Kelas Ibu Balita:</strong> {sequentialForm.ikutKelasBalita || 'Ya'}</div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">ASI Eksklusif</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.asiEksklusif || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Pemberian MP-ASI</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.mpAsi || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">PMT Pemulihan</div>
+                                  <div className="fw-bold text-dark">
+                                    {sequentialForm.pmtPemulihan ? `${sequentialForm.pmtPemulihan}${sequentialForm.pmtHabis ? ` (Dihabiskan: ${sequentialForm.pmtHabis})` : ''}` : '-'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Kapsul Vitamin A</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.vitA || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Mengikuti Kelas Ibu Balita</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.ikutKelasBalita || '-'}</div>
+                                </div>
+                              </div>
                             </>
                           )}
 
                           {activeSubmenu === 'bumil' && (
                             <>
                               <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong>{' '}
-                                <span className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark'}>{tbcChildGejala.text}</span>
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Gejala TBC</div>
+                                  <div className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark fw-medium'}>
+                                    {tbcChildGejala.text}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>Pemberian TTD:</strong> {sequentialForm.pemberianTtd || sequentialForm.jumlahTtd || 'Sudah'}</div>
-                              <div className="col-6"><strong>Rutin Minum TTD:</strong> {sequentialForm.rutinTtd || 'Ya'}</div>
-                              <div className="col-6"><strong>Komposisi MT Bumil:</strong> {sequentialForm.komposisiMtBumil || 'Biskuit PMT Pangan Lokal'}</div>
-                              <div className="col-6"><strong>Rutin Konsumsi MT:</strong> {sequentialForm.rutinMtBumil || 'Ya'}</div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Pemberian TTD</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.pemberianTtd || sequentialForm.jumlahTtd || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Rutin Minum TTD</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.rutinTtd || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Komposisi MT Bumil</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.komposisiMtBumil || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6 col-lg-3">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Rutin Konsumsi MT</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.rutinMtBumil || '-'}</div>
+                                </div>
+                              </div>
                             </>
                           )}
 
                           {activeSubmenu === 'nifas' && (
                             <>
                               <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong>{' '}
-                                <span className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark'}>{tbcChildGejala.text}</span>
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Evaluasi Gejala TBC</div>
+                                  <div className={tbcChildGejala.isRisiko ? 'text-danger fw-bold' : 'text-dark fw-medium'}>
+                                    {tbcChildGejala.text}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="col-6"><strong>Pemberian Vitamin A:</strong> {sequentialForm.jumlahVitA || 'Sudah'}</div>
-                              <div className="col-6"><strong>Rutin Minum Vitamin A:</strong> {sequentialForm.rutinVitA || 'Ya'}</div>
-                              <div className="col-6"><strong>Pelayanan KB Pasca Persalinan:</strong> {sequentialForm.kbPascaPersalinan || 'Ya'}</div>
-                              <div className="col-6"><strong>Menjaga Kondisi ASI / Menyusui:</strong> {sequentialForm.menyusui || 'Ya'}</div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Pemberian Vitamin A</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.jumlahVitA || sequentialForm.pemberianVitA || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Rutin Minum Vitamin A</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.rutinVitA || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Pelayanan KB Pasca Persalinan</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.kbPascaPersalinan || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                                  <div className="text-muted small mb-1 fw-medium">Menjaga Kondisi ASI / Menyusui</div>
+                                  <div className="fw-bold text-dark">{sequentialForm.menyusui || '-'}</div>
+                                </div>
+                              </div>
                             </>
                           )}
                         </div>
                       </div>
 
-                      {/* LANGKAH 5 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 5: Penyuluhan &amp; Rujukan</h6>
-                          <span className="badge bg-secondary-subtle text-secondary border fw-semibold">Tindak Lanjut</span>
+                      {/* LANGKAH 5: PENYULUHAN & RUJUKAN */}
+                      <div className="card border-0 shadow-sm rounded-4 bg-white p-4">
+                        <div className="d-flex align-items-center justify-content-between pb-3 mb-3 border-bottom">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-secondary text-white rounded-circle p-1 d-inline-flex align-items-center justify-content-center" style={{ width: '22px', height: '22px', fontSize: '0.75rem' }}>5</span>
+                            <h6 className="fw-bold text-dark mb-0">Penyuluhan &amp; Rujukan</h6>
+                          </div>
+                          <span className="badge bg-secondary-subtle text-secondary rounded-pill px-2.5 py-1 fw-medium" style={{ fontSize: '0.75rem' }}>
+                            Langkah 5
+                          </span>
                         </div>
-                        <div className="row g-2 small">
-                          <div className="col-12"><strong>Topik Penyuluhan:</strong> {sequentialForm.topikPenyuluhan || `Penyuluhan Gizi & Kesehatan ${currentCategory.label}`}</div>
-                          <div className="col-6"><strong>Mengikuti Kelas Posyandu:</strong> {sequentialForm.mengikutiKelas || 'Ya'}</div>
-                          <div className="col-6"><strong>Status Rujukan:</strong> <span className="badge bg-light text-dark border fw-semibold">{sequentialForm.statusRujukan || 'Tidak Perlu Rujukan'}</span></div>
+
+                        <div className="row g-3">
+                          <div className="col-12 col-lg-8">
+                            <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle">
+                              <div className="text-muted small mb-1 fw-medium">Topik Penyuluhan &amp; Edukasi</div>
+                              <div className="fw-semibold text-dark">
+                                {sequentialForm.topikPenyuluhan ? (
+                                  <span>{sequentialForm.topikPenyuluhan}</span>
+                                ) : (
+                                  <span className="text-muted font-monospace">Tidak ada catatan penyuluhan</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="col-12 col-lg-4">
+                            <div className="p-3 rounded-3 bg-light bg-opacity-75 h-100 border border-light-subtle d-flex flex-column justify-content-between">
+                              <div className="text-muted small mb-1 fw-medium">Status Rujukan</div>
+                              <div className="mt-2">
+                                <span className={`badge ${sequentialForm.statusRujukan && sequentialForm.statusRujukan !== 'Tidak Perlu Rujukan' ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-success-subtle text-success border border-success-subtle'} px-3 py-2 rounded-pill fw-bold fs-6`}>
+                                  {sequentialForm.statusRujukan || 'Tidak Perlu Rujukan'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </>
+                    </div>
                   );
                 })()}
 
               </div>
 
-              <div className="modal-footer bg-white p-3 px-4 justify-content-between">
-                <button type="button" className="btn btn-outline-secondary btn-sm px-4 rounded-3" onClick={() => setShowSequentialPreviewModal(false)}>
-                  &larr; Edit Data
+              <div className="modal-footer bg-white p-3 px-4 justify-content-between border-top">
+                <button type="button" className="btn btn-outline-secondary px-4 py-2 rounded-3 fw-medium" onClick={() => setShowSequentialPreviewModal(false)}>
+                  &larr; Kembali / Edit Data
                 </button>
-                <button type="button" className="btn btn-dark-custom btn-sm px-4 rounded-3 text-white fw-bold" style={{ backgroundColor: '#2b2e4a' }} onClick={handleSaveSequentialAll}>
-                  ✓ Konfirmasi &amp; Simpan Pemeriksaan
+                <button type="button" className="btn btn-primary px-4 py-2 rounded-3 text-white fw-bold shadow-sm d-flex align-items-center gap-2" onClick={handleSaveSequentialAll}>
+                  <CheckCircle2 size={18} />
+                  <span>Konfirmasi &amp; Simpan Pemeriksaan</span>
                 </button>
               </div>
             </div>

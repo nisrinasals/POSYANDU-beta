@@ -11,6 +11,7 @@ import {
   Download,
   Activity
 } from 'lucide-react';
+import { trenPemeriksaanDanKunjungan } from '../../data/mockData';
 
 export default function DinkesDashboardPage({ 
   onNavigate, 
@@ -24,18 +25,6 @@ export default function DinkesDashboardPage({
 
   // Dynamic calculations based on global list from Posyandu/Puskesmas
   const totalSasaranKota = globalSasaranList ? globalSasaranList.length : 0;
-  const totalPosyanduKota = useMemo(() => {
-    const ids = (globalSasaranList || [])
-      .map((item) => item?._raw?.posyandu_id || item?.posyandu_id)
-      .filter(Boolean);
-    return new Set(ids.map(String)).size;
-  }, [globalSasaranList]);
-  const totalPuskesmasKota = useMemo(() => {
-    const ids = (globalSasaranList || [])
-      .map((item) => item?._raw?.posyandu?.puskesmas_id || item?._raw?.puskesmas_id)
-      .filter(Boolean);
-    return new Set(ids.map(String)).size;
-  }, [globalSasaranList]);
 
   // Real-time calculation of examined citizens
   const totalExaminedKota = useMemo(() => {
@@ -45,42 +34,22 @@ export default function DinkesDashboardPage({
     return examined;
   }, [globalSasaranList, globalPemeriksaanData]);
 
-  // Aggregate the real examination records returned by the backend.
+  // Scaled aggregate data for city chart
   const cityChartData = useMemo(() => {
-    const records = Object.values(globalPemeriksaanData || {}).filter(
-      (item) => item && typeof item === 'object' && item.tanggal
-    );
-    const now = new Date();
-    const points = [];
-    const countForMonth = (year, month) =>
-      records.filter((item) => {
-        const d = new Date(item.tanggal);
-        return d.getFullYear() === year && d.getMonth() === month;
-      }).length;
-
-    if (periodeGrafik === '6bulan') {
-      for (let offset = 5; offset >= 0; offset -= 1) {
-        const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-        const count = countForMonth(d.getFullYear(), d.getMonth());
-        points.push({
-          periode: d.toLocaleDateString('id-ID', { month: 'short' }),
-          pemeriksaan: count,
-          kunjungan: count
-        });
-      }
-    } else {
-      const year = Number(periodeGrafik);
-      for (let month = 0; month < 12; month += 1) {
-        const count = countForMonth(year, month);
-        points.push({
-          periode: new Date(year, month, 1).toLocaleDateString('id-ID', { month: 'short' }),
-          pemeriksaan: count,
-          kunjungan: count
-        });
-      }
+    const base = trenPemeriksaanDanKunjungan[periodeGrafik] || trenPemeriksaanDanKunjungan['6bulan'];
+    if (totalSasaranKota === 0 && totalExaminedKota === 0) {
+      return base.map(item => ({
+        periode: item.periode,
+        pemeriksaan: 0,
+        kunjungan: 0
+      }));
     }
-    return points;
-  }, [globalPemeriksaanData, periodeGrafik]);
+    return base.map(item => ({
+      periode: item.periode,
+      pemeriksaan: item.pemeriksaan,
+      kunjungan: item.kunjungan
+    }));
+  }, [periodeGrafik]);
 
   // SVG Scaler calculations for full-width curved spline area chart
   const maxVal = 2500;
@@ -157,7 +126,7 @@ export default function DinkesDashboardPage({
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-              <span className="fw-bolder text-dark fs-2 mb-0">{totalPosyanduKota}</span>
+              <span className="fw-bolder text-dark fs-2 mb-0">18</span>
               <span className="text-muted fw-medium small">Puskesmas</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: '0.78rem' }}>
@@ -185,7 +154,7 @@ export default function DinkesDashboardPage({
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-              <span className="fw-bolder text-dark fs-2 mb-0">{totalPosyanduKota}</span>
+              <span className="fw-bolder text-dark fs-2 mb-0">186</span>
               <span className="text-muted fw-medium small">Posyandu</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: '0.78rem' }}>

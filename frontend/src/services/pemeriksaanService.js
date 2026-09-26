@@ -47,7 +47,12 @@ export const pemeriksaanService = {
     return await api.post('/pemeriksaan/step-5', data);
   },
 
-  // 10. Ekspor Rekap Pemeriksaan ke Excel
+  // 10. Ambil riwayat skrining tahunan warga
+  getScreeningHistory: async (id) => {
+    return await api.get(`/pemeriksaan/${id}/screening-history`);
+  },
+
+  // 11. Ekspor Rekap Pemeriksaan ke Excel
   exportPemeriksaanExcel: async (params = {}) => {
     return await api.get('/pemeriksaan/export', {
       params,

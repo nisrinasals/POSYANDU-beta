@@ -10,6 +10,7 @@ import {
   X 
 } from 'lucide-react';
 import DetailSasaranModal from '../../components/sasaran/DetailSasaranModal';
+import { formatIndoDate } from '../../utils/dataMappers';
 
 export default function DinkesDataSasaranPage({ 
   globalSasaranList = [], 
@@ -226,7 +227,7 @@ export default function DinkesDataSasaranPage({
                       <div className="text-muted font-monospace" style={{ fontSize: '0.78rem' }}>{item.nik || '-'}</div>
                     </td>
                     <td className="text-center text-secondary fw-medium text-nowrap">
-                      {item.tglLahir || item.tanggalLahir || '-'}
+                      {formatIndoDate(item.tglLahir || item.tanggalLahir)}
                     </td>
                     <td>
                       <div className="fw-semibold text-dark mb-0">{item.kategori}</div>
@@ -260,7 +261,7 @@ export default function DinkesDataSasaranPage({
         {/* Pagination Footer */}
         <div className="d-flex flex-column flex-sm-row align-items-center justify-content-between pt-3 border-top mt-3 text-muted small gap-3">
           <div>
-            Menampilkan <span className="fw-semibold text-dark">{paginatedData.length}</span> dari <span className="fw-semibold text-dark">{filteredData.length}</span> sasaran
+            Menampilkan <span className="fw-semibold text-dark">{filteredData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}</span> s/d <span className="fw-semibold text-dark">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> dari <span className="fw-semibold text-dark">{filteredData.length}</span> sasaran
           </div>
 
           <div className="d-flex align-items-center gap-1">

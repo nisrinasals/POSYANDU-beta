@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, ChevronDown, Check, X, MapPin } from 'lucide-react';
-import { posyanduService } from '../../services';
 import { daftarPosyandu2026 } from '../../data/mockData';
 
 export default function SearchablePosyanduSelect({
@@ -17,8 +16,6 @@ export default function SearchablePosyanduSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [posyanduList, setPosyanduList] = useState([]);
-  const [loading, setLoading] = useState(false);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const listRef = useRef(null);
@@ -42,48 +39,13 @@ export default function SearchablePosyanduSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [value]);
 
-  // Load Posyandu from the backend once. Search is then performed client-side
-  // against the scoped result returned by the API.
-  useEffect(() => {
-    let cancelled = false;
-    const loadPosyandu = async () => {
-      setLoading(true);
-      if (!localStorage.getItem('token')) {
-        setPosyanduList(daftarPosyandu2026);
-        setLoading(false);
-        return;
-      }
-      try {
-        const res = await posyanduService.getPosyanduList({ page: 1, limit: 1000 });
-        const rows = Array.isArray(res?.data) ? res.data : [];
-        const sourceRows = rows.length ? rows : daftarPosyandu2026;
-        if (!cancelled) {
-          setPosyanduList(sourceRows.map((item) => ({
-            ...item,
-            nama: item.nama_posyandu || item.nama,
-            kelurahan: item.kelurahan?.nama_kelurahan || item.kelurahan || '',
-            kecamatan: item.kelurahan?.kecamatan?.nama_kecamatan || item.kecamatan || '',
-            puskesmas: item.puskesmas?.nama_puskesmas || item.puskesmas || ''
-          })));
-        }
-      } catch (error) {
-        if (!cancelled) setPosyanduList(daftarPosyandu2026);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    loadPosyandu();
-    return () => { cancelled = true; };
-  }, []);
-
   // Filtered posyandu list based on search term
   const filteredList = useMemo(() => {
-    const source = posyanduList;
     if (!searchTerm || !searchTerm.trim()) {
-      return source.slice(0, 40);
+      return daftarPosyandu2026.slice(0, 40); // Show first 40 when blank
     }
     const term = searchTerm.toLowerCase().trim();
-    return source.filter((item) => {
+    return daftarPosyandu2026.filter((item) => {
       const matchNama = (item.nama || '').toLowerCase().includes(term);
       const matchKel = (item.kelurahan || '').toLowerCase().includes(term);
       const matchKec = (item.kecamatan || '').toLowerCase().includes(term);
@@ -244,7 +206,7 @@ export default function SearchablePosyanduSelect({
             <span>
               {searchTerm 
                 ? `Hasil pencarian "${searchTerm}" (${filteredList.length})` 
-                : `Menampilkan ${filteredList.length} Posyandu`}
+                : `Menampilkan ${filteredList.length} dari ${daftarPosyandu2026.length} Posyandu`}
             </span>
             <span>Ketik untuk menyaring</span>
           </div>
@@ -255,9 +217,7 @@ export default function SearchablePosyanduSelect({
             className="overflow-y-auto" 
             style={{ maxHeight: '235px' }}
           >
-            {loading ? (
-              <div className="text-center py-4 text-muted small">Memuat data Posyandu...</div>
-            ) : filteredList.length > 0 ? (
+            {filteredList.length > 0 ? (
               filteredList.map((item, index) => {
                 const isSelected = item.nama === value;
                 const isHighlighted = index === highlightedIndex;

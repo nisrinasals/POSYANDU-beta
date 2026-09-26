@@ -4,8 +4,11 @@ import {
   Activity, 
   Baby, 
   ShieldCheck, 
-  HeartPulse
+  HeartPulse,
+  Calendar,
+  Clock
 } from 'lucide-react';
+import { formatIndoDate, formatUsiaByCategory } from '../../utils/dataMappers';
 
 export default function DetailSasaranModal({
   show = true,
@@ -31,20 +34,28 @@ export default function DetailSasaranModal({
   const primaryColor = themeColor || (isDinkes ? '#1e3a8a' : isPuskesmas ? '#428A75' : '#2b2e4a');
   const accentColor = isDinkes ? '#1e3a8a' : isPuskesmas ? '#428A75' : '#F25B8E';
 
-  const kategori = (target.kategori || 'Sasaran').trim();
+  const kategori = (target.kategori || target.kategori_sasaran || 'Sasaran').trim();
   const katLower = kategori.toLowerCase();
-  const isStatusActive = (target.status || 'Aktif').toLowerCase() === 'aktif';
+  const subKat = (target.subKategori || target.kategori_sasaran_saat_ini || katLower).trim();
+  const isStatusActive = (target.status || target.status_domisili || 'Aktif').toLowerCase() === 'aktif';
 
   // Helper boolean flags matching form tambah sasaran categories
   const isBumil = katLower.includes('bumil') || katLower.includes('hamil');
-  const isNifas = katLower.includes('nifas') || katLower.includes('menyusui');
+  const isNifas = katLower.includes('nifas') || katLower.includes('menyusui') || katLower.includes('busui');
   const isBayiBalita = katLower.includes('bayi') || katLower.includes('balita') || katLower.includes('apras') || katLower.includes('anak');
-  const isUsekremChild = katLower.includes('usekrem') && katLower.includes('6-14');
+  const isUsekremChild = katLower.includes('usekrem') && (katLower.includes('6-14') || katLower.includes('6–14'));
   const isDewasaLansia = katLower.includes('dewasa') || katLower.includes('lansia');
   const isRemaja = katLower.includes('remaja') || katLower.includes('usekrem');
 
-  // Apakah sasaran adalah anak (tidak memiliki data status pernikahan & pekerjaan di form)
+  // Apakah sasaran adalah anak
   const isChild = isBayiBalita || isUsekremChild;
+
+  // Tanggal lahir & Usia tersinkronisasi
+  const rawBirthDate = target.tglLahir || target.tanggal_lahir || '';
+  const formattedTglLahir = formatIndoDate(rawBirthDate);
+  const formattedUsia = rawBirthDate ? formatUsiaByCategory(rawBirthDate, subKat || katLower) : (target.usia || '-');
+
+  const genderStr = target.gender || (target.jenis_kelamin === 'L' ? 'Laki-laki' : (target.jenis_kelamin === 'P' ? 'Perempuan' : (isBumil || isNifas ? 'Perempuan' : 'Laki-laki')));
 
   return (
     <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }} tabIndex="-1">
@@ -57,15 +68,15 @@ export default function DetailSasaranModal({
             style={{ backgroundColor: primaryColor }}
           >
             <div>
-              <div className="d-flex align-items-center gap-2 mb-1">
+              <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
                 <span className="badge bg-white text-dark fw-bold px-2.5 py-1 rounded-pill" style={{ fontSize: '0.74rem' }}>
                   {kategori}
                 </span>
                 <span className="badge bg-white bg-opacity-25 text-white px-2.5 py-1 rounded-pill" style={{ fontSize: '0.74rem' }}>
-                  {target.gender || (isBumil || isNifas ? 'Perempuan' : 'Laki-laki')}
+                  {formattedUsia}
                 </span>
                 <span className={`badge px-2.5 py-1 rounded-pill ${isStatusActive ? 'bg-success text-white' : 'bg-danger text-white'}`} style={{ fontSize: '0.74rem' }}>
-                  {target.status || 'Aktif'}
+                  {target.status || (isStatusActive ? 'Aktif' : 'Non-Aktif')}
                 </span>
               </div>
               <h5 className="modal-title fw-bold text-white mb-0">Detail Data Sasaran</h5>
@@ -90,6 +101,7 @@ export default function DetailSasaranModal({
               </h6>
               
               <div className="row g-3">
+                {/* NIK */}
                 <div className="col-12 col-md-6">
                   <div className="p-3 bg-light rounded-3 h-100">
                     <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
@@ -101,48 +113,51 @@ export default function DetailSasaranModal({
                   </div>
                 </div>
 
+                {/* Nama Lengkap */}
                 <div className="col-12 col-md-6">
                   <div className="p-3 bg-light rounded-3 h-100">
                     <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                      Nama Lengkap Sasaran
+                      Nama Lengkap
                     </div>
                     <div className="fw-bold text-dark fs-6">
-                      {target.nama || '-'}
+                      {target.nama || target.nama_lengkap || '-'}
                     </div>
                   </div>
                 </div>
 
+                {/* Tanggal Lahir (Format Tanggal-Bulan-Tahun) */}
                 <div className="col-12 col-md-6">
                   <div className="p-3 bg-light rounded-3 h-100">
                     <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
                       Tanggal Lahir
                     </div>
                     <div className="fw-bold text-dark">
-                      {target.tglLahir || '-'}
+                      {formattedTglLahir}
                     </div>
                   </div>
                 </div>
 
+                {/* Jenis Kelamin */}
                 <div className="col-12 col-md-6">
                   <div className="p-3 bg-light rounded-3 h-100">
                     <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
                       Jenis Kelamin
                     </div>
                     <div className="fw-bold text-dark">
-                      {target.gender || (isBumil || isNifas ? 'Perempuan' : '-')}
+                      {genderStr}
                     </div>
                   </div>
                 </div>
 
-                {/* Field Nama Ibu / Keluarga untuk anak / remaja (karena balita ada di section kelahiran, dan dewasa/lansia tidak memerlukan data ini) */}
+                {/* Field Nama Ibu / Ayah untuk anak / remaja */}
                 {!isBayiBalita && !isBumil && !isDewasaLansia && (
                   <div className="col-12 col-md-6">
                     <div className="p-3 bg-light rounded-3 h-100">
                       <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                        Nama Ibu Kandung / Keluarga
+                        {target.namaAyah && !target.namaIbu ? 'Nama Ayah' : 'Nama Ibu'}
                       </div>
                       <div className="fw-bold text-dark">
-                        {target.namaIbu || target.keteranganKeluarga || target.namaAyah || '-'}
+                        {target.namaIbu || target.nama_ibu || target.namaAyah || target.nama_ayah || target.keteranganKeluarga || '-'}
                       </div>
                     </div>
                   </div>
@@ -157,7 +172,7 @@ export default function DetailSasaranModal({
                           Status Pernikahan
                         </div>
                         <div className="fw-bold text-dark">
-                          {target.statusPernikahan || '-'}
+                          {target.statusPernikahan || target.status_pernikahan || '-'}
                         </div>
                       </div>
                     </div>
@@ -175,30 +190,33 @@ export default function DetailSasaranModal({
                   </>
                 )}
 
+                {/* Nomor Telepon / WA */}
                 <div className="col-12 col-md-6">
                   <div className="p-3 bg-light rounded-3 h-100">
                     <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
                       Nomor Telepon / WhatsApp
                     </div>
                     <div className="fw-bold text-dark">
-                      {target.noHp || '-'}
+                      {target.noHp || target.telepon || '-'}
                     </div>
                   </div>
                 </div>
 
-                {target.golDarah && (
+                {/* Golongan Darah */}
+                {(target.golDarah || target.golongan_darah) && (
                   <div className="col-12 col-md-6">
                     <div className="p-3 bg-light rounded-3 h-100">
                       <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
                         Golongan Darah
                       </div>
                       <div className="fw-bold text-dark">
-                        {target.golDarah}
+                        {target.golDarah || target.golongan_darah}
                       </div>
                     </div>
                   </div>
                 )}
 
+                {/* Alamat Domisili */}
                 <div className="col-12">
                   <div className="p-3 bg-light rounded-3 h-100">
                     <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
@@ -227,7 +245,9 @@ export default function DetailSasaranModal({
                       <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
                         HPHT (Hari Pertama Haid Terakhir)
                       </div>
-                      <div className="fw-bold text-dark">{target.hpht || target.ibuHamilDetail?.obstetri?.hpht || '-'}</div>
+                      <div className="fw-bold text-dark">
+                        {formatIndoDate(target.hpht || target.ibuHamilDetail?.obstetri?.hpht)}
+                      </div>
                     </div>
                   </div>
                   <div className="col-12 col-md-6">
@@ -235,7 +255,9 @@ export default function DetailSasaranModal({
                       <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
                         Taksiran Persalinan (HPL)
                       </div>
-                      <div className="fw-bold text-dark">{target.hpl || target.ibuHamilDetail?.obstetri?.taksiranPersalinan || '-'}</div>
+                      <div className="fw-bold text-dark">
+                        {formatIndoDate(target.hpl || target.ibuHamilDetail?.obstetri?.taksiranPersalinan)}
+                      </div>
                     </div>
                   </div>
                   <div className="col-12 col-md-6">
@@ -261,9 +283,9 @@ export default function DetailSasaranModal({
                   <div className="col-12 col-md-6">
                     <div className="p-3 bg-light rounded-3 h-100">
                       <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
-                        Nama Suami / Ayah
+                        Nama Suami
                       </div>
-                      <div className="fw-bold text-dark">{target.namaAyah || target.namaSuami || '-'}</div>
+                      <div className="fw-bold text-dark">{target.namaSuami || target.nama_suami || target.namaAyah || '-'}</div>
                     </div>
                   </div>
                   <div className="col-12 col-md-6">
@@ -296,7 +318,7 @@ export default function DetailSasaranModal({
               </div>
             )}
 
-            {/* --- IBU NIFAS & MENYUSUI (Nama Bayi Dihapus sesuai permintaan) --- */}
+            {/* --- IBU NIFAS & MENYUSUI --- */}
             {isNifas && (
               <div className="card border-0 shadow-sm rounded-4 p-4 mb-3 bg-white">
                 <h6 className="fw-bold text-dark mb-3 pb-2 border-bottom d-flex align-items-center gap-2">
@@ -309,7 +331,7 @@ export default function DetailSasaranModal({
                       <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
                         Status Menyusui
                       </div>
-                      <div className="fw-bold text-dark">{target.statusMenyusui || 'Masih Menyusui (ASI Eksklusif)'}</div>
+                      <div className="fw-bold text-dark">{target.statusMenyusui || target.status_menyusui || 'Masih Menyusui (ASI Eksklusif)'}</div>
                     </div>
                   </div>
                   <div className="col-12 col-md-6">
@@ -317,7 +339,9 @@ export default function DetailSasaranModal({
                       <div className="text-muted small mb-1.5" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
                         Tanggal Persalinan
                       </div>
-                      <div className="fw-bold text-dark">{target.tglPersalinan || '-'}</div>
+                      <div className="fw-bold text-dark">
+                        {formatIndoDate(target.tglPersalinan || target.tgl_persalinan)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -338,7 +362,7 @@ export default function DetailSasaranModal({
                         Berat Lahir (BBL)
                       </div>
                       <div className="fs-5 fw-bold text-dark">
-                        {target.bbl ? (String(target.bbl).includes('kg') ? target.bbl : `${target.bbl} kg`) : (target.bb ? `${target.bb} kg` : '-')}
+                        {target.bbl || target.berat_lahir ? (String(target.bbl || target.berat_lahir).includes('kg') ? (target.bbl || target.berat_lahir) : `${target.bbl || target.berat_lahir} kg`) : (target.bb ? `${target.bb} kg` : '-')}
                       </div>
                     </div>
                   </div>
@@ -349,7 +373,7 @@ export default function DetailSasaranModal({
                         Panjang Lahir (PBL)
                       </div>
                       <div className="fs-5 fw-bold text-dark">
-                        {target.pbl ? (String(target.pbl).includes('cm') ? target.pbl : `${target.pbl} cm`) : (target.tb ? `${target.tb} cm` : '-')}
+                        {target.pbl || target.panjang_lahir ? (String(target.pbl || target.panjang_lahir).includes('cm') ? (target.pbl || target.panjang_lahir) : `${target.pbl || target.panjang_lahir} cm`) : (target.tb ? `${target.tb} cm` : '-')}
                       </div>
                     </div>
                   </div>
@@ -360,7 +384,7 @@ export default function DetailSasaranModal({
                         Nama Ibu
                       </div>
                       <div className="fw-bold text-dark">
-                        {target.namaIbu || '-'}
+                        {target.namaIbu || target.nama_ibu || '-'}
                       </div>
                     </div>
                   </div>
@@ -371,7 +395,7 @@ export default function DetailSasaranModal({
                         Nama Ayah
                       </div>
                       <div className="fw-bold text-dark">
-                        {target.namaAyah || '-'}
+                        {target.namaAyah || target.nama_ayah || '-'}
                       </div>
                     </div>
                   </div>
@@ -393,9 +417,9 @@ export default function DetailSasaranModal({
                         Riwayat Penyakit Keluarga
                       </div>
                       <div className="fw-bold text-dark">
-                        {Array.isArray(target.riwayatKeluarga) && target.riwayatKeluarga.length > 0
-                          ? target.riwayatKeluarga.join(', ')
-                          : (target.riwayatKeluarga || 'Tidak Ada')}
+                        {Array.isArray(target.riwayatKeluarga || target.riwayat_keluarga) && (target.riwayatKeluarga || target.riwayat_keluarga).length > 0
+                          ? (target.riwayatKeluarga || target.riwayat_keluarga).join(', ')
+                          : (target.riwayatKeluarga || target.riwayat_keluarga || 'Tidak Ada')}
                       </div>
                     </div>
                   </div>
@@ -406,11 +430,11 @@ export default function DetailSasaranModal({
                         Riwayat Diri Sendiri
                       </div>
                       <div className="fw-bold text-dark">
-                        {Array.isArray(target.riwayatDiriSendiri) && target.riwayatDiriSendiri.length > 0
-                          ? target.riwayatDiriSendiri.join(', ')
+                        {Array.isArray(target.riwayatDiriSendiri || target.riwayat_diri_sendiri) && (target.riwayatDiriSendiri || target.riwayat_diri_sendiri).length > 0
+                          ? (target.riwayatDiriSendiri || target.riwayat_diri_sendiri).join(', ')
                           : Array.isArray(target.perilakuBerisikoUsekrem) && target.perilakuBerisikoUsekrem.length > 0
                           ? target.perilakuBerisikoUsekrem.join(', ')
-                          : (target.riwayatDiriSendiri || target.riwayatPenyakit || 'Tidak Ada')}
+                          : (target.riwayatDiriSendiri || target.riwayat_diri_sendiri || target.riwayatPenyakit || 'Tidak Ada')}
                       </div>
                     </div>
                   </div>
@@ -424,23 +448,23 @@ export default function DetailSasaranModal({
                         </div>
                         <div className="d-flex flex-wrap gap-2">
                           <span className="badge bg-white text-dark border px-3 py-1.5 fw-medium">
-                            Merokok: <strong className={typeof target.perilakuBerisikoDewasa === 'object' && target.perilakuBerisikoDewasa?.merokok === 'Ya' ? 'text-danger' : (target.perilakuBerisiko?.merokok === 'Ya' ? 'text-danger' : 'text-success')}>
-                              {target.perilakuBerisikoDewasa?.merokok || target.perilakuBerisiko?.merokok || 'Tidak'}
+                            Merokok: <strong className={(target.perilakuBerisikoDewasa?.merokok === 'Ya' || target.perilakuBerisiko?.merokok === 'Ya' || target.perilaku_berisiko?.merokok === 'Ya') ? 'text-danger' : 'text-success'}>
+                              {target.perilakuBerisikoDewasa?.merokok || target.perilakuBerisiko?.merokok || target.perilaku_berisiko?.merokok || 'Tidak'}
                             </strong>
                           </span>
                           <span className="badge bg-white text-dark border px-3 py-1.5 fw-medium">
-                            Tinggi Gula: <strong className={typeof target.perilakuBerisikoDewasa === 'object' && target.perilakuBerisikoDewasa?.tinggiGula === 'Ya' ? 'text-danger' : (target.perilakuBerisiko?.tinggiGula === 'Ya' ? 'text-danger' : 'text-success')}>
-                              {target.perilakuBerisikoDewasa?.tinggiGula || target.perilakuBerisiko?.tinggiGula || 'Tidak'}
+                            Tinggi Gula: <strong className={(target.perilakuBerisikoDewasa?.tinggiGula === 'Ya' || target.perilakuBerisiko?.tinggiGula === 'Ya' || target.perilaku_berisiko?.tinggiGula === 'Ya') ? 'text-danger' : 'text-success'}>
+                              {target.perilakuBerisikoDewasa?.tinggiGula || target.perilakuBerisiko?.tinggiGula || target.perilaku_berisiko?.tinggiGula || 'Tidak'}
                             </strong>
                           </span>
                           <span className="badge bg-white text-dark border px-3 py-1.5 fw-medium">
-                            Tinggi Garam: <strong className={typeof target.perilakuBerisikoDewasa === 'object' && target.perilakuBerisikoDewasa?.tinggiGaram === 'Ya' ? 'text-danger' : (target.perilakuBerisiko?.tinggiGaram === 'Ya' ? 'text-danger' : 'text-success')}>
-                              {target.perilakuBerisikoDewasa?.tinggiGaram || target.perilakuBerisiko?.tinggiGaram || 'Tidak'}
+                            Tinggi Garam: <strong className={(target.perilakuBerisikoDewasa?.tinggiGaram === 'Ya' || target.perilakuBerisiko?.tinggiGaram === 'Ya' || target.perilaku_berisiko?.tinggiGaram === 'Ya') ? 'text-danger' : 'text-success'}>
+                              {target.perilakuBerisikoDewasa?.tinggiGaram || target.perilakuBerisiko?.tinggiGaram || target.perilaku_berisiko?.tinggiGaram || 'Tidak'}
                             </strong>
                           </span>
                           <span className="badge bg-white text-dark border px-3 py-1.5 fw-medium">
-                            Tinggi Lemak: <strong className={typeof target.perilakuBerisikoDewasa === 'object' && target.perilakuBerisikoDewasa?.tinggiLemak === 'Ya' ? 'text-danger' : (target.perilakuBerisiko?.tinggiLemak === 'Ya' ? 'text-danger' : 'text-success')}>
-                              {target.perilakuBerisikoDewasa?.tinggiLemak || target.perilakuBerisiko?.tinggiLemak || 'Tidak'}
+                            Tinggi Lemak: <strong className={(target.perilakuBerisikoDewasa?.tinggiLemak === 'Ya' || target.perilakuBerisiko?.tinggiLemak === 'Ya' || target.perilaku_berisiko?.tinggiLemak === 'Ya') ? 'text-danger' : 'text-success'}>
+                              {target.perilakuBerisikoDewasa?.tinggiLemak || target.perilakuBerisiko?.tinggiLemak || target.perilaku_berisiko?.tinggiLemak || 'Tidak'}
                             </strong>
                           </span>
                         </div>
