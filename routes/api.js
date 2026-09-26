@@ -137,7 +137,7 @@ api.get("/rujukan/:id", personalAuthenticated, validator.rujukan.idOnly, validat
 // Screening Config routes
 // ======================================================
 
-api.get("screening-config", authenticateToken, authorize("dinkesAdmin", "sa"), validateResult, ScreeningConfigController.getScreeningConfig);
-api.put("screening-config/:id", authenticateToken, authorize("dinkesAdmin", "sa"), validator.screeningConfig.updateScreeningConfig, validateResult, ScreeningConfigController.getScreeningConfig);
+api.get("/screening-config", authenticateToken, authorize("dinkesAdmin", "sa"), validateResult, ScreeningConfigController.getScreeningConfig);
+api.put("/screening-config/:id", authenticateToken, authorize("dinkesAdmin", "sa"), validator.screeningConfig.updateScreeningConfig, validateResult, ScreeningConfigController.updateScreeningConfig);
 
 module.exports = api;

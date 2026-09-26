@@ -1,12 +1,11 @@
 openapi: 3.0.3
 info:
   title: POSYANDU API
-  version: 1.0.0
-  description: REST API untuk pengelolaan data Posyandu ILP.
+  version: 1.1.0
+  description: REST API POSYANDU ILP. Endpoint dan parameter diselaraskan dengan routes/api.js dan middleware validators.
 servers:
   - url: http://localhost:3000/api
     description: Local development
-
 tags:
   - name: Auth
   - name: Posyandu
@@ -18,618 +17,3070 @@ tags:
   - name: Kunjungan
   - name: Pemeriksaan
   - name: Rujukan
-
+  - name: Screening Config
+security:
+  - bearerAuth: []
 paths:
-  /health:
-    servers:
-      - url: http://localhost:3000
-        description: Server root for health check
-    get:
-      tags: [Auth]
-      summary: Health check
-      description: Public server health check outside the /api router.
-      security: []
-      responses:
-        "200":
-          description: API aktif
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [success, message]
-                properties:
-                  success: { type: boolean, example: true }
-                  message: { type: string, example: API Posyandu aktif. }
   /auth/register:
     post:
-      tags: [Auth]
+      tags:
+        - Auth
       summary: Register user
       security: []
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/RegisterRequest" } } }
-      responses: { "201": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" }, "403": { $ref: "#/components/responses/Forbidden" } }
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "201":
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+      parameters: []
   /auth/verify-otp:
     post:
-      tags: [Auth]
+      tags:
+        - Auth
       summary: Verify OTP
       security: []
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/VerifyOtpRequest" } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" } }
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /auth/resend-otp:
     post:
-      tags: [Auth]
+      tags:
+        - Auth
       summary: Resend OTP
       security: []
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/ResendOtpRequest" } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" }, "429": { $ref: "#/components/responses/Error" } }
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendOtpRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /auth/login:
     post:
-      tags: [Auth]
+      tags:
+        - Auth
       summary: Login
       security: []
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/LoginRequest" } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } }
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /auth/request-reset-password:
     post:
-      tags: [Auth]
+      tags:
+        - Auth
       summary: Request password reset OTP
       security: []
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/EmailRequest" } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" } }
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /auth/reset-password:
     post:
-      tags: [Auth]
+      tags:
+        - Auth
       summary: Reset password
       security: []
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/ResetPasswordRequest" } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" }, "404": { $ref: "#/components/responses/NotFound" } }
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /auth/logout:
     post:
-      tags: [Auth]
+      tags:
+        - Auth
       summary: Logout
-      security: [{ bearerAuth: [] }]
-      responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Unauthorized" } }
-
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "401":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /posyandu:
     get:
-      tags: [Posyandu]
+      tags:
+        - Posyandu
       summary: List Posyandu
-      parameters: [{ $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Search" }]
-      responses: { "200": { $ref: "#/components/responses/Paginated" }, "401": { $ref: "#/components/responses/Unauthorized" } }
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: puskesmas_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: kecamatan_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /posyandu/{id}:
     get:
-      tags: [Posyandu]
-      summary: Get Posyandu
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/NotFound" } }
-
+      tags:
+        - Posyandu
+      summary: Get Posyandu by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /warga:
     get:
-      tags: [Warga]
+      tags:
+        - Warga
       summary: List Warga
-      description: Personal-data endpoint. Dinkes and DinkesAdmin are denied by backend middleware.
       parameters:
-        [{ $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Search" }, { $ref: "#/components/parameters/Category" }, { $ref: "#/components/parameters/StatusDomisili" }]
-      responses: { "200": { $ref: "#/components/responses/Paginated" }, "400": { $ref: "#/components/responses/ValidationError" } }
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: jenis_kelamin
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - L
+              - P
+        - name: kategori_sasaran
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - bumil
+              - busui
+              - bayi
+              - balita
+              - apras
+              - uskrem_6_14
+              - uskrem_15_18
+              - dewasa
+              - lansia
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - bumil
+              - busui
+              - bayi
+              - balita
+              - apras
+              - uskrem_6_14
+              - uskrem_15_18
+              - dewasa
+              - lansia
+        - name: status_domisili
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - all
+              - aktif
+              - pindah
+              - meninggal
+        - name: rt
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 5
+        - name: rw
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 5
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     post:
-      tags: [Warga]
+      tags:
+        - Warga
       summary: Create Warga
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/WargaRequest" } } } }
-      responses: { "201": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" }, "409": { $ref: "#/components/responses/Error" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WargaRequest"
+      responses:
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "201":
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+      parameters: []
   /warga/export:
     get:
-      tags: [Warga]
-      summary: Export Data Sasaran as Excel
-      description: Export scoped Warga using the Sasaran form mapping.
-      parameters: [{ $ref: "#/components/parameters/Search" }, { $ref: "#/components/parameters/Category" }, { $ref: "#/components/parameters/StatusDomisili" }, { $ref: "#/components/parameters/PosyanduId" }]
-      responses: { "200": { $ref: "#/components/responses/Xlsx" }, "400": { $ref: "#/components/responses/ValidationError" } }
+      tags:
+        - Warga
+      summary: Export Warga Excel
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: jenis_kelamin
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - L
+              - P
+        - name: kategori_sasaran
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - bumil
+              - busui
+              - bayi
+              - balita
+              - apras
+              - uskrem_6_14
+              - uskrem_15_18
+              - dewasa
+              - lansia
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - bumil
+              - busui
+              - bayi
+              - balita
+              - apras
+              - uskrem_6_14
+              - uskrem_15_18
+              - dewasa
+              - lansia
+        - name: status_domisili
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - all
+              - aktif
+              - pindah
+              - meninggal
+        - name: rt
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 5
+        - name: rw
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 5
+      responses:
+        "200":
+          description: File Excel (.xlsx)
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /warga/statistik-sasaran:
     get:
-      tags: [Warga]
+      tags:
+        - Warga
       summary: Get target statistics
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+      parameters: []
   /warga/{id}:
     get:
-      tags: [Warga]
-      summary: Get Warga
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/NotFound" } }
+      tags:
+        - Warga
+      summary: Get Warga by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     put:
-      tags: [Warga]
+      tags:
+        - Warga
       summary: Update Warga
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/WargaRequest" } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" } }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WargaRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /warga/{id}/status-domisili:
     patch:
-      tags: [Warga]
+      tags:
+        - Warga
       summary: Update domicile status
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [status_domisili], properties: { status_domisili: { type: string, enum: [aktif, pindah, meninggal] } } } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/ValidationError" } }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusDomisiliRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /warga/mutasi/verify:
     post:
-      tags: [Warga]
+      tags:
+        - Warga
       summary: Verify Warga mutation
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExaminationRequest" } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "403": { $ref: "#/components/responses/Forbidden" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MutasiVerifyRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /warga/mutasi/confirm:
     patch:
-      tags: [Warga]
+      tags:
+        - Warga
       summary: Confirm Warga mutation
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExaminationRequest" } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "403": { $ref: "#/components/responses/Forbidden" } }
-
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MutasiConfirmRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /imunisasi/warga/{warga_id}:
     get:
-      tags: [Imunisasi]
-      summary: List immunizations by Warga
-      parameters: [{ $ref: "#/components/parameters/WargaId" }]
-      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/NotFound" } }
+      tags:
+        - Imunisasi
+      summary: List immunization by Warga
+      parameters:
+        - name: warga_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /imunisasi/{id}:
     get:
-      tags: [Imunisasi]
-      summary: Get immunization
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/NotFound" } }
+      tags:
+        - Imunisasi
+      summary: Get immunization by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     put:
-      tags: [Imunisasi]
+      tags:
+        - Imunisasi
       summary: Update immunization
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/Step2Request" } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImunisasiUpdateRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /imunisasi:
     post:
-      tags: [Imunisasi]
+      tags:
+        - Imunisasi
       summary: Create immunization
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/Step4Request" } } } }
-      responses: { "201": { $ref: "#/components/responses/Success" } }
-
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImunisasiRequest"
+      responses:
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "201":
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+      parameters: []
   /sesi-posyandu:
     get:
-      tags: [Sesi Posyandu]
-      summary: List sessions
-      parameters: [{ $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }]
-      responses: { "200": { $ref: "#/components/responses/Paginated" } }
+      tags:
+        - Sesi Posyandu
+      summary: List Posyandu sessions
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - open
+              - closed
+        - name: tanggal
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
     post:
-      tags: [Sesi Posyandu]
+      tags:
+        - Sesi Posyandu
       summary: Create session
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/Step5Request" } } } }
-      responses: { "201": { $ref: "#/components/responses/Success" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SesiCreateRequest"
+      responses:
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "201":
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+      parameters: []
   /sesi-posyandu/{id}:
     get:
-      tags: [Sesi Posyandu]
-      summary: Get session
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      tags:
+        - Sesi Posyandu
+      summary: Get session by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     put:
-      tags: [Sesi Posyandu]
+      tags:
+        - Sesi Posyandu
       summary: Update session
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SesiUpdateRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /sesi-posyandu/{id}/status:
     patch:
-      tags: [Sesi Posyandu]
+      tags:
+        - Sesi Posyandu
       summary: Update session status
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SesiStatusRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /users/{id}/verify:
+    patch:
+      tags:
+        - Users
+      summary: Verify user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /users/{id}/deactivate:
+    patch:
+      tags:
+        - Users
+      summary: Deactivate user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /users/{id}/puskesmas-admin:
+    put:
+      tags:
+        - Users
+      summary: Replace Puskesmas admin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /users/{id}/dinkes-admin:
+    put:
+      tags:
+        - Users
+      summary: Replace Dinkes admin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /users/me:
     get:
-      tags: [Users]
+      tags:
+        - Users
       summary: Get current user
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+      parameters: []
     patch:
-      tags: [Users]
+      tags:
+        - Users
       summary: Update current user
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /users/me/profile-picture:
     post:
-      tags: [Users]
+      tags:
+        - Users
       summary: Upload profile picture
       requestBody:
         required: true
         content:
           multipart/form-data:
-            schema: { type: object, required: [profile_picture], properties: { profile_picture: { type: string, format: binary } } }
-      responses: { "200": { $ref: "#/components/responses/Success" }, "413": { $ref: "#/components/responses/Error" } }
+            schema:
+              $ref: "#/components/schemas/ProfilePictureRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /users:
     get:
-      tags: [Users]
+      tags:
+        - Users
       summary: List users
-      parameters: [{ $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Search" }]
-      responses: { "200": { $ref: "#/components/responses/Paginated" } }
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: role
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - kader
+              - puskesmas
+              - puskesmasAdmin
+              - dinkes
+              - dinkesAdmin
+              - sa
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - pending_approval
+              - rejected
+              - active
+              - inactive
+        - name: puskesmas_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
   /users/{id}:
     get:
-      tags: [Users]
-      summary: Get user
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-  /users/{id}/verify:
-    patch:
-      tags: [Users]
-      summary: Verify user
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-  /users/{id}/deactivate:
-    patch:
-      tags: [Users]
-      summary: Deactivate user
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-  /users/{id}/puskesmas-admin:
-    put:
-      tags: [Users]
-      summary: Replace Puskesmas admin
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-  /users/{id}/dinkes-admin:
-    put:
-      tags: [Users]
-      summary: Replace Dinkes admin
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      tags:
+        - Users
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /users/{id}/role:
     patch:
-      tags: [Users]
+      tags:
+        - Users
       summary: Change user role
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRoleRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /users/{id}/status:
     patch:
-      tags: [Users]
+      tags:
+        - Users
       summary: Change user status
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserStatusRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /kehamilan/warga/{warga_id}:
     get:
-      tags: [Kehamilan]
-      summary: List pregnancy profiles
-      parameters: [{ $ref: "#/components/parameters/WargaId" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      tags:
+        - Kehamilan
+      summary: Get pregnancy profile by Warga
+      parameters:
+        - name: warga_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /kehamilan/{id}:
     get:
-      tags: [Kehamilan]
-      summary: Get pregnancy profile
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/NotFound" } }
+      tags:
+        - Kehamilan
+      summary: Get pregnancy profile by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     put:
-      tags: [Kehamilan]
+      tags:
+        - Kehamilan
       summary: Update pregnancy profile
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PregnancyRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /kehamilan:
     post:
-      tags: [Kehamilan]
+      tags:
+        - Kehamilan
       summary: Create pregnancy profile
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "201": { $ref: "#/components/responses/Success" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PregnancyRequest"
+      responses:
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "201":
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+      parameters: []
   /kehamilan/{id}/status:
     patch:
-      tags: [Kehamilan]
+      tags:
+        - Kehamilan
       summary: Update pregnancy status
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PregnancyStatusRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /kunjungan:
     post:
-      tags: [Kunjungan]
+      tags:
+        - Kunjungan
       summary: Create visit
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "201": { $ref: "#/components/responses/Success" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KunjunganCreateRequest"
+      responses:
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "201":
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+      parameters: []
     get:
-      tags: [Kunjungan]
+      tags:
+        - Kunjungan
       summary: List visits
-      parameters: [{ $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Search" }]
-      responses: { "200": { $ref: "#/components/responses/Paginated" } }
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: sesi_posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: status_langkah
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - langkah_1
+              - langkah_2
+              - langkah_3
+              - langkah_4
+              - langkah_5
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
   /kunjungan/antrean-hari-ini:
     get:
-      tags: [Kunjungan]
+      tags:
+        - Kunjungan
       summary: Get today's queue
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      parameters:
+        - name: sesi_posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /kunjungan/{id}:
     get:
-      tags: [Kunjungan]
-      summary: Get visit
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      tags:
+        - Kunjungan
+      summary: Get visit by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     delete:
-      tags: [Kunjungan]
+      tags:
+        - Kunjungan
       summary: Delete visit
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /kunjungan/{id}/status-langkah:
     patch:
-      tags: [Kunjungan]
-      summary: Update visit step
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-
+      tags:
+        - Kunjungan
+      summary: Update visit step status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusLangkahRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /pemeriksaan:
     get:
-      tags: [Pemeriksaan]
+      tags:
+        - Pemeriksaan
       summary: List examinations
       parameters:
-        [
-          { $ref: "#/components/parameters/Page" },
-          { $ref: "#/components/parameters/Limit" },
-          { $ref: "#/components/parameters/Search" },
-          { $ref: "#/components/parameters/Category" },
-          { $ref: "#/components/parameters/StartDate" },
-          { $ref: "#/components/parameters/EndDate" },
-        ]
-      responses: { "200": { $ref: "#/components/responses/Paginated" } }
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: kategori_sasaran
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - bumil
+              - busui
+              - bayi
+              - balita
+              - apras
+              - uskrem_6_14
+              - uskrem_15_18
+              - dewasa
+              - lansia
+        - name: sesi_posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: warga_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
     post:
-      tags: [Pemeriksaan]
+      tags:
+        - Pemeriksaan
       summary: Create examination
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExaminationRequest" } } } }
-      responses: { "201": { $ref: "#/components/responses/Success" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PemeriksaanRequest"
+      responses:
+        "200":
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /pemeriksaan/export:
     get:
-      tags: [Pemeriksaan]
-      summary: Export Rekap Pemeriksaan as Excel
-      description: Recap export. The route is protected by personalAuthenticated and Dinkes/DinkesAdmin cannot access it in the current implementation.
+      tags:
+        - Pemeriksaan
+      summary: Export examinations Excel
       parameters:
-        [
-          { $ref: "#/components/parameters/Search" },
-          { $ref: "#/components/parameters/Category" },
-          { $ref: "#/components/parameters/SessionId" },
-          { $ref: "#/components/parameters/PosyanduId" },
-          { $ref: "#/components/parameters/StartDate" },
-          { $ref: "#/components/parameters/EndDate" },
-        ]
-      responses: { "200": { $ref: "#/components/responses/Xlsx" }, "400": { $ref: "#/components/responses/ValidationError" } }
-  /pemeriksaan/{id}:
-    get:
-      tags: [Pemeriksaan]
-      summary: Get examination
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-    put:
-      tags: [Pemeriksaan]
-      summary: Update examination
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ExaminationRequest" } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-    delete:
-      tags: [Pemeriksaan]
-      summary: Delete examination
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: kategori_sasaran
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - bumil
+              - busui
+              - bayi
+              - balita
+              - apras
+              - uskrem_6_14
+              - uskrem_15_18
+              - dewasa
+              - lansia
+        - name: sesi_posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: posyandu_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: warga_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: File Excel (.xlsx)
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /pemeriksaan/{id}/step-3:
     get:
-      tags: [Pemeriksaan]
-      summary: Read Step 3 plotting
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      tags:
+        - Pemeriksaan
+      summary: Get examination step 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /pemeriksaan/{id}/screening-history:
     get:
-      tags: [Pemeriksaan]
+      tags:
+        - Pemeriksaan
       summary: Get screening history
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/NotFound" } }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /pemeriksaan/{id}:
+    get:
+      tags:
+        - Pemeriksaan
+      summary: Get examination by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      tags:
+        - Pemeriksaan
+      summary: Update examination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PemeriksaanRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+        - Pemeriksaan
+      summary: Delete examination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /pemeriksaan/step-2:
     post:
-      tags: [Pemeriksaan]
-      summary: Save Step 2 measurements
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/Step2Request" } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      tags:
+        - Pemeriksaan
+      summary: Save examination step 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PemeriksaanRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /pemeriksaan/step-4:
     post:
-      tags: [Pemeriksaan]
-      summary: Save Step 4 screening
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/Step4Request" } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      tags:
+        - Pemeriksaan
+      summary: Save examination step 4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PemeriksaanRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /pemeriksaan/step-5:
     post:
-      tags: [Pemeriksaan]
-      summary: Save Step 5 education and referral
-      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/Step5Request" } } } }
-      responses: { "200": { $ref: "#/components/responses/Success" } }
-
+      tags:
+        - Pemeriksaan
+      summary: Save examination step 5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PemeriksaanRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
   /rujukan:
     get:
-      tags: [Rujukan]
+      tags:
+        - Rujukan
       summary: List referrals
-      parameters: [{ $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Search" }, { $ref: "#/components/parameters/StartDate" }, { $ref: "#/components/parameters/EndDate" }]
-      responses: { "200": { $ref: "#/components/responses/Paginated" } }
-  /rujukan/{id}:
-    get:
-      tags: [Rujukan]
-      summary: Get referral
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Success" } }
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: puskesmas_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: kader_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
   /rujukan/{id}/export:
     get:
-      tags: [Rujukan]
+      tags:
+        - Rujukan
       summary: Export referral PDF
-      parameters: [{ $ref: "#/components/parameters/Id" }]
-      responses: { "200": { $ref: "#/components/responses/Pdf" }, "404": { $ref: "#/components/responses/NotFound" } }
-
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: File PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /rujukan/{id}:
+    get:
+      tags:
+        - Rujukan
+      summary: Get referral by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccess"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /screening-config:
+    get:
+      tags:
+        - Screening Config
+      summary: Get screening configuration
+      description: Requires a JWT user with role dinkesAdmin or sa. Returns all stored keys, each with its JSONB value.
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreeningConfigGetResponse"
+        "401":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Gagal mengambil konfigurasi screening
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      parameters: []
+  /screening-config/{id}:
+    put:
+      tags:
+        - Screening Config
+      summary: Update screening configuration
+      description: Requires a JWT user with role dinkesAdmin or sa. The body property must match the key belonging to the path ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScreeningConfigRequest"
+      responses:
+        "200":
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreeningConfigUpdateResponse"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Konfigurasi screening tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Gagal memperbarui konfigurasi screening
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-  parameters:
-    Id: { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
-    WargaId: { name: warga_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
-    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
-    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
-    Search: { name: search, in: query, schema: { type: string, maxLength: 100 } }
-    Category: { name: kategori_sasaran, in: query, schema: { type: string, enum: [bumil, busui, bayi, balita, apras, uskrem_6_14, uskrem_15_18, dewasa, lansia] } }
-    StatusDomisili: { name: status_domisili, in: query, schema: { type: string, enum: [all, aktif, pindah, meninggal] } }
-    PosyanduId: { name: posyandu_id, in: query, schema: { type: integer, minimum: 1 } }
-    SessionId: { name: sesi_posyandu_id, in: query, schema: { type: integer, minimum: 1 } }
-    StartDate: { name: start_date, in: query, schema: { type: string, format: date } }
-    EndDate: { name: end_date, in: query, schema: { type: string, format: date } }
+  parameters: {}
   schemas:
+    ApiSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+    ApiError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
     RegisterRequest:
       type: object
-      required: [role, email, password, nama_lengkap]
+      required:
+        - role
+        - email
+        - password
+        - nama_lengkap
       properties:
-        role: { type: string, enum: [kader, puskesmas, dinkes] }
-        email: { type: string, format: email }
-        password: { type: string, minLength: 8, maxLength: 72, format: password }
-        nama_lengkap: { type: string, minLength: 2, maxLength: 100 }
-        telepon: { type: string, maxLength: 20 }
-        nik: { type: string, pattern: "^[0-9]{16}$" }
-        puskesmas_id: { type: integer, minimum: 1 }
-        posyandu_id: { type: integer, minimum: 1 }
-    LoginRequest:
+        role:
+          type: string
+          enum:
+            - kader
+            - puskesmas
+            - dinkes
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+        nama_lengkap:
+          type: string
+          minLength: 2
+          maxLength: 100
+        telepon:
+          type: string
+          maxLength: 20
+        nik:
+          type: string
+          pattern: ^\d{16}$
+        puskesmas_id:
+          type: integer
+          minimum: 1
+        posyandu_id:
+          type: integer
+          minimum: 1
+    OtpRequest:
       type: object
-      required: [email, password]
-      properties: { email: { type: string, format: email }, password: { type: string, format: password } }
-    EmailRequest:
-      type: object
-      required: [email]
-      properties: { email: { type: string, format: email } }
-    VerifyOtpRequest:
-      type: object
-      required: [email, otp_code, purpose]
+      required:
+        - email
+        - otp_code
+        - purpose
       properties:
-        email: { type: string, format: email }
-        otp_code: { type: string, pattern: "^[0-9]{6}$" }
-        purpose: { type: string, enum: [register, reset_password] }
+        email:
+          type: string
+          format: email
+        otp_code:
+          type: string
+          pattern: ^\d{6}$
+        purpose:
+          type: string
+          enum:
+            - register
+            - reset_password
     ResendOtpRequest:
       type: object
-      required: [email, purpose]
+      required:
+        - email
+        - purpose
       properties:
-        email: { type: string, format: email }
-        purpose: { type: string, enum: [register, reset_password] }
+        email:
+          type: string
+          format: email
+        purpose:
+          type: string
+          enum:
+            - register
+            - reset_password
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    EmailRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
     ResetPasswordRequest:
       type: object
-      required: [email, otp_code, new_password]
+      required:
+        - email
+        - otp_code
+        - new_password
       properties:
-        email: { type: string, format: email }
-        otp_code: { type: string, pattern: "^[0-9]{6}$" }
-        new_password: { type: string, minLength: 8, maxLength: 72, format: password }
-    MeasurementFields:
-      type: object
-      properties:
-        bb_kg: { type: number, minimum: 0.01, maximum: 999.99 }
-        tb_cm: { type: number, minimum: 0.01, maximum: 999.99 }
-        lingkar_kepala_cm: { type: number, minimum: 0.01, maximum: 99.99 }
-        lila_cm: { type: number, minimum: 0.01, maximum: 99.99 }
-        lingkar_perut_cm: { type: number, minimum: 0.01, maximum: 999.99 }
-        td_sistole: { type: integer, minimum: 1, maximum: 300 }
-        td_diastole: { type: integer, minimum: 1, maximum: 300 }
-        kadar_gula: { type: integer, minimum: 0, maximum: 9999 }
-    ScreeningFields:
-      type: object
-      properties:
-        detail_skrining: { type: object, additionalProperties: true }
-        is_skrining_tahunan: { type: boolean }
-        profile_kehamilan_id: { type: integer, minimum: 1, nullable: true }
-    ReferralFields:
-      type: object
-      properties:
-        topik_penyuluhan: { type: string, maxLength: 500, nullable: true }
-        is_perlu_rujukan: { type: boolean }
-        alasan_rujukan: { type: string, maxLength: 1000, nullable: true }
-        status_kehadiran_rujukan: { type: string, enum: [hadir, tidak_hadir], nullable: true }
-    ExaminationRequest:
-      allOf:
-        - type: object
-          required: [kunjungan_id]
-          properties:
-            kunjungan_id: { type: integer, minimum: 1 }
-            kategori_sasaran: { type: string, enum: [bumil, busui, bayi, balita, apras, uskrem_6_14, uskrem_15_18, dewasa, lansia] }
-            tanggal: { type: string, format: date }
-        - $ref: "#/components/schemas/MeasurementFields"
-        - $ref: "#/components/schemas/ScreeningFields"
-        - $ref: "#/components/schemas/ReferralFields"
-    Step2Request:
-      allOf:
-        - type: object
-          required: [kunjungan_id]
-          properties: { kunjungan_id: { type: integer, minimum: 1 } }
-        - $ref: "#/components/schemas/MeasurementFields"
-    Step4Request:
-      allOf:
-        - type: object
-          required: [kunjungan_id]
-          properties: { kunjungan_id: { type: integer, minimum: 1 } }
-        - $ref: "#/components/schemas/ScreeningFields"
-    Step5Request:
-      allOf:
-        - type: object
-          required: [kunjungan_id]
-          properties: { kunjungan_id: { type: integer, minimum: 1 } }
-        - $ref: "#/components/schemas/ReferralFields"
+        email:
+          type: string
+          format: email
+        otp_code:
+          type: string
+          pattern: ^\d{6}$
+        new_password:
+          type: string
+          minLength: 8
+          maxLength: 72
     WargaRequest:
       type: object
+      required:
+        - nik
+        - nama_lengkap
+        - jenis_kelamin
+        - tanggal_lahir
       properties:
-        nik: { type: string, pattern: "^[0-9]{16}$" }
-        nama_lengkap: { type: string }
-        jenis_kelamin: { type: string, enum: [L, P] }
-        tanggal_lahir: { type: string, format: date }
-        alamat: { type: string }
-        rt: { type: string }
-        rw: { type: string }
-        telepon: { type: string }
-        status_domisili: { type: string, enum: [aktif, pindah, meninggal] }
-    ApiResponse:
+        nik:
+          type: string
+          pattern: ^\d{16}$
+        nama_lengkap:
+          type: string
+          minLength: 2
+          maxLength: 100
+        jenis_kelamin:
+          type: string
+          enum:
+            - L
+            - P
+        tanggal_lahir:
+          type: string
+          format: date
+        alamat:
+          type: string
+          maxLength: 500
+        rt:
+          type: string
+          maxLength: 5
+        rw:
+          type: string
+          maxLength: 5
+        telepon:
+          type: string
+          maxLength: 20
+        nama_ibu:
+          type: string
+          maxLength: 100
+        nama_ayah:
+          type: string
+          maxLength: 100
+        status_perkawinan:
+          type: string
+          enum:
+            - menikah
+            - tidak_menikah
+        pekerjaan:
+          type: string
+          maxLength: 50
+        pekerjaan_lainnya:
+          type: string
+          maxLength: 100
+        posyandu_id:
+          type: integer
+          minimum: 1
+        bb_lahir_kg:
+          type: number
+          minimum: 0
+          maximum: 99.99
+        tb_lahir_cm:
+          type: number
+          minimum: 0
+          maximum: 999.99
+        status_domisili:
+          type: string
+          enum:
+            - aktif
+            - pindah
+            - meninggal
+        profil_kesehatan:
+          type: object
+        profil_kesehatan_warga:
+          type: object
+        kategori_sasaran:
+          type: string
+          enum:
+            - bumil
+            - busui
+            - bayi
+            - balita
+            - apras
+            - uskrem_6_14
+            - uskrem_15_18
+            - dewasa
+            - lansia
+          description: Opsional; digunakan untuk validasi kategori terhadap usia/profil, bukan disimpan sebagai atribut warga.
+    StatusDomisiliRequest:
+      type: object
+      required:
+        - status_domisili
+      properties:
+        status_domisili:
+          type: string
+          enum:
+            - aktif
+            - pindah
+            - meninggal
+    MutasiVerifyRequest:
+      type: object
+      required:
+        - nik
+        - nama_lengkap
+        - nama_ibu
+      properties:
+        nik:
+          type: string
+          pattern: ^\d{16}$
+        nama_lengkap:
+          type: string
+          minLength: 2
+          maxLength: 100
+        nama_ibu:
+          type: string
+          minLength: 2
+          maxLength: 100
+    MutasiConfirmRequest:
+      type: object
+      required:
+        - warga_id
+        - nik
+        - nama_lengkap
+        - nama_ibu
+      properties:
+        warga_id:
+          type: integer
+          minimum: 1
+        nik:
+          type: string
+          pattern: ^\d{16}$
+        nama_lengkap:
+          type: string
+          minLength: 2
+          maxLength: 100
+        nama_ibu:
+          type: string
+          minLength: 2
+          maxLength: 100
+    ImunisasiRequest:
+      type: object
+      required:
+        - warga_id
+        - jenis_imunisasi
+        - tanggal_imunisasi
+      properties:
+        warga_id:
+          type: integer
+          minimum: 1
+        jenis_imunisasi:
+          type: string
+          maxLength: 100
+        tanggal_imunisasi:
+          type: string
+          format: date
+    ImunisasiUpdateRequest:
       type: object
       properties:
-        success: { type: boolean }
-        message: { type: string }
-        data: {}
-    ValidationResponse:
+        jenis_imunisasi:
+          type: string
+          maxLength: 100
+        tanggal_imunisasi:
+          type: string
+          format: date
+    SesiCreateRequest:
+      type: object
+      required:
+        - posyandu_id
+        - tanggal_pelaksanaan
+        - lokasi
+        - rw
+        - status
+      properties:
+        posyandu_id:
+          type: integer
+          minimum: 1
+        tanggal_pelaksanaan:
+          type: string
+          format: date
+        lokasi:
+          type: string
+          maxLength: 255
+        rw:
+          type: string
+          maxLength: 5
+        status:
+          type: string
+          enum:
+            - open
+            - closed
+    SesiUpdateRequest:
       type: object
       properties:
-        status: { type: string, example: error }
-        message: { type: string, example: Validasi data gagal }
-        errors: { type: array, items: { type: object, properties: { field: { type: string }, message: { type: string } } } }
-  responses:
-    Success:
-      description: Successful response
-      content: { application/json: { schema: { $ref: "#/components/schemas/ApiResponse" } } }
-    Paginated:
-      description: Successful paginated response
-      content: { application/json: { schema: { $ref: "#/components/schemas/ApiResponse" } } }
-    Error:
-      description: Error response
-      content: { application/json: { schema: { $ref: "#/components/schemas/ApiResponse" } } }
-    ValidationError:
-      description: Validation error
-      content: { application/json: { schema: { $ref: "#/components/schemas/ValidationResponse" } } }
-    Unauthorized:
-      description: Authentication required or token invalid
-      content: { application/json: { schema: { $ref: "#/components/schemas/ApiResponse" } } }
-    Forbidden:
-      description: Access denied
-      content: { application/json: { schema: { $ref: "#/components/schemas/ApiResponse" } } }
-    NotFound:
-      description: Resource not found or outside scope
-      content: { application/json: { schema: { $ref: "#/components/schemas/ApiResponse" } } }
-    Xlsx:
-      description: Excel workbook download
-      content: { application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } } }
-    Pdf:
-      description: PDF download
-      content: { application/pdf: { schema: { type: string, format: binary } } }
-
-security:
-  - bearerAuth: []
+        posyandu_id:
+          type: integer
+          minimum: 1
+        tanggal_pelaksanaan:
+          type: string
+          format: date
+        lokasi:
+          type: string
+          maxLength: 255
+        rw:
+          type: string
+          maxLength: 5
+        status:
+          type: string
+          enum:
+            - open
+            - closed
+    SesiStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - open
+            - closed
+    ProfileUpdateRequest:
+      type: object
+      properties:
+        nama_lengkap:
+          type: string
+          minLength: 2
+          maxLength: 100
+        telepon:
+          type: string
+          maxLength: 20
+        nik:
+          type: string
+          pattern: ^\d{16}$
+    UserRoleRequest:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum:
+            - kader
+            - puskesmas
+            - puskesmasAdmin
+            - dinkes
+            - dinkesAdmin
+            - sa
+    UserStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - pending_approval
+            - rejected
+            - active
+            - inactive
+    PregnancyRequest:
+      type: object
+      properties:
+        warga_id:
+          type: integer
+          minimum: 1
+        nama_suami:
+          type: string
+          maxLength: 100
+          nullable: true
+        hpht:
+          type: string
+          format: date
+          nullable: true
+        hpl:
+          type: string
+          format: date
+          nullable: true
+        tanggal_persalinan:
+          type: string
+          format: date
+          nullable: true
+        anak_ke:
+          type: integer
+          minimum: 1
+          nullable: true
+        jarak_anak_sebelum_bulan:
+          type: integer
+          minimum: 0
+          nullable: true
+        cara_persalinan:
+          type: string
+          enum:
+            - normal
+            - dengan_tindakan
+          nullable: true
+        status_kehamilan:
+          type: string
+          enum:
+            - hamil
+            - nifas
+            - menyusui
+            - selesai
+        is_menyusui:
+          type: boolean
+    PregnancyStatusRequest:
+      type: object
+      required:
+        - status_kehamilan
+      properties:
+        status_kehamilan:
+          type: string
+          enum:
+            - hamil
+            - nifas
+            - menyusui
+            - selesai
+        is_menyusui:
+          type: boolean
+        tanggal_persalinan:
+          type: string
+          format: date
+          nullable: true
+    KunjunganCreateRequest:
+      type: object
+      required:
+        - warga_id
+        - sesi_posyandu_id
+      properties:
+        warga_id:
+          type: integer
+          minimum: 1
+        sesi_posyandu_id:
+          type: integer
+          minimum: 1
+    StatusLangkahRequest:
+      type: object
+      required:
+        - status_langkah
+      properties:
+        status_langkah:
+          type: string
+          enum:
+            - langkah_1
+            - langkah_2
+            - langkah_3
+            - langkah_4
+            - langkah_5
+    PemeriksaanRequest:
+      type: object
+      required:
+        - kunjungan_id
+      properties:
+        kunjungan_id:
+          type: integer
+          minimum: 1
+        kategori_sasaran:
+          type: string
+          enum:
+            - bumil
+            - busui
+            - bayi
+            - balita
+            - apras
+            - uskrem_6_14
+            - uskrem_15_18
+            - dewasa
+            - lansia
+        tanggal:
+          type: string
+          format: date
+        bb_kg:
+          type: number
+          minimum: 0.01
+          maximum: 999.99
+        tb_cm:
+          type: number
+          minimum: 0.01
+          maximum: 999.99
+        lingkar_kepala_cm:
+          type: number
+          minimum: 0.01
+          maximum: 99.99
+        lila_cm:
+          type: number
+          minimum: 0.01
+          maximum: 99.99
+        lingkar_perut_cm:
+          type: number
+          minimum: 0.01
+          maximum: 999.99
+        td_sistole:
+          type: number
+          minimum: 1
+          maximum: 300
+        td_diastole:
+          type: number
+          minimum: 1
+          maximum: 300
+        kadar_gula:
+          type: number
+          minimum: 0
+          maximum: 9999
+        detail_skrining:
+          type: object
+        is_skrining_tahunan:
+          type: boolean
+        profile_kehamilan_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        topik_penyuluhan:
+          type: string
+          maxLength: 500
+          nullable: true
+        is_perlu_rujukan:
+          type: boolean
+        alasan_rujukan:
+          type: string
+          maxLength: 1000
+          nullable: true
+        status_kehadiran_rujukan:
+          type: string
+          enum:
+            - hadir
+            - tidak_hadir
+          nullable: true
+    ScreeningConfigRequest:
+      type: object
+      minProperties: 1
+      properties:
+        asi_eksklusif_months:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 12
+        mpasi_min_age_months:
+          type: integer
+          minimum: 0
+        mpasi_max_age_months:
+          type: integer
+          minimum: 0
+        vitamin_a_months:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 12
+        obat_cacing_months:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 12
+    ScreeningConfigGetResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          additionalProperties:
+            type: object
+            required: [value]
+            properties:
+              value:
+                oneOf:
+                  - type: array
+                    items: { type: integer }
+                  - type: integer
+                  - type: number
+                  - type: string
+                  - type: boolean
+                  - type: object
+    ScreeningConfigUpdateResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        message:
+          type: string
+          enum: [Konfigurasi screening berhasil diperbarui]
+    ProfilePictureRequest:
+      type: object
+      required:
+        - profile_picture
+      properties:
+        profile_picture:
+          type: string
+          format: binary

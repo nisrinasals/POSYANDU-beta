@@ -1,8 +1,5 @@
 # POSYANDU API Documentation
 
-> Source: branch `nisrn` of `nisrinasals/POSYANDU-beta`.
-> Dokumentasi ini mengikuti route, middleware, validator, dan controller yang ada pada branch tersebut.
-
 ## Base URL
 
 ```text
@@ -1287,6 +1284,51 @@ Kategori Sasaran
 
 ---
 
+# 12. Screening Config
+
+Kedua endpoint berikut memerlukan JWT dan hanya mengizinkan role `dinkesAdmin` atau `sa`.
+
+## GET /screening-config
+
+Tidak memiliki path parameter, query, atau body.
+
+Success `200` membentuk `data` dari seluruh record konfigurasi. Setiap property memakai nilai `key` database dan berisi satu property `value`, yang nilainya berasal dari kolom JSONB pada record tersebut. Contoh struktur untuk key yang didukung validator:
+
+```json
+{
+  "success": true,
+  "data": {
+    "asi_eksklusif_months": { "value": [1, 2, 3, 4, 5, 6] }
+  }
+}
+```
+
+Kegagalan controller: `500`, `{ "success": false, "message": "Gagal mengambil konfigurasi screening" }`.
+
+## PUT /screening-config/:id
+
+Path `id` adalah primary key record `ScreeningConfig` yang akan diperbarui. Body wajib berupa object dengan property yang cocok dengan `key` record tersebut. Property yang divalidasi:
+
+| Body key               | Bentuk nilai       |
+| ---------------------- | ------------------ |
+| `asi_eksklusif_months` | Array integer 1–12 |
+| `mpasi_min_age_months` | Integer minimal 0  |
+| `mpasi_max_age_months` | Integer minimal 0  |
+| `vitamin_a_months`     | Array integer 1–12 |
+| `obat_cacing_months`   | Array integer 1–12 |
+
+Body kosong atau key body tidak cocok dengan record ID: `400`. Config tidak ditemukan: `404`.
+
+Success `200`:
+
+```json
+{ "success": true, "message": "Konfigurasi screening berhasil diperbarui" }
+```
+
+Kegagalan controller: `500`, `{ "success": false, "message": "Gagal memperbarui konfigurasi screening" }`.
+
+---
+
 # 12. Application Flow
 
 ## Registrasi Kader
@@ -1431,5 +1473,7 @@ hasil plot dengan is_merah
 | GET    | `/rujukan`                           | Personal        |
 | GET    | `/rujukan/:id/export`                | Personal        |
 | GET    | `/rujukan/:id`                       | Personal        |
+| GET    | `/screening-config`                  | Dinkes Admin/SA |
+| PUT    | `/screening-config/:id`              | Dinkes Admin/SA |
 
-**Total: 63 endpoint.**
+**Total: 65 endpoint** pada `/api`. Health check `GET /health` berada di luar router API.

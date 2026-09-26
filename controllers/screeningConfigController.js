@@ -1,7 +1,5 @@
 const { ScreeningConfig } = require("../models");
-const { createAuditLog } = require("../utils/auditLog");
-const { AUDIT_ACTIONS } = require("../constants/audit");
-
+const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 const screeningConfigSnapshot = (sc) => ({
   id: sc.id,
   key: sc.key,
@@ -37,9 +35,10 @@ const getScreeningConfig = async (req, res) => {
 };
 
 const updateScreeningConfig = async (req, res) => {
-  const transaction = await ScreeningConfig.sequelize.transaction();
+  let transaction = null;
 
   try {
+    transaction = await ScreeningConfig.sequelize.transaction();
     const updates = req.body;
 
     const keys = Object.keys(updates);
@@ -53,66 +52,51 @@ const updateScreeningConfig = async (req, res) => {
       });
     }
 
-    const configs = await ScreeningConfig.findAll({
-      where: {
-        key: keys,
-      },
+    const config = await ScreeningConfig.findByPk(req.params.id, {
       transaction,
     });
 
-    const existingKeys = new Set(configs.map((config) => config.key));
-
-    const invalidKeys = keys.filter((key) => !existingKeys.has(key));
-
-    if (invalidKeys.length > 0) {
+    if (!config) {
       await transaction.rollback();
+      transaction = null;
 
+      return res.status(404).json({
+        success: false,
+        message: "Konfigurasi screening tidak ditemukan",
+      });
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(updates, config.key)) {
+      await transaction.rollback();
+      transaction = null;
       return res.status(400).json({
         success: false,
-        message: "Terdapat konfigurasi yang tidak dikenal",
-        invalid_keys: invalidKeys,
+        message: "Body konfigurasi tidak sesuai dengan konfigurasi yang dipilih",
       });
     }
 
-    for (const config of configs) {
-      const newValue = updates[config.key];
-
-      if (newValue === undefined) {
-        continue;
-      }
-
-      const oldValue = screeningConfigSnapshot(config);
-
-      await config.update(
-        {
-          value: newValue,
-        },
-        {
-          transaction,
-        },
-      );
-
-      const newValueSnapshot = screeningConfigSnapshot(config);
-
-      await createAuditLog({
-        userId: req.user?.id ?? null,
-        action: created ? AUDIT_ACTIONS.SCREENING_CONFIG_CREATE : SCREENING_CONFIG_UPDATE,
-        tableName: "screening_config",
-        recordId: config.id,
-        oldValue,
-        newValue: newValueSnapshot,
-        transaction,
-      });
-    }
+    const oldValue = screeningConfigSnapshot(config);
+    await config.update({ value: updates[config.key] }, { transaction });
+    const newValue = screeningConfigSnapshot(config);
 
     await transaction.commit();
+    transaction = null;
+
+    await createAuditLog({
+      userId: req.user?.id ?? null,
+      action: AUDIT_ACTIONS.SCREENING_CONFIG_UPDATE,
+      tableName: "screening_config",
+      recordId: config.id,
+      oldValue,
+      newValue,
+    });
 
     return res.status(200).json({
       success: true,
       message: "Konfigurasi screening berhasil diperbarui",
     });
   } catch (error) {
-    await transaction.rollback();
+    if (transaction) await transaction.rollback();
 
     console.error("updateScreeningConfig error:", error);
 
