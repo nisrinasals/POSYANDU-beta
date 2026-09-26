@@ -15,7 +15,9 @@ const validatePregnancyCombination = (payload, current = {}) => {
   const tanggalPersalinan = payload.tanggal_persalinan ?? current.tanggal_persalinan;
 
   if (!VALID_STATUS.includes(status)) return "status_kehamilan tidak valid.";
-  if (isMenyusui && status !== "menyusui") return "is_menyusui hanya dapat bernilai true saat status kehamilan menyusui.";
+  if (isMenyusui && !["menyusui", "nifas"].includes(status)) {
+    return "is_menyusui hanya dapat bernilai true saat status kehamilan menyusui atau nifas.";
+  }
   if (status === "menyusui" && !isMenyusui) return "is_menyusui harus bernilai true saat status kehamilan menyusui.";
   if (["nifas", "menyusui"].includes(status) && !tanggalPersalinan) return "tanggal_persalinan wajib diisi untuk status nifas atau menyusui.";
   if (status === "hamil" && tanggalPersalinan) return "tanggal_persalinan harus kosong saat status kehamilan hamil.";

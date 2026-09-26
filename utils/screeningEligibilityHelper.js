@@ -10,6 +10,12 @@ const getAgeMonths = (tanggalLahir, tanggalPemeriksaan = new Date()) => {
   return months;
 };
 
+const getExaminationMonth = (tanggalPemeriksaan = new Date()) => {
+  const reference = new Date(tanggalPemeriksaan instanceof Date ? tanggalPemeriksaan : `${String(tanggalPemeriksaan).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(reference.getTime())) return null;
+  return reference.getUTCMonth() + 1;
+};
+
 const getScreeningEligibility = (tanggalLahir, tanggalPemeriksaan = new Date(), config) => {
   if (!config) {
     throw new Error("Screening configuration is required");
@@ -41,4 +47,4 @@ const validateIrreversibleAsi = (existingValue, incomingValue) => {
   return null;
 };
 
-module.exports = { getAgeMonths, getScreeningEligibility, validateIrreversibleAsi };
+module.exports = { getAgeMonths, getExaminationMonth, getScreeningEligibility, validateIrreversibleAsi };

@@ -784,7 +784,12 @@ const saveStep2 = async (req, res, next) => {
     const { kunjungan_id, bb_kg, tb_cm, lingkar_kepala_cm, lila_cm, lingkar_perut_cm, td_sistole, td_diastole, kadar_gula } = req.body;
 
     const measurementError = getMeasurementError(req.body);
-    if (measurementError) return res.status(400).json({ success: false, message: measurementError });
+    if (measurementError) {
+      return res.status(400).json({
+        success: false,
+        message: measurementError,
+      });
+    }
 
     const { kunjungan, pemeriksaan } = await preparePemeriksaanContext(kunjungan_id, req.user);
     const growthScores = getGrowthZScores(kunjungan.warga, {
@@ -806,11 +811,12 @@ const saveStep2 = async (req, res, next) => {
       step2_completed_at: new Date(),
     });
 
-    const plotReasons = getPlotReferralReasons(plotData);
-
-    // Update status ke langkah 2 jika belum melebihi langkah 2
+    // Update status kunjungan ke langkah 2
+    // jika saat ini masih berada di langkah 1
     if (["langkah_1"].includes(kunjungan.status_langkah)) {
-      await kunjungan.update({ status_langkah: "langkah_2" });
+      await kunjungan.update({
+        status_langkah: "langkah_2",
+      });
     }
 
     return res.status(200).json({
@@ -820,7 +826,10 @@ const saveStep2 = async (req, res, next) => {
     });
   } catch (error) {
     if (error.statusCode) {
-      return res.status(error.statusCode).json({ success: false, message: error.message });
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
     }
     next(error);
   }
@@ -883,7 +892,7 @@ const saveStep4 = async (req, res, next) => {
       success: true,
       message: "Data skrining (Step 4) berhasil disimpan.",
       data: pemeriksaan,
-      screening_eligibility: getScreeningEligibility(kunjungan.warga.tanggal_lahir, tglPemeriksaan),
+      screening_eligibility: screeningEligibility,
     });
   } catch (error) {
     if (error.statusCode) {
