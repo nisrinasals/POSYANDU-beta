@@ -1,30 +1,45 @@
-import api from './api';
+import api from "./api";
 
 export const userService = {
   // 1. Ambil profil user yang sedang login
   getMe: async () => {
-    return await api.get('/users/me');
+    return await api.get("/users/me");
   },
 
   // 2. Update profil user yang sedang login
   updateMe: async (data) => {
-    return await api.patch('/users/me', data);
+    return await api.patch("/users/me", data);
   },
 
   // 3. Upload foto profil
   uploadProfilePicture: async (file) => {
     const formData = new FormData();
-    formData.append('profile_picture', file);
-    return await api.post('/users/me/profile-picture', formData, {
+    formData.append("profile_picture", file);
+    return await api.post("/users/me/profile-picture", formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
     });
   },
 
   // 4. Ambil daftar semua user (untuk Dinkes/Puskesmas Admin)
   getUsersList: async (params = {}) => {
-    return await api.get('/users', { params });
+    return await api.get("/users", { params });
+  },
+
+  // Ambil seluruh user dengan pagination backend.
+  getAllUsers: async (params = {}) => {
+    const allItems = [];
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const res = await api.get("/users", { params: { ...params, page, limit: 100 } });
+      const items = Array.isArray(res?.data) ? res.data : [];
+      allItems.push(...items);
+      totalPages = Number(res?.pagination?.total_pages || 1);
+      page += 1;
+    } while (page <= totalPages);
+    return { success: true, data: allItems, pagination: { total_items: allItems.length } };
   },
 
   // 5. Ambil detail user berdasarkan ID
@@ -50,6 +65,10 @@ export const userService = {
   // 9. Ubah status user
   changeUserStatus: async (id, statusData) => {
     return await api.patch(`/users/${id}/status`, statusData);
+  },
+
+  setUserStatus: async (id, status) => {
+    return await api.patch(`/users/${id}/status`, { status });
   },
 
   // 10. Ganti Admin Puskesmas

@@ -12,14 +12,13 @@ import {
   HeartHandshake,
   Menu,
   Building2,
-  RefreshCw,
   UserCheck,
   UserCog,
   Activity,
   FileSpreadsheet,
   Shield
 } from 'lucide-react';
-import { kategoriPemeriksaan } from '../../data/mockData';
+import { kategoriPemeriksaan } from '../../data/kategoriPemeriksaan';
 
 export default function AppLayout({ 
   user, 
@@ -27,7 +26,6 @@ export default function AppLayout({
   activeSubmenu, 
   onNavigate, 
   onLogout, 
-  onToggleRole,
   children 
 }) {
   const [pemeriksaanOpen, setPemeriksaanOpen] = useState(true);
@@ -75,13 +73,7 @@ export default function AppLayout({
     return 'Kader';
   };
 
-  const getRoleSubLabel = () => {
-    if (isDinkesAdmin) return 'Dinas Kesehatan Kota';
-    if (isDinkesStaf) return 'Staf Dinkes Kota';
-    if (isPuskesmasAdmin) return 'Puskesmas Sukamaju';
-    if (isPuskesmasStaf) return 'Staf Puskesmas Sukamaju';
-    return 'Posyandu Melati';
-  };
+  const getRoleSubLabel = () => user?.posyandu || user?.instansi || user?.puskesmas || '';
 
   const roleClass = isDinkes ? 'role-dinkes' : isPuskesmas ? 'role-puskesmas' : 'role-kader';
 
@@ -159,19 +151,6 @@ export default function AppLayout({
                 {getRoleSubLabel()}
               </span>
             </div>
-            <button 
-              className="btn btn-xs border p-1 rounded-2 fw-bold"
-              title="Ganti Role View (Kader ⇄ Puskesmas Admin ⇄ Puskesmas Staf ⇄ Dinkes Admin ⇄ Dinkes Staf)"
-              onClick={onToggleRole}
-              style={{ 
-                fontSize: '0.7rem', 
-                backgroundColor: isDinkes ? '#0284c7' : (isPuskesmas ? '#FE6D01' : '#2b2e4a'), 
-                color: '#ffffff',
-                borderColor: isDinkes ? '#0284c7' : (isPuskesmas ? '#FE6D01' : '#2b2e4a')
-              }}
-            >
-              <RefreshCw size={12} />
-            </button>
           </div>
         </div>
 
@@ -574,7 +553,7 @@ export default function AppLayout({
                   {(activeMenu === 'jadwal-monitoring' || activeMenu === 'jadwal') && 'Jadwal Posyandu Se-Kota'}
                   {activeMenu === 'data-sasaran' && 'Data Sasaran Wilayah Kota'}
                   {activeMenu === 'laporan-ekspor' && (isDinkesStaf ? 'Rekapitulasi Pelaporan' : 'Rekapitulasi Pelaporan Kota')}
-                  {activeMenu === 'profil-pengguna' && (isDinkesStaf ? 'Profil Pengguna Staf' : 'Profil Dinas Kesehatan Kota')}
+                  {activeMenu === 'profil-pengguna' && (isDinkesStaf ? 'Profil Pengguna Staf' : 'Profil Pengguna')}
                 </>
               ) : isPuskesmas ? (
                 <>
@@ -610,10 +589,10 @@ export default function AppLayout({
                   {activeMenu === 'dashboard' && 'Pemantauan indikator kesehatan, status pelaporan Puskesmas, dan kesiapan fasilitas kesehatan tingkat Kota'}
                   {(activeMenu === 'verifikasi-akun' || activeMenu === 'manajemen-akun') && (
                     activeSubmenu === 'staf'
-                      ? 'Kelola persetujuan dan otorisasi pendaftaran staf internal Dinas Kesehatan Kota.'
+                      ? 'Kelola persetujuan dan otorisasi pendaftaran staf internal.'
                       : activeSubmenu === 'kelola'
                         ? 'Manajemen status aktif, nonaktif, dan hak akses seluruh akun Puskesmas dan Staf Dinkes terdaftar.'
-                        : 'Kelola persetujuan pendaftaran akun resmi Puskesmas Induk & Pembantu se-wilayah Kota.'
+                        : 'Kelola persetujuan pendaftaran akun Puskesmas.'
                   )}
                   {(activeMenu === 'jadwal-monitoring' || activeMenu === 'jadwal') && 'Monitoring agenda buka dan operasional Posyandu se-Kota'}
                   {activeMenu === 'data-sasaran' && 'Monitoring cakupan data sasaran seluruh siklus hidup lintas Puskesmas dan Posyandu se-Kota'}
@@ -638,8 +617,8 @@ export default function AppLayout({
                 </>
               ) : (
                 <>
-                  {activeMenu === 'dashboard' && 'Ringkasan pelayanan Posyandu Melati RW 04 hari ini.'}
-                  {activeMenu === 'jadwal' && 'Agenda dan waktu pelaksanaan posyandu Posyandu Melati RW 04.'}
+                  {activeMenu === 'dashboard' && 'Ringkasan pelayanan Posyandu.'}
+                  {activeMenu === 'jadwal' && 'Agenda dan waktu pelaksanaan Posyandu.'}
                   {activeMenu === 'data-sasaran' && 'Data sasaran seluruh siklus hidup posyandu di wilayah kerja Posyandu.'}
                   {activeMenu === 'pemeriksaan' && 'Input dan monitoring berkala tumbuh kembang serta kesehatan.'}
                   {activeMenu === 'rekap-pemeriksaan' && 'Laporan rekap bulanan pemeriksaan kesehatan posyandu.'}
@@ -681,10 +660,10 @@ export default function AppLayout({
             </div>
             <div>
               <div className="fw-bold text-dark" style={{ fontSize: '0.825rem', lineHeight: '1.2' }}>
-                {user.nama || (isDinkesAdmin ? 'dr. H. Rahmat Hidayat, M.Kes' : isDinkesStaf ? 'Anisa Mayasari, SKM' : isPuskesmasAdmin ? 'dr. Hendra Setiawan' : isPuskesmasStaf ? 'dr. Sarah Amanda Putri' : 'Dzakiyah Al Zahrani')}
+                {user?.nama || ''}
               </div>
               <span className="text-muted" style={{ fontSize: '0.725rem' }}>
-                {user.role || (isDinkesAdmin ? 'Admin Dinas Kesehatan' : isDinkesStaf ? 'Staf Dinas Kesehatan' : isPuskesmasAdmin ? 'Admin Puskesmas Sukamaju' : isPuskesmasStaf ? 'Staf Puskesmas Sukamaju' : 'Kader Posyandu')}
+                {user?.role || ''}
               </span>
             </div>
           </div>

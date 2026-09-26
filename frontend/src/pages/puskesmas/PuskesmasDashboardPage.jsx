@@ -11,10 +11,6 @@ import {
   CheckCircle2,
   FileSpreadsheet
 } from 'lucide-react';
-import { 
-  STANDAR_KATEGORI, 
-  trenPemeriksaanDanKunjungan 
-} from '../../data/mockData';
 
 export default function PuskesmasDashboardPage({ 
   onNavigate,
@@ -61,22 +57,51 @@ export default function PuskesmasDashboardPage({
 
   const totalJadwalCount = globalJadwalList ? globalJadwalList.length : 0;
 
-  // Active chart data
+  // Aggregate the real examination records returned by the backend.
   const chartData = useMemo(() => {
-    if (totalSasaranCount === 0 && examinedCount === 0) {
-      const base = trenPemeriksaanDanKunjungan[periodeGrafik] || trenPemeriksaanDanKunjungan['6bulan'];
-      return base.map(item => ({
-        periode: item.periode,
-        pemeriksaan: 0,
-        kunjungan: 0
-      }));
+    const records = Object.values(globalPemeriksaanData || {}).filter(
+      (item) => item && typeof item === 'object' && item.tanggal
+    );
+    const now = new Date();
+    const countForMonth = (year, month) =>
+      records.filter((item) => {
+        const d = new Date(item.tanggal);
+        return d.getFullYear() === year && d.getMonth() === month;
+      }).length;
+
+    const points = [];
+    if (periodeGrafik === '6bulan') {
+      for (let offset = 5; offset >= 0; offset -= 1) {
+        const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        const count = countForMonth(d.getFullYear(), d.getMonth());
+        points.push({
+          periode: d.toLocaleDateString('id-ID', { month: 'short' }),
+          pemeriksaan: count,
+          kunjungan: count
+        });
+      }
+    } else {
+      const year = Number(periodeGrafik);
+      for (let month = 0; month < 12; month += 1) {
+        const count = countForMonth(year, month);
+        points.push({
+          periode: new Date(year, month, 1).toLocaleDateString('id-ID', { month: 'short' }),
+          pemeriksaan: count,
+          kunjungan: count
+        });
+      }
     }
-    return trenPemeriksaanDanKunjungan[periodeGrafik] || trenPemeriksaanDanKunjungan['6bulan'];
-  }, [periodeGrafik, totalSasaranCount, examinedCount]);
+    return points;
+  }, [globalPemeriksaanData, periodeGrafik]);
+
+  const availableYears = useMemo(() => [...new Set(Object.values(globalPemeriksaanData || {})
+    .map((item) => String(item?.tanggal || '').slice(0, 4))
+    .filter((year) => /^\d{4}$/.test(year)))]
+    .sort((a, b) => Number(b) - Number(a)), [globalPemeriksaanData]);
 
   // Scaler calculation for SVG Chart
-  const maxPemeriksaan = 350;
-  const maxKunjungan = 15;
+  const maxPemeriksaan = Math.max(1, ...chartData.map((d) => d.pemeriksaan));
+  const maxKunjungan = Math.max(1, ...chartData.map((d) => d.kunjungan));
   const chartHeight = 220;
   const chartWidth = 720;
   const paddingX = 40;
@@ -288,8 +313,9 @@ export default function PuskesmasDashboardPage({
                 style={{ fontSize: '0.825rem', minWidth: '150px' }}
               >
                 <option value="6bulan">6 Bulan Terakhir</option>
-                <option value="2026">Tahun 2026</option>
-                <option value="2025">Tahun 2025</option>
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>Tahun {year}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -299,12 +325,15 @@ export default function PuskesmasDashboardPage({
         <div className="position-relative w-100 overflow-hidden" style={{ minHeight: '260px' }}>
           {/* Y-Axis Gridlines & Reference Values */}
           <div className="position-absolute start-0 end-0 top-0 bottom-0 d-flex flex-column justify-content-between pe-2" style={{ pointerEvents: 'none', height: `${chartHeight}px` }}>
-            {[300, 225, 150, 75, 0].map((val) => (
+            {[1, 0.75, 0.5, 0.25, 0].map((ratio) => {
+              const val = Math.round(maxPemeriksaan * ratio);
+              return (
               <div key={val} className="d-flex align-items-center w-100">
                 <span className="text-muted text-end pe-2" style={{ width: '40px', fontSize: '0.725rem' }}>{val}</span>
                 <div className="flex-grow-1 border-top border-light-subtle" style={{ borderStyle: 'dashed' }} />
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* SVG Canvas overlaying Bars and Line */}
