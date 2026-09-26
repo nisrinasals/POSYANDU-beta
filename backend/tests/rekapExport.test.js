@@ -6,7 +6,7 @@ const { PassThrough } = require("stream");
 const request = require("supertest");
 const test = require("node:test");
 const controller = require("../controllers/pemeriksaanController");
-const { app } = require("../server");
+const { app } = require("../../server");
 const { Pemeriksaan, User } = require("../models");
 const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../utils/export/rekapExportHelper");
 
