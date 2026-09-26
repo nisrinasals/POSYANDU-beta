@@ -11,6 +11,7 @@ const userController = require("../controllers/userController");
 const imunisasiController = require("../controllers/imunisasiController");
 const rujukanController = require("../controllers/rujukanController");
 const ScreeningConfigController = require("../controllers/screeningConfigController");
+const { getPublicPosyandu, getPublicPuskesmas } = require("../controllers/publicController");
 
 const uploadProfilePicture = require("../middleware/uploadProfilePicture");
 const { authenticateToken, authorize, denyDinkesPersonalData } = require("../middleware/authMiddleware");
@@ -139,5 +140,12 @@ api.get("/rujukan/:id", personalAuthenticated, validator.rujukan.idOnly, validat
 
 api.get("/screening-config", authenticateToken, authorize("dinkesAdmin", "sa"), validateResult, ScreeningConfigController.getScreeningConfig);
 api.put("/screening-config/:id", authenticateToken, authorize("dinkesAdmin", "sa"), validator.screeningConfig.updateScreeningConfig, validateResult, ScreeningConfigController.updateScreeningConfig);
+
+// ======================================================
+// Public routes
+// ======================================================
+
+router.get("/public/posyandu", getPublicPosyandu);
+router.get("/public/puskesmas", getPublicPuskesmas);
 
 module.exports = api;
