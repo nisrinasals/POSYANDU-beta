@@ -332,7 +332,7 @@ export default function DataSasaranPage({
       pekerjaan: "",
       posyandu: "",
       alamat: "",
-      statusMenyusui: "",
+      statusMenyusui: "Masih Menyusui",
       hpht: "",
       hpl: "",
       anakKe: "",
@@ -408,11 +408,15 @@ export default function DataSasaranPage({
       return;
     }
 
+    // Jenis Kelamin Backend: 'L' | 'P'
+    const isFemale = katId === "bumil" || katId === "nifas";
+    const genderBackend = isFemale ? "P" : categoryForm.gender === "Perempuan" || categoryForm.gender === "P" ? "P" : categoryForm.gender === "Laki-laki" || categoryForm.gender === "L" ? "L" : null;
+
     // =========================================================
     // VALIDASI JENIS KELAMIN UNTUK BUMIL / NIFAS
     // Bumil dan Nifas/Menyusui hanya boleh Perempuan.
     // =========================================================
-    if (["bumil", "nifas"].includes(katId) && genderBackend === "L") {
+    if (isFemale && genderBackend !== "P") {
       showWarning("Validasi Jenis Kelamin", "Sasaran Ibu Hamil dan Nifas/Menyusui harus berjenis kelamin Perempuan.");
       return;
     }
@@ -452,9 +456,15 @@ export default function DataSasaranPage({
       showWarning("Validasi Ibu Hamil", "HPHT (Hari Pertama Haid Terakhir) wajib diisi untuk sasaran Ibu Hamil.");
       return;
     }
+
+    // Backend mewajibkan tanggal persalinan untuk profil nifas/menyusui.
+    if (katId === "nifas" && !categoryForm.tglPersalinan) {
+      showWarning("Validasi Nifas/Menyusui", "Tanggal persalinan wajib diisi untuk sasaran Nifas/Menyusui.");
+      return;
+    }
+
     const isUsekrem = ["usekrem-6-14", "usekrem-15-18"].some((k) => katId.includes(k));
     const isDewasaOrLansia = ["dewasa", "lansia"].some((k) => katId.includes(k));
-    const isFemale = katId === "bumil" || katId === "nifas";
 
     // Normalisasi status pernikahan (Backend: 'menikah' | 'tidak_menikah')
     let statusPernikahanBackend = null;
@@ -473,9 +483,6 @@ export default function DataSasaranPage({
     }
 
     const tglLahirFormatted = categoryForm.tglLahir;
-
-    // Jenis Kelamin Backend: 'L' | 'P'
-    const genderBackend = isFemale ? "P" : categoryForm.gender === "Perempuan" || categoryForm.gender === "P" ? "P" : categoryForm.gender === "Laki-laki" || categoryForm.gender === "L" ? "L" : null;
 
     if (!genderBackend) {
       showWarning("Validasi Jenis Kelamin", "Jenis kelamin sasaran wajib diisi.");
@@ -529,8 +536,9 @@ export default function DataSasaranPage({
           ...(categoryForm.namaAyah || categoryForm.namaSuami ? { nama_suami: categoryForm.namaAyah || categoryForm.namaSuami } : {}),
           ...(categoryForm.anakKe ? { anak_ke: parseInt(categoryForm.anakKe, 10) } : {}),
           ...(categoryForm.jarakAnak ? { jarak_anak_sebelum_bulan: parseInt(categoryForm.jarakAnak, 10) } : {}),
+          ...(categoryForm.tglPersalinan ? { tanggal_persalinan: categoryForm.tglPersalinan } : {}),
           status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
-          is_menyusui: katId === "nifas",
+          is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
         };
         await kehamilanService.createKehamilan(kehamilanPayload);
 
@@ -583,11 +591,12 @@ export default function DataSasaranPage({
             ...(categoryForm.namaAyah || categoryForm.namaSuami ? { nama_suami: categoryForm.namaAyah || categoryForm.namaSuami } : {}),
             ...(categoryForm.anakKe ? { anak_ke: parseInt(categoryForm.anakKe, 10) } : {}),
             ...(categoryForm.jarakAnak ? { jarak_anak_sebelum_bulan: parseInt(categoryForm.jarakAnak, 10) } : {}),
+            ...(categoryForm.tglPersalinan ? { tanggal_persalinan: categoryForm.tglPersalinan } : {}),
             status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
-            is_menyusui: katId === "nifas",
+            is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
           });
-        } catch (e) {
-          console.warn("Profil kehamilan auto-create notice:", e);
+        } catch (e2) {
+          console.error("Fallback update kehamilan error:", e2);
         }
       }
 
@@ -607,11 +616,12 @@ export default function DataSasaranPage({
               warga_id: parseInt(found.id, 10),
               ...(categoryForm.hpht ? { hpht: categoryForm.hpht } : {}),
               hpl: categoryForm.hpl || null,
+              tanggal_persalinan: categoryForm.tglPersalinan || null,
               nama_suami: categoryForm.namaAyah || categoryForm.namaSuami || null,
               anak_ke: categoryForm.anakKe ? parseInt(categoryForm.anakKe, 10) : 1,
               jarak_anak_sebelum_bulan: categoryForm.jarakAnak ? parseInt(categoryForm.jarakAnak, 10) : null,
               status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
-              is_menyusui: katId === "nifas",
+              is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
             });
             setShowCategoryFormModal(false);
             showSuccess("Peralihan ke Ibu Hamil Berhasil", `Sasaran atas nama "${found.nama_lengkap}" berhasil dialihkan statusnya menjadi sasaran Ibu Hamil (Bumil).`);
@@ -1328,7 +1338,15 @@ export default function DataSasaranPage({
                       </>
                     )}
 
-                    {/* KHUSUS NIFAS / MENYUSUI: DITAMBAHKAN SATU FIELD STATUS MENYUSUI */}
+                    {/* KHUSUS NIFAS / MENYUSUI: TANGGAL PERSALINAN WAJIB UNTUK PROFILE BUSUI */}
+                    {selectedCategory.id === "nifas" && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold text-primary small mb-1">Tanggal Persalinan</label>
+                        <input type="date" className="form-control form-control-custom border-primary" value={categoryForm.tglPersalinan} onChange={(e) => setCategoryForm({ ...categoryForm, tglPersalinan: e.target.value })} required />
+                      </div>
+                    )}
+
+                    {/* KHUSUS NIFAS / MENYUSUI: STATUS MENYUSUI */}
                     {selectedCategory.id === "nifas" && (
                       <div className="mb-3">
                         <label className="form-label fw-bold text-primary small mb-1">Status Menyusui</label>
