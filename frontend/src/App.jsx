@@ -21,7 +21,7 @@ import DinkesDataSasaranPage from "./pages/dinkes/DinkesDataSasaranPage";
 import DinkesJadwalMonitoringPage from "./pages/dinkes/DinkesJadwalMonitoringPage";
 import RekapTemplateExcelView from "./components/pemeriksaan/RekapTemplateExcelView";
 
-import { authService, sesiService, pemeriksaanService, userService, posyanduService } from "./services";
+import { authService, sesiService, pemeriksaanService, userService, posyanduService, rujukanService } from "./services";
 
 import wargaService from "./services/wargaService";
 
@@ -41,6 +41,7 @@ export default function App() {
     nama: "",
     posyandu: "",
     posyandu_id: null,
+    puskesmas: "",
     puskesmas_id: null,
     roleType: "",
     role: "",
@@ -61,6 +62,10 @@ export default function App() {
   const [isGlobalStatistikLoading, setIsGlobalStatistikLoading] = useState(false);
 
   const [globalJadwalList, setGlobalJadwalList] = useState([]);
+
+  const [globalPosyanduList, setGlobalPosyanduList] = useState([]);
+
+  const [globalRujukanList, setGlobalRujukanList] = useState([]);
 
   const [activePemeriksaanWargaId, setActivePemeriksaanWargaId] = useState(null);
 
@@ -115,6 +120,8 @@ export default function App() {
 
             posyandu: u.posyandu?.nama_posyandu || prev.posyandu,
 
+            puskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas?.nama || prev.puskesmas,
+
             posyandu_id: u.posyandu_id || u.posyandu?.id || prev.posyandu_id,
 
             puskesmas_id: u.puskesmas_id || u.puskesmas?.id || prev.puskesmas_id,
@@ -132,8 +139,27 @@ export default function App() {
              * profile_picture sekarang disimpan
              * di global user.
              */
-            profile_picture: u.profile_picture ?? prev.profile_picture,
+            profile_picture: u.profile_picture ?? u.profilePicture ?? u.foto_profil ?? u.foto ?? u.avatar ?? prev.profile_picture,
           }));
+
+          // /users/me pada backend mengembalikan puskesmas_id, tetapi tidak menyertakan relasi puskesmas.
+          // Resolve nama Puskesmas berdasarkan ID user agar sidebar/profil tidak mengambil nama Posyandu.
+          if (u.puskesmas_id) {
+            try {
+              const puskesmasRes = await posyanduService.getPublicPuskesmasList();
+              const puskesmas = (Array.isArray(puskesmasRes?.data) ? puskesmasRes.data : []).find((item) => String(item?.id) === String(u.puskesmas_id));
+
+              if (puskesmas) {
+                setUser((prev) => ({
+                  ...prev,
+                  puskesmas: puskesmas.nama_puskesmas || prev.puskesmas,
+                  puskesmas_id: puskesmas.id,
+                }));
+              }
+            } catch (error) {
+              console.warn("Gagal mengambil nama Puskesmas user:", error);
+            }
+          }
 
           if (u.posyandu_id) {
             try {
@@ -165,10 +191,16 @@ export default function App() {
     const isDinkesRole = ["dinkes", "dinkesAdmin", "dinkes-staf", "dinkes-admin"].includes(currentBackendRole);
 
     const canAccessPersonalData = !isDinkesRole;
+    const isPuskesmasRole = ["puskesmas", "puskesmasAdmin", "puskesmas-admin", "puskesmas-staf", "puskesmas-user"].includes(currentBackendRole);
 
     if (!canAccessPersonalData) {
       setGlobalPemeriksaanData({});
       setGlobalSasaranList([]);
+    }
+
+    if (!isPuskesmasRole) {
+      setGlobalPosyanduList([]);
+      setGlobalRujukanList([]);
     }
 
     // =======================================================
@@ -284,6 +316,22 @@ export default function App() {
       console.error("Gagal mengambil Data Warga dari backend:", err);
     }
     // =======================================================
+    // POSYANDU & RUJUKAN PUSKESMAS
+    // =======================================================
+    if (isPuskesmasRole) {
+      try {
+        const [posyanduRes, rujukanRes] = await Promise.all([posyanduService.getAllPosyandu(), rujukanService.getAllRujukan()]);
+
+        setGlobalPosyanduList(Array.isArray(posyanduRes?.data) ? posyanduRes.data : []);
+        setGlobalRujukanList(Array.isArray(rujukanRes?.data) ? rujukanRes.data : []);
+      } catch (err) {
+        console.error("Gagal mengambil data Posyandu/Rujukan Puskesmas:", err);
+        setGlobalPosyanduList([]);
+        setGlobalRujukanList([]);
+      }
+    }
+
+    // =======================================================
     // JADWAL
     // =======================================================
     try {
@@ -379,6 +427,8 @@ export default function App() {
 
       posyandu: loginData.posyandu?.nama_posyandu || loginData.posyandu || prev.posyandu,
 
+      puskesmas: loginData.puskesmas?.nama_puskesmas || loginData.puskesmas?.nama || loginData.user?.puskesmas?.nama_puskesmas || prev.puskesmas,
+
       roleType,
 
       role: roleTitle,
@@ -391,7 +441,18 @@ export default function App() {
        * Tambahkan profile_picture
        * apabila login response memilikinya.
        */
-      profile_picture: loginData.profile_picture || loginData.user?.profile_picture || prev.profile_picture,
+      profile_picture:
+        loginData.profile_picture ||
+        loginData.profilePicture ||
+        loginData.foto_profil ||
+        loginData.foto ||
+        loginData.avatar ||
+        loginData.user?.profile_picture ||
+        loginData.user?.profilePicture ||
+        loginData.user?.foto_profil ||
+        loginData.user?.foto ||
+        loginData.user?.avatar ||
+        prev.profile_picture,
     }));
 
     setActiveMenu("dashboard");
@@ -531,7 +592,17 @@ export default function App() {
         )}
 
         {activeMenu === "dashboard" && (
-          <PuskesmasDashboardPage onNavigate={handleNavigate} globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} globalJadwalList={globalJadwalList} onRefreshData={fetchBackendData} />
+          <PuskesmasDashboardPage
+            onNavigate={handleNavigate}
+            globalSasaranList={globalSasaranList}
+            globalPemeriksaanData={globalPemeriksaanData}
+            globalJadwalList={globalJadwalList}
+            globalPosyanduList={globalPosyanduList}
+            globalRujukanList={globalRujukanList}
+            globalStatistikSasaran={globalStatistikSasaran}
+            isGlobalStatistikLoading={isGlobalStatistikLoading}
+            onRefreshData={fetchBackendData}
+          />
         )}
 
         {activeMenu === "jadwal" && <PuskesmasJadwalPage globalJadwalList={globalJadwalList} setGlobalJadwalList={setGlobalJadwalList} onRefreshData={fetchBackendData} />}
@@ -547,14 +618,18 @@ export default function App() {
           />
         )}
 
-        {isPuskesmasAdmin && activeMenu === "pemantauan-rujukan" && <PuskesmasPemantauanRujukanPage globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} onRefreshData={fetchBackendData} />}
+        {activeMenu === "pemantauan-rujukan" && <PuskesmasPemantauanRujukanPage globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} onRefreshData={fetchBackendData} />}
 
-        {activeMenu === "laporan-ekspor" &&
-          (isPuskesmasStaf ? (
-            <RekapTemplateExcelView globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} userRole="puskesmas-staf" user={user} />
-          ) : (
-            <PuskesmasRekapitulasiPage globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} onNavigate={handleNavigate} onRefreshData={fetchBackendData} />
-          ))}
+        {activeMenu === "laporan-ekspor" && (
+          <PuskesmasRekapitulasiPage
+            globalSasaranList={globalSasaranList}
+            globalPemeriksaanData={globalPemeriksaanData}
+            onNavigate={handleNavigate}
+            onRefreshData={fetchBackendData}
+            user={user}
+            userRole={isPuskesmasStaf ? "puskesmas-staf" : "puskesmas-admin"}
+          />
+        )}
 
         {(activeMenu === "profil-instansi" || activeMenu === "profil-pengguna") && (
           <ProfilPenggunaPage

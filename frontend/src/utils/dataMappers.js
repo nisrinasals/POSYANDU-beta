@@ -22,6 +22,25 @@ export const KATEGORI_MAPPINGS = {
 export function mapBackendWargaToFrontend(w) {
   if (!w) return null;
 
+  const birthDateRaw = w.tanggal_lahir || w.tglLahir;
+  let calculatedAge = "";
+  if (birthDateRaw) {
+    const birth = new Date(birthDateRaw);
+    const now = new Date();
+    if (!Number.isNaN(birth.getTime()) && birth <= now) {
+      let months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+      if (now.getDate() < birth.getDate()) months -= 1;
+      months = Math.max(0, months);
+      if (months < 24) {
+        calculatedAge = `${months} bln`;
+      } else {
+        const years = Math.floor(months / 12);
+        const remainder = months % 12;
+        calculatedAge = remainder ? `${years} th ${remainder} bln` : `${years} th`;
+      }
+    }
+  }
+
   const kategoriKey = (w.kategori_sasaran_saat_ini || w.kategori_sasaran_estimasi || w.kategori_sasaran || w.kategori || w.subKategori || "").toLowerCase();
 
   const matched = KATEGORI_MAPPINGS[kategoriKey];
@@ -38,7 +57,7 @@ export function mapBackendWargaToFrontend(w) {
     nama: w.nama_lengkap || w.nama || "",
     nik: w.nik || "",
     tglLahir: w.tanggal_lahir ? String(w.tanggal_lahir).split("T")[0] : w.tglLahir || "",
-    usia: w.umur_text || w.usia || "",
+    usia: w.umur_text || w.usia || calculatedAge,
     usiaBulan: w.usia_bulan ?? null,
     gender,
     kategori: matched?.label || w.kategori || "",

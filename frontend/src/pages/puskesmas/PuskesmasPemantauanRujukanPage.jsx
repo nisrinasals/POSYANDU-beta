@@ -7,17 +7,28 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
   // State kehadiran pasien rujukan (id: 'Hadir' | 'Tidak Hadir')
 
   const [backendReferrals, setBackendReferrals] = useState([]);
+  const [isLoadingReferrals, setIsLoadingReferrals] = useState(true);
+  const [referralError, setReferralError] = useState("");
+  const [loadingReferrals, setLoadingReferrals] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadingReferrals(true);
+    setReferralError("");
     rujukanService
       .getAllRujukan()
       .then((res) => {
         const rows = Array.isArray(res?.data) ? res.data : [];
         if (!cancelled) setBackendReferrals(rows);
       })
-      .catch(() => {
-        if (!cancelled) setBackendReferrals([]);
+      .catch((error) => {
+        if (!cancelled) {
+          setBackendReferrals([]);
+          setReferralError(error?.response?.data?.message || error?.message || "Gagal mengambil data rujukan dari backend.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingReferrals(false);
       });
     return () => {
       cancelled = true;
@@ -117,6 +128,8 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
 
   return (
     <div className="d-flex flex-column gap-3 pb-4">
+      {loadingReferrals && <div className="alert alert-light border mb-0">Memuat data rujukan dari backend...</div>}
+      {!loadingReferrals && referralError && <div className="alert alert-danger border mb-0">{referralError}</div>}
       {/* Filter and Search Bar Section */}
       <div className="card border-0 bg-white shadow-xs rounded-4 p-4" style={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
         <div className="row g-3 align-items-center">
@@ -202,6 +215,9 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
           </div>
         </div>
       </div>
+
+      {isLoadingReferrals && <div className="alert alert-light border text-muted mb-0">Memuat data rujukan dari backend...</div>}
+      {referralError && !isLoadingReferrals && <div className="alert alert-danger mb-0">{referralError}</div>}
 
       {/* Main Referral Table Card */}
       <div className="card border-0 shadow-xs rounded-4 bg-white overflow-hidden">

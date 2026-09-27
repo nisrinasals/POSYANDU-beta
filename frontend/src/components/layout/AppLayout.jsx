@@ -48,7 +48,11 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
     return "Kader";
   };
 
-  const getRoleSubLabel = () => user?.posyandu || user?.instansi || user?.puskesmas || "";
+  const getRoleSubLabel = () => {
+    if (isPuskesmas) return user?.puskesmas || "";
+    if (isDinkes) return user?.instansi || user?.puskesmas || "";
+    return user?.posyandu || "";
+  };
 
   // Profile picture dari backend disimpan sebagai /uploads/profile/...,
   // sedangkan frontend biasanya berjalan di origin yang berbeda dari API.
@@ -69,7 +73,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
     return `${apiOrigin}${normalizedPath}`;
   };
 
-  const profilePictureSrc = getProfilePictureSrc(user?.profile_picture || user?.foto || user?.avatar);
+  const profilePictureSrc = getProfilePictureSrc(user?.profile_picture || user?.profilePicture || user?.foto_profil || user?.poto_profile || user?.foto || user?.avatar);
 
   const roleClass = isDinkes ? "role-dinkes" : isPuskesmas ? "role-puskesmas" : "role-kader";
 
@@ -387,7 +391,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 )}
 
                 {/* 5. Pemantauan Rujukan (KHUSUS ADMIN PUSKESMAS) */}
-                {isPuskesmasAdmin && (
+                {isPuskesmas && (
                   <a
                     href="#pemantauan-rujukan"
                     className={`nav-link-custom puskesmas-nav-link ${activeMenu === "pemantauan-rujukan" ? "active" : ""}`}

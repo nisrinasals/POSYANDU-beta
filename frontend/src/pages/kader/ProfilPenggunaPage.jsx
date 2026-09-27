@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { User, Save, KeyRound, Camera, Eye, EyeOff, Pencil, X, LockKeyhole, CircleCheck } from "lucide-react";
 import { Modal, Button } from "react-bootstrap";
 import { useNotification } from "../../context/NotificationContext";
-import { userService } from "../../services";
+import { userService, posyanduService } from "../../services";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
 
@@ -29,7 +29,7 @@ const resolveProfileImageUrl = (image) => {
 };
 
 const getProfileImageFromUser = (userData) => {
-  return userData?.profile_picture || userData?.profilePicture || userData?.foto || userData?.avatar || null;
+  return userData?.profile_picture || userData?.profilePicture || userData?.foto_profil || userData?.poto_profile || userData?.foto || userData?.avatar || null;
 };
 
 export default function ProfilPenggunaPage({ user, onUpdateUser }) {
@@ -40,9 +40,9 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
   // =========================================================
   // ROLE THEME
   // =========================================================
-  const isPuskesmas = user?.roleType?.includes("puskesmas") || user?.posyandu?.toLowerCase()?.includes("puskesmas");
+  const isPuskesmas = user?.roleType?.includes("puskesmas");
 
-  const isDinkes = user?.roleType?.includes("dinkes") || user?.posyandu?.toLowerCase()?.includes("dinas") || user?.nama?.toLowerCase()?.includes("dinas");
+  const isDinkes = user?.roleType?.includes("dinkes");
 
   const getRoleTheme = () => {
     if (isDinkes) {
@@ -82,6 +82,8 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
     email: data?.email || "",
     telepon: data?.telepon || "",
     posyandu: data?.posyandu?.nama_posyandu || data?.posyandu || "",
+    puskesmas: data?.puskesmas?.nama_puskesmas || data?.puskesmas || "",
+    puskesmas: data?.puskesmas?.nama_puskesmas || data?.puskesmas?.nama || data?.puskesmas || "",
   });
 
   const initialProfileData = createProfileData(user);
@@ -147,6 +149,18 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
           return;
         }
 
+        let resolvedPuskesmas = backendUser.puskesmas?.nama_puskesmas || backendUser.puskesmas?.nama || backendUser.puskesmas || user?.puskesmas || "";
+
+        if (isPuskesmas && backendUser.puskesmas_id && !resolvedPuskesmas) {
+          try {
+            const puskesmasRes = await posyanduService.getPublicPuskesmasList();
+            const matched = (Array.isArray(puskesmasRes?.data) ? puskesmasRes.data : []).find((item) => String(item?.id) === String(backendUser.puskesmas_id));
+            resolvedPuskesmas = matched?.nama_puskesmas || "";
+          } catch (resolveError) {
+            console.warn("Gagal resolve nama Puskesmas:", resolveError);
+          }
+        }
+
         const freshProfileData = {
           nama: backendUser.nama_lengkap || backendUser.nama || user?.nama || "",
 
@@ -156,9 +170,9 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
 
           telepon: backendUser.telepon ?? user?.telepon ?? "",
 
-          // Jangan bergantung pada GET /users/me
-          // karena endpoint tersebut tidak include relasi posyandu.
           posyandu: backendUser.posyandu?.nama_posyandu || backendUser.posyandu || user?.posyandu || "",
+
+          puskesmas: resolvedPuskesmas,
         };
 
         const rawPhoto = getProfileImageFromUser(backendUser);
@@ -194,8 +208,9 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
 
             telepon: freshProfileData.telepon,
 
-            // Pertahankan Posyandu dari App/global state
             posyandu: freshProfileData.posyandu,
+
+            puskesmas: freshProfileData.puskesmas,
 
             profile_picture: rawPhoto || user?.profile_picture || null,
           });
@@ -331,6 +346,8 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
 
           posyandu: updatedData.posyandu,
 
+          puskesmas: updatedData.puskesmas,
+
           profile_picture: user?.profile_picture || getProfileImageFromUser(backendUser) || null,
         });
       }
@@ -378,7 +395,32 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
        *     "/uploads/profile/..."
        * }
        */
-      let rawPhoto = response?.data?.profile_picture || response?.profile_picture || response?.data?.user?.profile_picture || response?.user?.profile_picture || null;
+      let rawPhoto =
+        response?.data?.profile_picture ||
+        response?.data?.profilePicture ||
+        response?.data?.foto_profil ||
+        response?.data?.poto_profile ||
+        response?.data?.foto ||
+        response?.data?.avatar ||
+        response?.profile_picture ||
+        response?.profilePicture ||
+        response?.foto_profil ||
+        response?.poto_profile ||
+        response?.foto ||
+        response?.avatar ||
+        response?.data?.user?.profile_picture ||
+        response?.data?.user?.profilePicture ||
+        response?.data?.user?.foto_profil ||
+        response?.data?.user?.poto_profile ||
+        response?.data?.user?.foto ||
+        response?.data?.user?.avatar ||
+        response?.user?.profile_picture ||
+        response?.user?.profilePicture ||
+        response?.user?.foto_profil ||
+        response?.user?.poto_profile ||
+        response?.user?.foto ||
+        response?.user?.avatar ||
+        null;
 
       /*
        * Apabila response upload tidak membawa
@@ -536,7 +578,7 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
 
           <h3 className="fw-bold text-dark mb-1">{isLoadingProfile ? "Memuat..." : profileData.nama || "-"}</h3>
 
-          <p className="text-muted fw-medium small mb-0">{profileData.posyandu || user?.posyandu || "-"}</p>
+          <p className="text-muted fw-medium small mb-0">{isPuskesmas ? profileData.puskesmas || user?.puskesmas || "-" : isDinkes ? user?.instansi || profileData.puskesmas || "-" : profileData.posyandu || user?.posyandu || "-"}</p>
         </div>
 
         {/* ===================================================

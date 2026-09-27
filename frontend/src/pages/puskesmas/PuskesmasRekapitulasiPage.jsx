@@ -3,6 +3,22 @@ import { Download, Search, Users, CheckCircle, Clock, AlertTriangle, Filter, Cal
 import DetailRekapModal, { resolve5StepDetails } from "../../components/pemeriksaan/DetailRekapModal";
 import ExportRekapModal from "../../components/pemeriksaan/ExportRekapModal";
 
+const formatAge = (birthDate, fallback = "") => {
+  if (fallback && String(fallback).trim() && String(fallback).trim() !== "-") return fallback;
+  if (!birthDate) return "-";
+  const birth = new Date(birthDate);
+  if (Number.isNaN(birth.getTime())) return "-";
+  const now = new Date();
+  let months = (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
+  if (now.getDate() < birth.getDate()) months -= 1;
+  if (months < 0) return "-";
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+  if (years > 0 && remainingMonths > 0) return `${years} th ${remainingMonths} bln`;
+  if (years > 0) return `${years} th`;
+  return `${months} bln`;
+};
+
 export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], globalPemeriksaanData = {}, onNavigate, user, userRole = "puskesmas" }) {
   const isDinkes = userRole === "dinkes" || user?.roleType?.includes("dinkes");
   const themeColor = isDinkes ? "#1e3a8a" : "#428A75";
@@ -41,7 +57,21 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
           nik: s.nik || "",
           kategori: s.kategori || "",
           subKategori: s.subKategori || "",
-          subText: s.usia || "",
+          subText:
+            s.usia ||
+            (() => {
+              if (!s.tglLahir) return "";
+              const birth = new Date(s.tglLahir);
+              const now = new Date();
+              if (Number.isNaN(birth.getTime()) || birth > now) return "";
+              let months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+              if (now.getDate() < birth.getDate()) months -= 1;
+              months = Math.max(0, months);
+              if (months < 24) return `${months} bln`;
+              const years = Math.floor(months / 12);
+              const remainder = months % 12;
+              return remainder ? `${years} th ${remainder} bln` : `${years} th`;
+            })(),
           tglLahir: s.tglLahir || "",
           gender: s.gender || "",
           posyandu: s.posyandu || "",

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { Calendar, Search, ChevronLeft, ChevronRight, Eye, X, Info, CalendarCheck, FileText } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
+import { Calendar, Search, ChevronLeft, ChevronRight, Eye, X, Info, CalendarCheck, FileText, MapPin } from "lucide-react";
 
 export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJadwalList, onRefreshData }) {
   // Search & Filter states
@@ -8,6 +8,27 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
   const [bulanFilter, setBulanFilter] = useState("Semua");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  const filteredList = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return (globalJadwalList || []).filter((item) => {
+      const haystack = [item?.posyandu, item?.rw, item?.lokasi, item?.alamatDetail, item?.nakes, item?.namaNakes].filter(Boolean).join(" ").toLowerCase();
+
+      const matchSearch = !query || haystack.includes(query);
+      const matchPosyandu = posyanduFilter === "Semua" || String(item?.posyandu || "") === posyanduFilter;
+      const rawDate = String(item?.tanggal || "");
+      const matchMonth = bulanFilter === "Semua" || rawDate.slice(0, 7) === bulanFilter;
+
+      return matchSearch && matchPosyandu && matchMonth;
+    });
+  }, [globalJadwalList, searchQuery, posyanduFilter, bulanFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredList.length / itemsPerPage));
+  const paginatedList = useMemo(() => filteredList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredList, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   // Modal states
   const [selectedJadwal, setSelectedJadwal] = useState(null);
@@ -117,7 +138,6 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
                 <th className="py-3 px-3">NAMA POSYANDU &amp; RW</th>
                 <th className="py-3 px-3">TANGGAL &amp; WAKTU</th>
                 <th className="py-3 px-3">LOKASI</th>
-                <th className="py-3 px-3">FOKUS LAYANAN</th>
                 <th className="py-3 px-3 text-center">STATUS</th>
                 <th className="py-3 px-3 text-end">AKSI</th>
               </tr>
@@ -169,17 +189,6 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
                         </div>
                         <div className="text-muted small" style={{ fontSize: "0.8rem" }}>
                           {item.alamatDetail}
-                        </div>
-                      </td>
-
-                      {/* FOKUS LAYANAN */}
-                      <td className="py-3 px-3">
-                        <div className="d-flex flex-wrap gap-1.5">
-                          {item.fokusLayanan?.map((layanan, fIdx) => (
-                            <span key={fIdx} className="badge bg-light text-dark border px-2.5 py-1 rounded-2" style={{ fontSize: "0.78rem", fontWeight: 500 }}>
-                              {layanan}
-                            </span>
-                          ))}
                         </div>
                       </td>
 
@@ -266,7 +275,7 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
                       <div className="d-flex align-items-center gap-2 pb-2 mb-2 border-bottom text-dark">
                         <Calendar size={16} style={{ color: "#428A75" }} />
                         <h6 className="fw-bold mb-0" style={{ fontSize: "0.9rem" }}>
-                          Waktu Pelaksanaan
+                          Informasi Jadwal
                         </h6>
                       </div>
                       <table className="table table-borderless table-sm mb-0" style={{ fontSize: "0.82rem" }}>
@@ -276,10 +285,6 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
                               Hari / Tanggal
                             </td>
                             <td className="py-1 fw-bold text-dark">: {selectedJadwal.tanggalFormatted || selectedJadwal.tanggal}</td>
-                          </tr>
-                          <tr>
-                            <td className="text-muted ps-0 py-1">Waktu Pelaksanaan</td>
-                            <td className="py-1 text-dark">: {selectedJadwal.waktu || ""}</td>
                           </tr>
                           <tr>
                             <td className="text-muted ps-0 py-1">Status Jadwal</td>
@@ -324,31 +329,6 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
                           </tr>
                         </tbody>
                       </table>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Fokus Layanan & Catatan */}
-                  <div className="col-12">
-                    <div className="card border-0 shadow-xs rounded-3 p-3 bg-white">
-                      <h6 className="fw-bold text-dark mb-2" style={{ fontSize: "0.9rem" }}>
-                        Fokus Layanan Hari Ini
-                      </h6>
-                      <div className="d-flex flex-wrap gap-1.5 mb-3">
-                        {(selectedJadwal.fokusLayanan || []).map((layanan, i) => (
-                          <span key={i} className="badge bg-light text-secondary border px-2.5 py-1 rounded-2" style={{ fontSize: "0.78rem" }}>
-                            {layanan}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="p-3 bg-light rounded-2 border">
-                        <span className="text-muted d-block mb-1" style={{ fontSize: "0.74rem" }}>
-                          Catatan Persiapan:
-                        </span>
-                        <p className="mb-0 text-dark fw-medium" style={{ fontSize: "0.84rem" }}>
-                          {selectedJadwal.catatan || ""}
-                        </p>
-                      </div>
                     </div>
                   </div>
                 </div>
