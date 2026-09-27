@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Search, Filter, Eye, Info, ChevronLeft, ChevronRight, User, Calendar, Heart, Activity, ShieldCheck, CheckCircle2, Stethoscope, Baby, UserCheck, Clock, FileText, AlertCircle, X } from "lucide-react";
 import { Modal, Button } from "react-bootstrap";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
+import ExportSasaranButton from "../../components/sasaran/ExportSasaranButton";
 
 export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globalPemeriksaanData = {}, onNavigate, initialCategoryFilter, setCategoryFilterParam, user, userRole = "puskesmas" }) {
   const isDinkes = userRole === "dinkes" || user?.roleType?.includes("dinkes");
@@ -80,6 +81,9 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
 
   return (
     <div className="d-flex flex-column gap-3 pb-4">
+      <div className="d-flex justify-content-end">
+        <ExportSasaranButton themeColor={themeColor} />
+      </div>
       {/* Filter & Search Bar Section */}
       <div className="card border-0 bg-white shadow-xs rounded-4 p-3">
         <div className="row g-2.5 align-items-center">

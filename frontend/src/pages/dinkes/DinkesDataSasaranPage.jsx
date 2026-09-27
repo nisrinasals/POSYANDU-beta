@@ -2,7 +2,16 @@ import React, { useState, useMemo } from "react";
 import { Search, Eye, Filter, Info, ChevronLeft, ChevronRight, Building2, X } from "lucide-react";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
 
-export default function DinkesDataSasaranPage({ globalSasaranList = [], globalPemeriksaanData = {}, onNavigate, initialCategoryFilter, setCategoryFilterParam }) {
+export default function DinkesDataSasaranPage({
+  globalSasaranList = [],
+  globalPemeriksaanData = {},
+  globalStatistikSasaran = {},
+  isGlobalStatistikLoading = false,
+  privacyMode = false,
+  onNavigate,
+  initialCategoryFilter,
+  setCategoryFilterParam,
+}) {
   const themeColor = "#1e3a8a";
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,6 +47,8 @@ export default function DinkesDataSasaranPage({ globalSasaranList = [], globalPe
         matchesCategory = itemCat.includes(selCat) || selCat.includes(itemCat);
       }
 
+      const matchesStatus = statusFilter === "Semua Status" || (statusFilter === "Aktif" && item.status === "Aktif") || (statusFilter === "Non-Aktif" && item.status !== "Aktif");
+
       // 3. Puskesmas / Faskes Filter
       let matchesPuskesmas = true;
       if (selectedPuskesmas !== "all") {
@@ -45,9 +56,9 @@ export default function DinkesDataSasaranPage({ globalSasaranList = [], globalPe
         matchesPuskesmas = itemPusk.includes(selectedPuskesmas.toLowerCase());
       }
 
-      return matchesSearch && matchesCategory && matchesPuskesmas;
+      return matchesSearch && matchesCategory && matchesStatus && matchesPuskesmas;
     });
-  }, [dataset, searchQuery, selectedCategory, selectedPuskesmas]);
+  }, [dataset, searchQuery, statusFilter, selectedCategory, selectedPuskesmas]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
@@ -73,6 +84,53 @@ export default function DinkesDataSasaranPage({ globalSasaranList = [], globalPe
     setSelectedPuskesmas("all");
     setCurrentPage(1);
   };
+
+  if (privacyMode) {
+    const categories = [
+      ["bumil", "Bumil"],
+      ["busui", "Nifas/Menyusui"],
+      ["bayi", "Bayi 0-11 Bulan"],
+      ["balita", "Balita 12-59 Bulan"],
+      ["apras", "Apras 60-72 Bulan"],
+      ["uskrem_6_14", "Usia Sekolah 6-14 Tahun"],
+      ["uskrem_15_18", "Usia Sekolah 15-18 Tahun"],
+      ["dewasa", "Dewasa"],
+      ["lansia", "Lansia"],
+    ];
+    const total = Number(globalStatistikSasaran?.total_warga || 0);
+
+    return (
+      <div className="d-flex flex-column gap-3.5 pb-4">
+        <div className="card border-0 bg-white shadow-sm rounded-4 p-4">
+          <div className="d-flex align-items-start gap-3">
+            <div className="rounded-3 p-3 bg-primary-subtle text-primary">
+              <Building2 size={24} />
+            </div>
+            <div>
+              <h4 className="fw-bold text-dark mb-1">Statistik Sasaran Agregat</h4>
+              <p className="text-muted mb-0">Data personal seperti nama, NIK, alamat, dan detail warga tidak ditampilkan untuk role Dinkes.</p>
+            </div>
+          </div>
+          <div className="row g-3 mt-3">
+            <div className="col-12 col-md-4">
+              <div className="border rounded-3 p-3 h-100">
+                <div className="text-muted small">Total warga aktif</div>
+                <div className="display-6 fw-bold text-dark">{isGlobalStatistikLoading ? "..." : total.toLocaleString("id-ID")}</div>
+              </div>
+            </div>
+            {categories.map(([key, label]) => (
+              <div className="col-6 col-md-4 col-xl-3" key={key}>
+                <div className="border rounded-3 p-3 h-100">
+                  <div className="text-muted small">{label}</div>
+                  <div className="fs-3 fw-bold text-dark">{isGlobalStatistikLoading ? "..." : Number(globalStatistikSasaran?.[key] || 0).toLocaleString("id-ID")}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="d-flex flex-column gap-3.5 pb-4">

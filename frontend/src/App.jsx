@@ -19,7 +19,6 @@ import DinkesDashboardPage from "./pages/dinkes/DinkesDashboardPage";
 import DinkesVerifikasiAkunPage from "./pages/dinkes/DinkesVerifikasiAkunPage";
 import DinkesDataSasaranPage from "./pages/dinkes/DinkesDataSasaranPage";
 import DinkesJadwalMonitoringPage from "./pages/dinkes/DinkesJadwalMonitoringPage";
-import DinkesRekapitulasiPage from "./pages/dinkes/DinkesRekapitulasiPage";
 import RekapTemplateExcelView from "./components/pemeriksaan/RekapTemplateExcelView";
 
 import { authService, sesiService, pemeriksaanService, userService, posyanduService } from "./services";
@@ -45,6 +44,8 @@ export default function App() {
   // Shared Global Data State (Directly synced with real database)
   const [globalSasaranList, setGlobalSasaranList] = useState([]);
   const [globalPemeriksaanData, setGlobalPemeriksaanData] = useState({});
+  const [globalStatistikSasaran, setGlobalStatistikSasaran] = useState({});
+  const [isGlobalStatistikLoading, setIsGlobalStatistikLoading] = useState(false);
   const [globalJadwalList, setGlobalJadwalList] = useState([]);
   const [activePemeriksaanWargaId, setActivePemeriksaanWargaId] = useState(null);
   const [categoryFilterParam, setCategoryFilterParam] = useState("Semua Kategori");
@@ -52,12 +53,14 @@ export default function App() {
   const fetchBackendData = async () => {
     // 1. Ambil Profil User Terkini jika token ada
     const token = localStorage.getItem("token");
+    let currentBackendRole = user.roleType;
     if (token) {
       try {
         const meRes = await userService.getMe();
         if (meRes?.data) {
           const u = meRes.data;
-          let roleType = u.role || "";
+          currentBackendRole = u.role || currentBackendRole;
+          let roleType = currentBackendRole;
           let roleTitle = "Kader";
           if (roleType === "dinkesAdmin") {
             roleTitle = "Admin Dinas Kesehatan";
@@ -111,27 +114,48 @@ export default function App() {
       }
     }
 
+    const isDinkesRole = ["dinkes", "dinkesAdmin", "dinkes-staf", "dinkes-admin"].includes(currentBackendRole);
+    const canAccessPersonalData = !isDinkesRole;
+
+    if (!canAccessPersonalData) {
+      setGlobalPemeriksaanData({});
+      setGlobalSasaranList([]);
+    }
+
+    try {
+      setIsGlobalStatistikLoading(true);
+      const statistikRes = await wargaService.getStatistikSasaran();
+      setGlobalStatistikSasaran(statistikRes?.data || {});
+    } catch (err) {
+      console.error("Gagal mengambil statistik sasaran dari backend:", err);
+      setGlobalStatistikSasaran({});
+    } finally {
+      setIsGlobalStatistikLoading(false);
+    }
+
     // 2. Ambil Rekam Pemeriksaan Posyandu terlebih dahulu untuk memetakan status pemeriksaan warga
     let backendPemMap = {};
     try {
-      const resPem = await pemeriksaanService.getAllPemeriksaan();
-      const pemItems = resPem?.data?.items || resPem?.data;
-      if (Array.isArray(pemItems)) {
-        pemItems.forEach((p) => {
-          if (p) {
-            const wId = p.kunjungan?.warga_id || p.warga_id || p.sasaranId || p.kunjungan?.warga?.id || p.warga?.id;
-            if (wId) {
-              backendPemMap[wId] = p;
-              backendPemMap[String(wId)] = p;
+      if (canAccessPersonalData) {
+        const resPem = await pemeriksaanService.getAllPemeriksaan();
+        const pemItems = resPem?.data?.items || resPem?.data;
+        if (Array.isArray(pemItems)) {
+          pemItems.forEach((p) => {
+            if (p) {
+              const wId = p.kunjungan?.warga_id || p.warga_id || p.sasaranId || p.kunjungan?.warga?.id || p.warga?.id;
+              if (wId) {
+                backendPemMap[wId] = p;
+                backendPemMap[String(wId)] = p;
+              }
+              if (p.id) {
+                backendPemMap[`exam_${p.id}`] = p;
+              }
             }
-            if (p.id) {
-              backendPemMap[`exam_${p.id}`] = p;
-            }
-          }
-        });
-        setGlobalPemeriksaanData((prev) => ({ ...prev, ...backendPemMap }));
-      } else if (resPem?.data && typeof resPem.data === "object" && !Array.isArray(resPem.data)) {
-        setGlobalPemeriksaanData((prev) => ({ ...prev, ...resPem.data }));
+          });
+          setGlobalPemeriksaanData((prev) => ({ ...prev, ...backendPemMap }));
+        } else if (resPem?.data && typeof resPem.data === "object" && !Array.isArray(resPem.data)) {
+          setGlobalPemeriksaanData((prev) => ({ ...prev, ...resPem.data }));
+        }
       }
     } catch (err) {
       console.info("Backend Pemeriksaan API offline.");
@@ -139,28 +163,30 @@ export default function App() {
 
     // 3. Ambil Data Warga
     try {
-      const resWarga = await wargaService.getAllWarga({
-        status_domisili: "all",
-      });
-      const wargaItems = resWarga?.data?.items || resWarga?.data || (Array.isArray(resWarga) ? resWarga : null);
-      if (Array.isArray(wargaItems)) {
-        const mapped = wargaItems.map(mapBackendWargaToFrontend).filter(Boolean);
-        setGlobalSasaranList((prev) => {
-          return mapped.map((w) => {
-            const existing = prev.find((p) => String(p.id) === String(w.id));
-            const exam = backendPemMap[w.id] || backendPemMap[String(w.id)];
-            const statusLangkah = exam?.kunjungan?.status_langkah;
-            const isCompleted = statusLangkah === "langkah_5";
-            if (isCompleted) {
-              return {
-                ...w,
-                statusPemeriksaan: "Sudah",
-                tglPeriksa: exam?.tanggal ? String(exam.tanggal).split("T")[0] : "",
-              };
-            }
-            return w;
-          });
+      if (canAccessPersonalData) {
+        const resWarga = await wargaService.getAllWarga({
+          status_domisili: "all",
         });
+        const wargaItems = resWarga?.data?.items || resWarga?.data || (Array.isArray(resWarga) ? resWarga : null);
+        if (Array.isArray(wargaItems)) {
+          const mapped = wargaItems.map(mapBackendWargaToFrontend).filter(Boolean);
+          setGlobalSasaranList((prev) => {
+            return mapped.map((w) => {
+              const existing = prev.find((p) => String(p.id) === String(w.id));
+              const exam = backendPemMap[w.id] || backendPemMap[String(w.id)];
+              const statusLangkah = exam?.kunjungan?.status_langkah;
+              const isCompleted = statusLangkah === "langkah_5";
+              if (isCompleted) {
+                return {
+                  ...w,
+                  statusPemeriksaan: "Sudah",
+                  tglPeriksa: exam?.tanggal ? String(exam.tanggal).split("T")[0] : "",
+                };
+              }
+              return existing ? { ...existing, ...w } : w;
+            });
+          });
+        }
       }
     } catch (err) {
       console.error("Gagal mengambil Data Warga dari backend:", err);
@@ -283,13 +309,23 @@ export default function App() {
     return (
       <AppLayout user={user} activeMenu={activeMenu} activeSubmenu={activeSubmenu} onNavigate={handleNavigate} onLogout={handleLogout}>
         {activeMenu === "dashboard" && (
-          <DinkesDashboardPage onNavigate={handleNavigate} user={user} globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} globalJadwalList={globalJadwalList} onRefreshData={fetchBackendData} />
+          <DinkesDashboardPage
+            onNavigate={handleNavigate}
+            user={user}
+            globalStatistikSasaran={globalStatistikSasaran}
+            isGlobalStatistikLoading={isGlobalStatistikLoading}
+            globalJadwalList={globalJadwalList}
+            onRefreshData={fetchBackendData}
+          />
         )}
         {isDinkesAdmin && (activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && <DinkesVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} />}
         {activeMenu === "data-sasaran" && (
           <DinkesDataSasaranPage
             globalSasaranList={globalSasaranList}
             globalPemeriksaanData={globalPemeriksaanData}
+            globalStatistikSasaran={globalStatistikSasaran}
+            isGlobalStatistikLoading={isGlobalStatistikLoading}
+            privacyMode
             onNavigate={handleNavigate}
             initialCategoryFilter={categoryFilterParam}
             setCategoryFilterParam={setCategoryFilterParam}
@@ -297,14 +333,7 @@ export default function App() {
           />
         )}
         {(activeMenu === "jadwal" || activeMenu === "jadwal-monitoring") && <DinkesJadwalMonitoringPage globalJadwalList={globalJadwalList} onRefreshData={fetchBackendData} />}
-        {activeMenu === "laporan-ekspor" &&
-          (isDinkesStaf ? (
-            /* TAMPILAN KHUSUS STAF DINKES: HANYA TEMPLATE EXCEL KEMENKES (TANPA DATA BY NAME) */
-            <RekapTemplateExcelView globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} userRole="dinkes-staf" user={user} />
-          ) : (
-            /* TAMPILAN ADMIN DINKES: DATA BY NAME & DETAIL REKAP LENGKAP */
-            <DinkesRekapitulasiPage globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} onNavigate={handleNavigate} onRefreshData={fetchBackendData} />
-          ))}
+        {activeMenu === "laporan-ekspor" && <RekapTemplateExcelView userRole="dinkes-staf" user={user} />}
         {activeMenu === "profil-pengguna" && <ProfilPenggunaPage user={{ ...user, roleType: isDinkesAdmin ? "dinkes-admin" : "dinkes-staf" }} onUpdateUser={(updated) => setUser({ ...user, ...updated })} />}
       </AppLayout>
     );

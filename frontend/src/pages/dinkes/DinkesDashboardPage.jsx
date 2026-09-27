@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { userService, posyanduService } from "../../services";
 import { Building2, Users, Layers, Calendar, FileSpreadsheet, UserCheck, ChevronRight, TrendingUp, Download, Activity } from "lucide-react";
 
-export default function DinkesDashboardPage({ onNavigate, user, globalSasaranList = [], globalPemeriksaanData = {} }) {
+export default function DinkesDashboardPage({ onNavigate, user, globalStatistikSasaran = {}, isGlobalStatistikLoading = false }) {
   const themeColor = "#1e3a8a";
   const [periodeGrafik, setPeriodeGrafik] = useState("6bulan");
   const [activeTooltip, setActiveTooltip] = useState(null);
@@ -11,7 +11,8 @@ export default function DinkesDashboardPage({ onNavigate, user, globalSasaranLis
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([userService.getAllUsers({ status: "pending_approval" }), posyanduService.getAllPosyandu()])
+    const pendingUsersRequest = user?.roleType === "dinkes-admin" ? userService.getAllUsers({ status: "pending_approval" }) : Promise.resolve({ data: [] });
+    Promise.all([pendingUsersRequest, posyanduService.getAllPosyandu()])
       .then(([usersRes, posyanduRes]) => {
         if (cancelled) return;
 
@@ -40,27 +41,15 @@ export default function DinkesDashboardPage({ onNavigate, user, globalSasaranLis
   }, []);
 
   // Dynamic calculations based only on backend data.
-  const totalSasaranKota = globalSasaranList ? globalSasaranList.length : 0;
+  const totalSasaranKota = Number(globalStatistikSasaran?.total_warga || 0);
   const totalPosyanduKota = registryStats.posyandu;
   const totalPuskesmasKota = registryStats.puskesmas;
 
-  // Real-time calculation of examined citizens
-  const totalExaminedKota = useMemo(() => {
-    const examined = (globalSasaranList || []).filter((s) => s.statusPemeriksaan === "Sudah" || s.status === "Sudah" || !!globalPemeriksaanData?.[s.id] || !!globalPemeriksaanData?.[String(s.id)]).length;
-    return examined;
-  }, [globalSasaranList, globalPemeriksaanData]);
-
   // Aggregate the real examination records returned by the backend.
   const cityChartData = useMemo(() => {
-    const rawRecords = Object.values(globalPemeriksaanData || {}).filter((item) => item && typeof item === "object" && item.tanggal);
-    const records = Array.from(new Map(rawRecords.map((item) => [String(item.id ?? `${item.tanggal}-${item.kunjungan?.warga_id ?? ""}`), item])).values());
     const now = new Date();
     const points = [];
-    const countForMonth = (year, month) =>
-      records.filter((item) => {
-        const d = new Date(item.tanggal);
-        return d.getFullYear() === year && d.getMonth() === month;
-      }).length;
+    const countForMonth = () => 0;
 
     if (periodeGrafik === "6bulan") {
       for (let offset = 5; offset >= 0; offset -= 1) {
@@ -84,19 +73,9 @@ export default function DinkesDashboardPage({ onNavigate, user, globalSasaranLis
       }
     }
     return points;
-  }, [globalPemeriksaanData, periodeGrafik]);
+  }, [periodeGrafik]);
 
-  const availableYears = useMemo(
-    () =>
-      [
-        ...new Set(
-          Object.values(globalPemeriksaanData || {})
-            .map((item) => String(item?.tanggal || "").slice(0, 4))
-            .filter((year) => /^\d{4}$/.test(year)),
-        ),
-      ].sort((a, b) => Number(b) - Number(a)),
-    [globalPemeriksaanData],
-  );
+  const availableYears = useMemo(() => [...new Set([])].sort((a, b) => Number(b) - Number(a)), []);
 
   // SVG Scaler calculations for full-width curved spline area chart
   const maxVal = Math.max(1, ...cityChartData.map((d) => d.pemeriksaan));
@@ -229,7 +208,7 @@ export default function DinkesDashboardPage({ onNavigate, user, globalSasaranLis
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-              <span className="fw-bolder text-dark fs-2 mb-0">{totalSasaranKota.toLocaleString("id-ID")}</span>
+              <span className="fw-bolder text-dark fs-2 mb-0">{isGlobalStatistikLoading ? "..." : totalSasaranKota.toLocaleString("id-ID")}</span>
               <span className="text-muted fw-medium small">Jiwa</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
@@ -251,7 +230,7 @@ export default function DinkesDashboardPage({ onNavigate, user, globalSasaranLis
               <span>Grafik Pemantauan &amp; Perkembangan Layanan Kesehatan Se-Kota</span>
             </h5>
             <p className="text-muted small mb-0" style={{ fontSize: "0.825rem" }}>
-              Statistik agregat pemeriksaan berkala dan tren pelayanan berdasarkan data yang tersedia pada backend.
+              Statistik aggregate sasaran berasal dari backend. Rekap pemeriksaan diunduh melalui endpoint export backend.
             </p>
           </div>
 
@@ -383,7 +362,7 @@ export default function DinkesDashboardPage({ onNavigate, user, globalSasaranLis
         {/* Footer Summary Bar */}
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 pt-3 border-top mt-2">
           <div className="text-muted small" style={{ fontSize: "0.825rem" }}>
-            💡 Total akumulasi skrining warga terverifikasi se-Kota mencapai <strong>{totalExaminedKota.toLocaleString("id-ID")} Jiwa</strong> (Capaian ILP Aktual).
+            <span>Data jumlah pemeriksaan aggregate untuk grafik belum disediakan oleh endpoint backend.</span>
           </div>
           <button
             className="btn btn-sm btn-light border text-dark fw-bold d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 align-self-start align-self-sm-auto shadow-none"

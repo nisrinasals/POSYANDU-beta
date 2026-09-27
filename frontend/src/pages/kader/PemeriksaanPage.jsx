@@ -5,7 +5,7 @@ import { useNotification } from "../../context/NotificationContext";
 import { validateNik, formatNikInput, validateMeasurements } from "../../utils/validators";
 import GrowthChartPlotter from "../../components/pemeriksaan/GrowthChartPlotter";
 import { mapFlatScreeningToBackend } from "../../utils/screeningPayload";
-import { pemeriksaanService, kunjunganService, wargaService } from "../../services";
+import { pemeriksaanService, kunjunganService, wargaService, sesiService } from "../../services";
 
 // Opsi Langkah 1: Pemeriksaan Sesuai Umur Kehamilan (Ibu Hamil) - Format Buku KIA
 const OPSI_UMUR_KEHAMILAN_BUMIL = ["<4 minggu", "4-8 minggu", "8-12 minggu", "12-16 minggu", "16-20 minggu", "20-24 minggu", "24-28 minggu", "28-32 minggu", "32-36 minggu", "36-40 minggu"];
@@ -290,6 +290,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   const [kunjunganIdByWarga, setKunjunganIdByWarga] = useState({});
   const [pemeriksaanByWarga, setPemeriksaanByWarga] = useState({});
   const [backendPlottingByWarga, setBackendPlottingByWarga] = useState({});
+  const [screeningHistoryByExam, setScreeningHistoryByExam] = useState({});
 
   // Presensi Kehadiran Langkah 1 (Status Kehadiran Hari Ini: { [wargaId]: true/false })
   const [kehadiranWarga, setKehadiranWarga] = useState({});
@@ -430,11 +431,30 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     };
   }, [currentSelectedWarga, currentExamListRecord, backendPlottingByWarga]);
 
+  useEffect(() => {
+    const examId = currentExamListRecord?.id;
+    if (!examId || screeningHistoryByExam[String(examId)]) return;
+
+    let cancelled = false;
+    pemeriksaanService
+      .getScreeningHistory(examId)
+      .then((res) => {
+        if (!cancelled && res?.data) {
+          setScreeningHistoryByExam((prev) => ({ ...prev, [String(examId)]: res.data }));
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentExamListRecord, screeningHistoryByExam]);
+
   // Keep legacy list metadata only; detailed clinical values come from backend Step 3.
   const currentExamData = useMemo(() => currentExamListRecord || null, [currentExamListRecord]);
 
   // Helper evaluasi riwayat skrining tahunan warga
-  const getRiwayatSkriningTahunanInfo = (warga, exam) => {
+  const getRiwayatSkriningTahunanInfo = (warga, exam, historyResponse) => {
     if (!warga) {
       return {
         hasHistory: false,
@@ -457,13 +477,15 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       (examL4.skriningJiwa && examL4.skriningJiwa !== ""),
     );
 
-    let rawDate = null;
+    const historyItems = Array.isArray(historyResponse?.history) ? historyResponse.history : Array.isArray(historyResponse?.screening_history) ? historyResponse.screening_history : [];
+    const latestHistory = historyResponse?.latest || historyItems[0] || null;
+    let rawDate = latestHistory?.tanggal || latestHistory?.tanggal_pemeriksaan || latestHistory?.created_at || null;
     if (hasExamAnnual) {
-      rawDate = examL4.tglSkriningTahunan || exam?.tglPemeriksaan || warga.tglSkriningTahunanTerakhir || warga.tglPeriksa;
+      rawDate = rawDate || examL4.tglSkriningTahunan || exam?.tglPemeriksaan || warga.tglSkriningTahunanTerakhir || warga.tglPeriksa;
     } else if (warga.tglSkriningTahunanTerakhir) {
-      rawDate = warga.tglSkriningTahunanTerakhir;
+      rawDate = rawDate || warga.tglSkriningTahunanTerakhir;
     } else if (warga.tglPeriksa && warga.statusPemeriksaan === "Sudah") {
-      rawDate = warga.tglPeriksa;
+      rawDate = rawDate || warga.tglPeriksa;
     }
 
     if (!rawDate) {
@@ -536,8 +558,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   }, [activeCitizenStep4, globalPemeriksaanData, currentExamData]);
 
   const annualScreeningInfo = useMemo(() => {
-    return getRiwayatSkriningTahunanInfo(activeCitizenStep4, activeExamDataStep4);
-  }, [activeCitizenStep4, activeExamDataStep4]);
+    const examId = activeExamDataStep4?.id;
+    return getRiwayatSkriningTahunanInfo(activeCitizenStep4, activeExamDataStep4, screeningHistoryByExam[String(examId)]);
+  }, [activeCitizenStep4, activeExamDataStep4, screeningHistoryByExam]);
 
   // Helper render riwayat pemeriksaan sebelumnya (ditiadakan sesuai masukan kader)
   const renderRiwayatPemeriksaanTerakhir = () => null;

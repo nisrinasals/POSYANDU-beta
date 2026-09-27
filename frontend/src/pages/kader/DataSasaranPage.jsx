@@ -32,6 +32,7 @@ import { mapBackendWargaToFrontend } from "../../utils/dataMappers";
 import { validateNik, formatNikInput, validatePhone, formatPhoneInput, validateBirthDate } from "../../utils/validators";
 import { useNotification } from "../../context/NotificationContext";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
+import ExportSasaranButton from "../../components/sasaran/ExportSasaranButton";
 
 export default function DataSasaranPage({
   globalSasaranList: sasaranList = [],
@@ -674,6 +675,7 @@ export default function DataSasaranPage({
     <div>
       {/* Top Action Bar: 2 Main Buttons (Mutasi & Tambah Sasaran 9 Kategori) */}
       <div className="d-flex flex-column flex-sm-row justify-content-end gap-2 mb-3">
+        <ExportSasaranButton />
         {/* Tombol 1: Sasaran Mutasi */}
         <button className="btn btn-dark-custom btn-top-action shadow-xs" onClick={() => setShowMutasiCheckModal(true)}>
           <UserCheck size={16} />

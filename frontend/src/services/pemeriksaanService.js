@@ -49,6 +49,10 @@ export const pemeriksaanService = {
     return await api.get(`/pemeriksaan/${id}/step-3`);
   },
 
+  getScreeningHistory: async (id) => {
+    return await api.get(`/pemeriksaan/${id}/screening-history`);
+  },
+
   saveStep4: async (data) => {
     return await api.post("/pemeriksaan/step-4", data);
   },
