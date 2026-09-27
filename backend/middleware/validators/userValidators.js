@@ -28,4 +28,29 @@ const updateMyProfile = [
     .withMessage("NIK harus terdiri dari 16 digit angka."),
 ];
 
-module.exports = { getUsers, getUserById, changeUserRole, changeUserStatus, updateMyProfile, verifyUser, replacePuskesmasAdmin, replaceDinkesAdmin, deactivateUser };
+const changePassword = [
+  body("old_password").notEmpty().withMessage("Password lama wajib diisi."),
+  body("new_password")
+    .notEmpty()
+    .withMessage("Password baru wajib diisi.")
+    .isLength({ min: 8 })
+    .withMessage("Password baru minimal 8 karakter.")
+    .custom((value, { req }) => {
+      if (value === req.body.old_password) {
+        throw new Error("Password baru harus berbeda dari password lama.");
+      }
+      return true;
+    }),
+  body("confirm_password")
+    .notEmpty()
+    .withMessage("Konfirmasi password baru wajib diisi.")
+    .custom((value, { req }) => {
+      if (value !== req.body.new_password) {
+        throw new Error("Konfirmasi password baru tidak cocok.");
+      }
+      return true;
+    }),
+];
+
+module.exports = { getUsers, getUserById, changeUserRole, changeUserStatus, updateMyProfile, changePassword, verifyUser, replacePuskesmasAdmin, replaceDinkesAdmin, deactivateUser };
+

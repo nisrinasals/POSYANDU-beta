@@ -11,6 +11,11 @@ export const userService = {
     return await api.patch("/users/me", data);
   },
 
+  // Ubah password user yang sedang login
+  changePassword: async (passwordData) => {
+    return await api.patch("/users/me/password", passwordData);
+  },
+
   // 3. Upload foto profil
   uploadProfilePicture: async (file) => {
     const formData = new FormData();

@@ -83,6 +83,7 @@ api.put("/users/:id/puskesmas-admin", authenticateToken, authorize("dinkesAdmin"
 api.put("/users/:id/dinkes-admin", authenticateToken, authorize("dinkesAdmin", "sa"), validator.user.replaceDinkesAdmin, validateResult, userController.replaceDinkesAdmin);
 api.get("/users/me", authenticateToken, userController.getMyProfile);
 api.patch("/users/me", authenticateToken, validator.user.updateMyProfile, validateResult, userController.updateMyProfile);
+api.patch("/users/me/password", authenticateToken, validator.user.changePassword, validateResult, userController.changePassword);
 api.post("/users/me/profile-picture", authenticateToken, uploadProfilePicture, userController.uploadProfilePicture);
 api.get("/users", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin", "sa"), validator.user.getUsers, validateResult, userController.getUsers);
 api.get("/users/:id", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin", "sa"), validator.user.getUserById, validateResult, userController.getUserById);

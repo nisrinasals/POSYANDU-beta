@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const bcrypt = require("bcryptjs");
 const { User } = require("../models");
 const { Op } = require("sequelize");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
@@ -275,6 +276,62 @@ const deactivateUser = async (req, res, next) => {
   }
 };
 
+const changePassword = async (req, res, next) => {
+  try {
+    const { old_password, new_password, confirm_password } = req.body;
+
+    if (!old_password || !new_password || !confirm_password) {
+      return res.status(400).json({ success: false, message: "Semua field password wajib diisi." });
+    }
+
+    if (new_password.length < 8) {
+      return res.status(400).json({ success: false, message: "Password baru minimal 8 karakter." });
+    }
+
+    if (new_password === old_password) {
+      return res.status(400).json({ success: false, message: "Password baru harus berbeda dari password lama." });
+    }
+
+    if (confirm_password !== new_password) {
+      return res.status(400).json({ success: false, message: "Konfirmasi password baru tidak cocok." });
+    }
+
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User tidak ditemukan." });
+    }
+
+    const isMatch = await bcrypt.compare(old_password, user.password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: "Password lama tidak sesuai." });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(new_password, salt);
+
+    await user.update({
+      password_hash,
+      token_version: user.token_version + 1,
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: AUDIT_ACTIONS.AUTH_RESET_PASSWORD,
+      tableName: "users",
+      recordId: user.id,
+      oldValue: null,
+      newValue: { id: user.id, email: user.email },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Password berhasil diperbarui.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUsers,
   getUserById,
@@ -286,6 +343,7 @@ module.exports = {
   deactivateUser,
   getMyProfile,
   updateMyProfile,
+  changePassword,
   uploadProfilePicture,
   rejectSelf,
   canVerifyUser,

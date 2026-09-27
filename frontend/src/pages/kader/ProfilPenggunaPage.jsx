@@ -5,7 +5,7 @@ import { useNotification } from "../../context/NotificationContext";
 import { userService } from "../../services";
 
 export default function ProfilPenggunaPage({ user, onUpdateUser }) {
-  const { showSuccess, showWarning } = useNotification();
+  const { showSuccess, showWarning, showError } = useNotification();
   const fileInputRef = useRef(null);
   const [profileImage, setProfileImage] = useState(user?.foto || user?.avatar || null);
 
@@ -104,15 +104,34 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
     showSuccess("Profil Tersimpan", "Perubahan nomor telepon dan profil akun berhasil disimpan.");
   };
 
-  const handleChangePasswordSubmit = (e) => {
+  const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
+    if (passwordForm.newPassword.length < 8) {
+      showWarning("Validasi Kata Sandi", "Password baru minimal 8 karakter.");
+      return;
+    }
+    if (passwordForm.newPassword === passwordForm.oldPassword) {
+      showWarning("Validasi Kata Sandi", "Password baru harus berbeda dari password lama.");
+      return;
+    }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       showWarning("Validasi Kata Sandi", "Konfirmasi kata sandi baru tidak cocok. Pastikan kata sandi baru dan konfirmasinya sama.");
       return;
     }
-    setShowPasswordModal(false);
-    setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
-    showSuccess("Kata Sandi Diperbarui", "Kata sandi akun Anda telah berhasil diperbarui dan siap digunakan untuk login berikutnya.");
+
+    try {
+      await userService.changePassword({
+        old_password: passwordForm.oldPassword,
+        new_password: passwordForm.newPassword,
+        confirm_password: passwordForm.confirmPassword,
+      });
+      setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      setShowPasswordModal(false);
+      showSuccess("Kata Sandi Diperbarui", "Kata sandi akun Anda telah berhasil diperbarui dan siap digunakan untuk login berikutnya.");
+    } catch (err) {
+      const errorMsg = err.errors?.[0]?.message || err.message || "Gagal memperbarui password. Silakan coba lagi.";
+      showError("Gagal Memperbarui Password", errorMsg);
+    }
   };
 
   return (
