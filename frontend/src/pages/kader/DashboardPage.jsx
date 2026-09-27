@@ -74,7 +74,7 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
             </div>
             <h3 className="fw-bold mb-1.5 text-white fs-4">{todaySchedule?.posyandu || user?.posyandu || "Jadwal Posyandu"}</h3>
             <p className="mb-0 small" style={{ maxWidth: "640px", fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.92)" }}>
-              Pelayanan Posyandu dan pemantauan kesehatan siklus hidup ILP berdasarkan jadwal yang tersimpan pada backend.
+              Pelayanan Posyandu dan pemantauan kesehatan siklus hidup ILP.
             </p>
           </div>
 

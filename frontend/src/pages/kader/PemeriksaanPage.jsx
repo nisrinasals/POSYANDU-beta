@@ -10,7 +10,6 @@ import { pemeriksaanService, kunjunganService, wargaService, sesiService } from 
 // Hitung umur dalam bulan untuk menentukan apakah layanan ASI eksklusif (0-6 bulan) ditampilkan.
 const getAgeInMonths = (warga, referenceDate = new Date()) => {
   if (!warga) return null;
-
   const rawBirthDate = warga.tglLahir || warga._raw?.tanggal_lahir || warga.tanggal_lahir;
   if (!rawBirthDate) return null;
 
@@ -2247,38 +2246,40 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                   <div className="col-12 col-md-6">
                     <label className="form-label fw-bold text-dark small mb-1">Tekanan darah (mm/Hg)</label>
                     <div className="d-flex align-items-center gap-2">
-                      <div className="input-group">
-                        <input
-                          type="number"
-                          className="form-control form-control-custom bg-white border-0 py-3"
-                          placeholder="120"
-                          value={examinationMode === "per-step" ? langkah2Form.tensiSistol : sequentialForm.tensiSistol}
-                          onChange={(e) => {
-                            if (examinationMode === "per-step") {
-                              setLangkah2Form({ ...langkah2Form, tensiSistol: e.target.value });
-                            } else {
-                              setSequentialForm({ ...sequentialForm, tensiSistol: e.target.value });
-                            }
-                          }}
-                        />
-                        <span className="input-group-text bg-white border-0 text-muted">mm</span>
-                      </div>
-                      <div className="input-group">
-                        <input
-                          type="number"
-                          className="form-control form-control-custom bg-white border-0 py-3"
-                          placeholder="80"
-                          value={examinationMode === "per-step" ? langkah2Form.tensiDiastol : sequentialForm.tensiDiastol}
-                          onChange={(e) => {
-                            if (examinationMode === "per-step") {
-                              setLangkah2Form({ ...langkah2Form, tensiDiastol: e.target.value });
-                            } else {
-                              setSequentialForm({ ...sequentialForm, tensiDiastol: e.target.value });
-                            }
-                          }}
-                        />
-                        <span className="input-group-text bg-white border-0 text-muted">Hg</span>
-                      </div>
+                      <input
+                        type="number"
+                        className="form-control form-control-custom bg-white border-0 py-3 text-center"
+                        style={{ width: "85px", flex: "none" }}
+                        placeholder="120"
+                        value={examinationMode === "per-step" ? langkah2Form.tensiSistol : sequentialForm.tensiSistol}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah2Form({ ...langkah2Form, tensiSistol: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, tensiSistol: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="fw-bold text-muted px-1" style={{ fontSize: "1.4rem", lineHeight: "1", userSelect: "none" }}>
+                        /
+                      </span>
+                      <input
+                        type="number"
+                        className="form-control form-control-custom bg-white border-0 py-3 text-center"
+                        style={{ width: "85px", flex: "none" }}
+                        placeholder="80"
+                        value={examinationMode === "per-step" ? langkah2Form.tensiDiastol : sequentialForm.tensiDiastol}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah2Form({ ...langkah2Form, tensiDiastol: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, tensiDiastol: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="fw-semibold text-muted ms-1" style={{ fontSize: "0.95rem" }}>
+                        mm/Hg
+                      </span>
                     </div>
                   </div>
                 )}
@@ -2434,7 +2435,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                 <div className="p-4 bg-white rounded-4 border border-warning-subtle text-center my-4 shadow-sm">
                   <AlertCircle size={40} className="text-warning mb-2" />
                   <h5 className="fw-bold text-dark mb-1">Hasil Plotting Belum Tersedia</h5>
-                  <p className="text-muted small mb-0">Simpan Langkah 2 terlebih dahulu agar backend menghitung dan menyimpan hasil plotting.</p>
+                  <p className="text-muted small mb-0">Simpan Langkah 2 terlebih dahulu agar plotting dapat dihitung.</p>
                 </div>
               ) : (
                 <div className="mb-3">
