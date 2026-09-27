@@ -1,16 +1,17 @@
 import React, { useState, useMemo } from "react";
-import { Calendar, Clock, MapPin, Plus, Search, ChevronLeft, ChevronRight, X, Eye, Info, FileText, Users, CheckCircle2, CalendarCheck } from "lucide-react";
+import { Calendar, MapPin, Plus, Search, ChevronLeft, ChevronRight, X, Eye, Info, FileText, CheckCircle2 } from "lucide-react";
 import { useNotification } from "../../context/NotificationContext";
 import { sesiService } from "../../services";
 import { mapBackendSesiToFrontend } from "../../utils/dataMappers";
-import SearchablePosyanduSelect from "../../components/common/SearchablePosyanduSelect";
 
 export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwalList, user, onRefreshData }) {
   const { showWarning, showSuccess } = useNotification();
+
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Semua Status");
   const [currentPage, setCurrentPage] = useState(1);
+
   const itemsPerPage = 5;
 
   // Modal states
@@ -19,30 +20,69 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [alertNotification, setAlertNotification] = useState(null);
 
-  // Form state for Create New Schedule
-  const posyanduName = user?.posyandu || "";
+  // Form state
   const [formData, setFormData] = useState({
     rw: "",
     tanggal: "",
     lokasi: "",
   });
 
+  const posyanduName = user?.posyandu || "";
+
+  /*
+   * Tanggal hari ini dalam format YYYY-MM-DD.
+   * Digunakan untuk menentukan jadwal buka berikutnya.
+   */
+  const dateToday = useMemo(() => {
+    const today = new Date();
+
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const getDateOnly = (dateValue) => {
+    if (!dateValue) return "";
+
+    const value = String(dateValue);
+
+    const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})/);
+
+    if (isoMatch) {
+      return isoMatch[1];
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
+
   const filteredList = useMemo(() => {
     return (globalJadwalList || [])
       .filter((item) => {
         if (!item) return false;
+
         const itemPos = (item.posyandu || "").toLowerCase();
-        const itemRw = (item.rw || "").toLowerCase();
         const targetPos = (posyanduName || "").toLowerCase();
 
-        const matchPosyandu = !targetPos || itemPos === targetPos.toLowerCase() || itemPos.includes(targetPos.toLowerCase());
+        const matchPosyandu = !targetPos || itemPos === targetPos || itemPos.includes(targetPos);
 
         const matchSearch =
           searchQuery === "" ||
           (item.lokasi || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (item.rw || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
           (item.tanggalFormatted || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (item.alamatDetail || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (Array.isArray(item.fokusLayanan) && item.fokusLayanan.some((f) => (f || "").toLowerCase().includes(searchQuery.toLowerCase())));
+          (item.alamatDetail || "").toLowerCase().includes(searchQuery.toLowerCase());
 
         const matchStatus = statusFilter === "Semua Status" || item.status === statusFilter;
 
@@ -51,28 +91,52 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
       .sort((a, b) => new Date(b.tanggal || 0) - new Date(a.tanggal || 0));
   }, [globalJadwalList, posyanduName, searchQuery, statusFilter]);
 
-  // Featured upcoming schedule (first active schedule in future or latest 'Terjadwal')
+  /*
+   * Jadwal Hari Buka Berikutnya:
+   * - Sesuai Posyandu kader
+   * - Status Terjadwal
+   * - tanggal >= hari ini
+   * - Diambil tanggal paling dekat
+   */
   const upcomingJadwal = useMemo(() => {
-    if (!globalJadwalList || globalJadwalList.length === 0) return null;
-    return globalJadwalList.filter((j) => j && (!posyanduName || (j.posyandu || "").toLowerCase() === posyanduName.toLowerCase()) && j.status === "Terjadwal").sort((a, b) => new Date(a.tanggal || 0) - new Date(b.tanggal || 0))[0] || null;
-  }, [globalJadwalList, posyanduName]);
+    if (!globalJadwalList || globalJadwalList.length === 0) {
+      return null;
+    }
 
-  // Pagination calculation
+    return (
+      globalJadwalList
+        .filter((jadwal) => {
+          if (!jadwal) return false;
+
+          const itemPos = (jadwal.posyandu || "").toLowerCase();
+          const targetPos = (posyanduName || "").toLowerCase();
+
+          const matchPosyandu = !targetPos || itemPos === targetPos || itemPos.includes(targetPos);
+
+          const jadwalDate = getDateOnly(jadwal.tanggal);
+
+          return matchPosyandu && jadwal.status === "Terjadwal" && jadwalDate !== "" && jadwalDate >= dateToday;
+        })
+        .sort((a, b) => new Date(a.tanggal || 0) - new Date(b.tanggal || 0))[0] || null
+    );
+  }, [globalJadwalList, posyanduName, dateToday]);
+
+  // Pagination
   const totalPages = Math.ceil(filteredList.length / itemsPerPage) || 1;
+
   const paginatedList = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
+
     return filteredList.slice(start, start + itemsPerPage);
   }, [filteredList, currentPage]);
 
-  const showToast = (message) => {
-    setAlertNotification(message);
-    setTimeout(() => {
-      setAlertNotification(null);
-    }, 3500);
-  };
-
   const handleOpenCreateModal = () => {
-    setFormData({ rw: "", tanggal: "", lokasi: "" });
+    setFormData({
+      rw: "",
+      tanggal: "",
+      lokasi: "",
+    });
+
     setIsModalOpen(true);
   };
 
@@ -83,8 +147,10 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
 
   const formatTanggalIndo = (dateStr) => {
     if (!dateStr) return "";
+
     try {
       const d = new Date(dateStr);
+
       return d.toLocaleDateString("id-ID", {
         weekday: "long",
         day: "numeric",
@@ -99,8 +165,8 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
   const handleSaveJadwal = async (e) => {
     e.preventDefault();
 
-    if (!formData.tanggal || !formData.lokasi.trim()) {
-      showWarning("Validasi Jadwal Posyandu", "Mohon lengkapi tanggal pelaksanaan dan lokasi posyandu sebelum menyimpan.");
+    if (!formData.tanggal || !formData.lokasi.trim() || !formData.rw.trim()) {
+      showWarning("Validasi Jadwal Posyandu", "Mohon lengkapi tanggal, RW, dan lokasi posyandu sebelum menyimpan.");
       return;
     }
 
@@ -113,28 +179,36 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
       posyandu_id: Number(user.posyandu_id),
       tanggal_pelaksanaan: formData.tanggal,
       lokasi: formData.lokasi.trim(),
-      rw: formData.rw.trim() || null,
+      rw: formData.rw.trim(),
       status: "open",
     };
 
     try {
       const res = await sesiService.createSesi(payload);
-      if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data sesi yang baru dibuat.");
+
+      if (!res?.data?.id) {
+        throw new Error("Backend tidak mengembalikan data sesi yang baru dibuat.");
+      }
 
       const createdSesi = mapBackendSesiToFrontend(res.data);
+
       setGlobalJadwalList?.((prev) => [createdSesi, ...(prev || []).filter((j) => String(j.id) !== String(createdSesi.id))]);
+
       showSuccess("Jadwal Tersimpan", `Jadwal posyandu pada tanggal ${formatTanggalIndo(formData.tanggal)} berhasil disimpan ke database.`);
+
       setIsModalOpen(false);
+
       onRefreshData?.();
     } catch (err) {
       console.error("Gagal simpan jadwal sesi:", err);
+
       showWarning("Gagal Menyimpan Jadwal", err?.message || "Gagal menyimpan jadwal posyandu ke database.");
     }
   };
 
   return (
     <div className="d-flex flex-column gap-3 pb-4">
-      {/* Toast Notification */}
+      {/* Toast */}
       {alertNotification && (
         <div className="alert border-0 shadow-sm rounded-3 position-fixed bottom-0 end-0 m-4 z-3 d-flex align-items-center gap-3 text-white" style={{ backgroundColor: "#2b2e4a" }}>
           <CheckCircle2 size={20} className="text-primary" />
@@ -142,7 +216,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
         </div>
       )}
 
-      {/* Top Action Bar: Tambah Jadwal Baru Button */}
+      {/* Top Action */}
       <div className="d-flex align-items-center justify-content-end mb-3">
         <button className="btn btn-dark-custom btn-top-action shadow-xs" onClick={handleOpenCreateModal}>
           <Plus size={16} />
@@ -150,7 +224,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
         </button>
       </div>
 
-      {/* Featured Card: Jadwal Hari Buka Berikutnya (Posyandu Theme) */}
+      {/* Jadwal Hari Buka Berikutnya */}
       {upcomingJadwal && (
         <div className="card border-0 shadow-sm rounded-4 p-4 bg-white position-relative overflow-hidden">
           <div className="d-flex align-items-center gap-2 mb-2">
@@ -161,39 +235,51 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
 
           <h3 className="fw-bold text-dark mb-2 fs-4">{upcomingJadwal.tanggalFormatted}</h3>
 
-          <div className="d-flex flex-wrap align-items-center gap-3 text-secondary small mb-3">
-            <div className="d-flex align-items-center gap-1.5">
-              <Clock size={16} className="text-muted" />
-              <span className="fw-medium text-dark">{upcomingJadwal.waktu}</span>
-            </div>
-            <span className="text-muted opacity-50">•</span>
-            <div className="d-flex align-items-center gap-1.5">
+          <div className="d-flex flex-wrap align-items-center gap-3 text-secondary small">
+            <div className="d-flex align-items-center gap-1">
               <MapPin size={16} className="text-muted" />
+
               <span className="fw-medium text-dark">
-                {upcomingJadwal.lokasi}, {upcomingJadwal.alamatDetail}
+                {upcomingJadwal.lokasi}
+                {upcomingJadwal.alamatDetail ? `, ${upcomingJadwal.alamatDetail}` : ""}
               </span>
             </div>
+
+            {upcomingJadwal.rw && (
+              <>
+                <span className="text-muted opacity-50">•</span>
+
+                <span className="fw-medium text-dark">RW {upcomingJadwal.rw}</span>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* Table Section: Daftar Jadwal Posyandu */}
+      {/* Daftar Jadwal */}
       <div className="card border-0 shadow-sm rounded-4 bg-white">
-        {/* Table Header & Controls */}
         <div className="card-header bg-white py-3 px-3 px-md-4 border-bottom d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
           <div className="d-flex align-items-center gap-2">
             <h6 className="fw-bold text-dark mb-0">Daftar Jadwal Posyandu</h6>
-            <span className="badge px-2.5 py-1 rounded-pill fw-semibold text-white" style={{ backgroundColor: "#2b2e4a", fontSize: "0.72rem" }}>
+
+            <span
+              className="badge px-2.5 py-1 rounded-pill fw-semibold text-white"
+              style={{
+                backgroundColor: "#2b2e4a",
+                fontSize: "0.72rem",
+              }}
+            >
               {filteredList.length} Jadwal
             </span>
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            {/* Search Input */}
+            {/* Search */}
             <div className="input-group input-group-sm" style={{ minWidth: "220px" }}>
               <span className="input-group-text bg-light border-end-0 text-muted">
                 <Search size={15} />
               </span>
+
               <input
                 type="text"
                 className="form-control form-control-sm bg-light border-start-0 ps-0"
@@ -204,6 +290,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
                   setCurrentPage(1);
                 }}
               />
+
               {searchQuery && (
                 <button className="btn btn-light btn-sm border-start-0 text-muted" type="button" onClick={() => setSearchQuery("")}>
                   <X size={14} />
@@ -214,7 +301,10 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
             {/* Status Filter */}
             <select
               className="form-select form-select-sm bg-light rounded-2 text-dark fw-semibold"
-              style={{ width: "auto", minWidth: "130px" }}
+              style={{
+                width: "auto",
+                minWidth: "130px",
+              }}
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
@@ -228,30 +318,43 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
           </div>
         </div>
 
-        {/* Responsive Table */}
+        {/* Table */}
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0" style={{ fontSize: "0.84rem" }}>
-            <thead className="bg-light text-muted text-uppercase" style={{ fontSize: "0.72rem", letterSpacing: "0.04em" }}>
+            <thead
+              className="bg-light text-muted text-uppercase"
+              style={{
+                fontSize: "0.72rem",
+                letterSpacing: "0.04em",
+              }}
+            >
               <tr>
                 <th className="ps-4 py-2.5 text-center" style={{ width: "45px" }}>
                   NO
                 </th>
-                <th className="py-2.5">TANGGAL &amp; WAKTU</th>
+
+                <th className="py-2.5">TANGGAL</th>
+
                 <th className="py-2.5">LOKASI / TEMPAT</th>
-                <th className="py-2.5">FOKUS LAYANAN</th>
+
+                <th className="py-2.5">RW</th>
+
                 <th className="py-2.5 text-center" style={{ width: "120px" }}>
                   STATUS
                 </th>
+
                 <th className="pe-4 py-2.5 text-center" style={{ width: "120px" }}>
                   AKSI
                 </th>
               </tr>
             </thead>
+
             <tbody>
               {paginatedList.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-4 text-muted">
                     <Info size={28} className="opacity-40 mb-2 d-block mx-auto" />
+
                     <div>Tidak ada jadwal posyandu yang sesuai dengan filter pencarian.</div>
                   </td>
                 </tr>
@@ -264,24 +367,26 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
                       {/* NO */}
                       <td className="ps-4 py-2.5 text-center fw-semibold text-secondary">{rowNumber}</td>
 
-                      {/* TANGGAL & WAKTU */}
+                      {/* TANGGAL */}
                       <td className="py-2.5">
                         <div className="fw-bold text-dark">{item.tanggalFormatted}</div>
-                        <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                          {item.waktu}
-                        </div>
                       </td>
 
-                      {/* LOKASI / TEMPAT */}
+                      {/* LOKASI */}
                       <td className="py-2.5">
                         <div className="fw-semibold text-dark">{item.lokasi}</div>
-                        <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                          {item.alamatDetail}
-                        </div>
+
+                        {item.alamatDetail && (
+                          <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                            {item.alamatDetail}
+                          </div>
+                        )}
                       </td>
 
-                      {/* Fokus layanan tidak tersedia pada backend sesi. */}
-                      <td className="py-2.5 text-muted">-</td>
+                      {/* RW */}
+                      <td className="py-2.5">
+                        <span className="fw-semibold text-dark">{item.rw ? `RW ${item.rw}` : "-"}</span>
+                      </td>
 
                       {/* STATUS */}
                       <td className="py-2.5 text-center">
@@ -296,7 +401,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
                         )}
                       </td>
 
-                      {/* AKSI: HANYA LIHAT DETAIL */}
+                      {/* AKSI */}
                       <td className="pe-4 py-2.5 text-center text-nowrap">
                         <button type="button" className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => handleOpenDetailModal(item)}>
                           <Eye size={14} />
@@ -311,7 +416,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
           </table>
         </div>
 
-        {/* Table Footer: Counter & Pagination */}
+        {/* Pagination */}
         <div className="card-footer bg-light py-2.5 px-3 px-md-4 d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2" style={{ fontSize: "0.8rem" }}>
           <div className="text-muted">
             Menampilkan <span className="fw-semibold text-dark">{paginatedList.length}</span> dari total <span className="fw-semibold text-dark">{filteredList.length}</span> jadwal
@@ -321,6 +426,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
             <button className="btn btn-sm btn-light border p-1" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
               <ChevronLeft size={14} />
             </button>
+
             {Array.from({ length: totalPages }).map((_, pIdx) => (
               <button
                 key={pIdx + 1}
@@ -336,6 +442,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
                 {pIdx + 1}
               </button>
             ))}
+
             <button className="btn btn-sm btn-light border p-1" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
               <ChevronRight size={14} />
             </button>
@@ -343,51 +450,115 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
         </div>
       </div>
 
-      {/* Modal: Tambah Jadwal Baru (Posyandu Palette: Dark Navy & Pink Accent) */}
+      {/* Modal Tambah Jadwal */}
       {isModalOpen && (
-        <div className="modal show d-block" style={{ backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1050 }}>
+        <div
+          className="modal show d-block"
+          style={{
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            zIndex: 1050,
+          }}
+        >
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
-              {/* Modal Header */}
               <div className="modal-header border-bottom px-4 py-3" style={{ backgroundColor: "#2b2e4a" }}>
                 <div className="d-flex align-items-center gap-2">
                   <Calendar size={19} color="#ffffff" style={{ stroke: "#ffffff" }} />
-                  <h5 className="modal-title fw-bold mb-0" style={{ color: "#ffffff", fontSize: "1.05rem" }}>
+
+                  <h5
+                    className="modal-title fw-bold mb-0"
+                    style={{
+                      color: "#ffffff",
+                      fontSize: "1.05rem",
+                    }}
+                  >
                     Tambah Jadwal Posyandu Baru
                   </h5>
                 </div>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setIsModalOpen(false)}></button>
+
+                <button type="button" className="btn-close btn-close-white" onClick={() => setIsModalOpen(false)} />
               </div>
 
-              {/* Modal Body */}
               <form onSubmit={handleSaveJadwal}>
                 <div className="modal-body p-4 bg-white">
                   <div className="row g-3">
+                    {/* Tanggal */}
                     <div className="col-12 col-md-6">
                       <label className="form-label small fw-bold text-dark">
                         Tanggal Pelaksanaan <span className="text-danger">*</span>
                       </label>
-                      <input type="date" className="form-control form-control-sm" value={formData.tanggal} onChange={(e) => setFormData({ ...formData, tanggal: e.target.value })} required />
+
+                      <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        value={formData.tanggal}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            tanggal: e.target.value,
+                          })
+                        }
+                        required
+                      />
                     </div>
+
+                    {/* RW */}
                     <div className="col-12 col-md-6">
-                      <label className="form-label small fw-bold text-dark">RW</label>
-                      <input type="text" className="form-control form-control-sm" placeholder="Contoh: 04" value={formData.rw} onChange={(e) => setFormData({ ...formData, rw: e.target.value })} />
+                      <label className="form-label small fw-bold text-dark">
+                        RW <span className="text-danger">*</span>
+                      </label>
+
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        placeholder="Contoh: 04"
+                        value={formData.rw}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            rw: e.target.value,
+                          })
+                        }
+                        required
+                      />
                     </div>
+
+                    {/* Lokasi */}
                     <div className="col-12">
                       <label className="form-label small fw-bold text-dark">
                         Lokasi / Tempat Pelaksanaan <span className="text-danger">*</span>
                       </label>
-                      <input type="text" className="form-control form-control-sm" placeholder="Masukkan lokasi pelaksanaan" value={formData.lokasi} onChange={(e) => setFormData({ ...formData, lokasi: e.target.value })} required />
+
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        placeholder="Masukkan lokasi pelaksanaan"
+                        value={formData.lokasi}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            lokasi: e.target.value,
+                          })
+                        }
+                        required
+                      />
                     </div>
                   </div>
                 </div>
 
-                {/* Modal Footer */}
                 <div className="modal-footer border-top px-4 py-2.5 bg-light">
                   <button type="button" className="btn btn-sm btn-outline-secondary px-3 py-1.5 rounded-2" onClick={() => setIsModalOpen(false)}>
                     Batal
                   </button>
-                  <button type="submit" className="btn btn-dark-custom btn-sm text-white px-4 py-1.5 rounded-2 fw-semibold" style={{ backgroundColor: "#2b2e4a", borderColor: "#2b2e4a" }}>
+
+                  <button
+                    type="submit"
+                    className="btn btn-dark-custom btn-sm text-white px-4 py-1.5 rounded-2 fw-semibold"
+                    style={{
+                      backgroundColor: "#2b2e4a",
+                      borderColor: "#2b2e4a",
+                    }}
+                  >
                     Simpan Jadwal
                   </button>
                 </div>
@@ -397,50 +568,67 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
         </div>
       )}
 
-      {/* Modal: Detail Jadwal Posyandu (Pure Read-Only - Posyandu Palette) */}
+      {/* Modal Detail */}
       {isDetailModalOpen && selectedJadwal && (
-        <div className="modal show d-block" style={{ backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1050 }}>
+        <div
+          className="modal show d-block"
+          style={{
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            zIndex: 1050,
+          }}
+        >
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
               <div className="modal-header border-bottom px-4 py-3" style={{ backgroundColor: "#2b2e4a" }}>
                 <div className="d-flex align-items-center gap-2">
                   <FileText size={19} color="#ffffff" style={{ stroke: "#ffffff" }} />
-                  <h5 className="modal-title fw-bold mb-0" style={{ color: "#ffffff", fontSize: "1.05rem" }}>
+
+                  <h5
+                    className="modal-title fw-bold mb-0"
+                    style={{
+                      color: "#ffffff",
+                      fontSize: "1.05rem",
+                    }}
+                  >
                     Detail Jadwal Posyandu
                   </h5>
                 </div>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setIsDetailModalOpen(false)}></button>
+
+                <button type="button" className="btn-close btn-close-white" onClick={() => setIsDetailModalOpen(false)} />
               </div>
 
               <div className="modal-body p-4 bg-light">
                 <div className="row g-3">
-                  {/* Card 1: Informasi Pelaksanaan */}
+                  {/* Informasi Tanggal */}
                   <div className="col-12 col-md-6">
                     <div className="card border-0 shadow-xs rounded-3 h-100 p-3 bg-white">
                       <div className="d-flex align-items-center gap-2 pb-2 mb-2 border-bottom text-dark">
                         <Calendar size={16} className="text-primary" />
+
                         <h6 className="fw-bold mb-0" style={{ fontSize: "0.9rem" }}>
-                          Waktu Pelaksanaan
+                          Tanggal Pelaksanaan
                         </h6>
                       </div>
+
                       <table className="table table-borderless table-sm mb-0" style={{ fontSize: "0.82rem" }}>
                         <tbody>
                           <tr>
                             <td className="text-muted ps-0 py-1" style={{ width: "120px" }}>
                               Hari / Tanggal
                             </td>
+
                             <td className="py-1 fw-bold text-dark">: {selectedJadwal.tanggalFormatted}</td>
                           </tr>
-                          <tr>
-                            <td className="text-muted ps-0 py-1">Waktu Pelaksanaan</td>
-                            <td className="py-1 text-dark">: {selectedJadwal.waktu}</td>
-                          </tr>
+
                           <tr>
                             <td className="text-muted ps-0 py-1">Status Jadwal</td>
+
                             <td className="py-1">
                               :{" "}
                               <span
-                                className={`badge ${selectedJadwal.status === "Terjadwal" ? "bg-primary-subtle text-primary border border-primary-subtle" : "bg-success-subtle text-success border border-success-subtle"} px-2 py-0.5 rounded-pill`}
+                                className={`badge ${
+                                  selectedJadwal.status === "Terjadwal" ? "bg-primary-subtle text-primary border border-primary-subtle" : "bg-success-subtle text-success border border-success-subtle"
+                                } px-2 py-0.5 rounded-pill`}
                               >
                                 {selectedJadwal.status}
                               </span>
@@ -451,58 +639,48 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
                     </div>
                   </div>
 
-                  {/* Card 2: Lokasi & Wilayah */}
+                  {/* Lokasi & RW */}
                   <div className="col-12 col-md-6">
                     <div className="card border-0 shadow-xs rounded-3 h-100 p-3 bg-white">
                       <div className="d-flex align-items-center gap-2 pb-2 mb-2 border-bottom text-dark">
                         <MapPin size={16} className="text-danger" />
+
                         <h6 className="fw-bold mb-0" style={{ fontSize: "0.9rem" }}>
                           Lokasi & Wilayah
                         </h6>
                       </div>
+
                       <table className="table table-borderless table-sm mb-0" style={{ fontSize: "0.82rem" }}>
                         <tbody>
                           <tr>
                             <td className="text-muted ps-0 py-1" style={{ width: "120px" }}>
                               Lokasi / Tempat
                             </td>
+
                             <td className="py-1 fw-bold text-dark">: {selectedJadwal.lokasi}</td>
                           </tr>
+
                           <tr>
-                            <td className="text-muted ps-0 py-1">Alamat Detail / RT</td>
-                            <td className="py-1 text-dark">: {selectedJadwal.alamatDetail || ""}</td>
+                            <td className="text-muted ps-0 py-1">RW</td>
+
+                            <td className="py-1 fw-bold text-dark">: {selectedJadwal.rw ? `RW ${selectedJadwal.rw}` : "-"}</td>
                           </tr>
+
+                          {selectedJadwal.alamatDetail && (
+                            <tr>
+                              <td className="text-muted ps-0 py-1">Alamat Detail</td>
+
+                              <td className="py-1 text-dark">: {selectedJadwal.alamatDetail}</td>
+                            </tr>
+                          )}
+
                           <tr>
                             <td className="text-muted ps-0 py-1">Posyandu</td>
+
                             <td className="py-1 text-dark">: {selectedJadwal.posyandu || ""}</td>
                           </tr>
                         </tbody>
                       </table>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Fokus Layanan & Catatan */}
-                  <div className="col-12">
-                    <div className="card border-0 shadow-xs rounded-3 p-3 bg-white">
-                      <h6 className="fw-bold text-dark mb-2" style={{ fontSize: "0.9rem" }}>
-                        Fokus Layanan Hari Ini
-                      </h6>
-                      <div className="d-flex flex-wrap gap-1.5 mb-3">
-                        {selectedJadwal.fokusLayanan?.map((layanan, i) => (
-                          <span key={i} className="badge bg-light text-secondary border px-2.5 py-1 rounded-2" style={{ fontSize: "0.78rem" }}>
-                            {layanan}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="p-3 bg-light rounded-2 border">
-                        <span className="text-muted d-block mb-1" style={{ fontSize: "0.74rem" }}>
-                          Catatan Persiapan:
-                        </span>
-                        <p className="mb-0 text-dark fw-medium" style={{ fontSize: "0.84rem" }}>
-                          {selectedJadwal.catatan || ""}
-                        </p>
-                      </div>
                     </div>
                   </div>
                 </div>

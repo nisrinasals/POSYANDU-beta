@@ -116,7 +116,6 @@ export default function DataSasaranPage({
     pekerjaan: "",
     posyandu: "",
     alamat: "",
-    status: "",
     // Khusus Nifas / Menyusui (Gambar 1 + Status Menyusui)
     statusMenyusui: "",
     // Khusus Bumil (Gambar 2)
@@ -133,13 +132,14 @@ export default function DataSasaranPage({
     pbl: "",
   });
 
-  // 2. Form State for Mutasi Flow (Image 3 & 4)
   const [mutasiCheckForm, setMutasiCheckForm] = useState({
     nama: "",
     nik: "",
     namaIbu: "",
     alamatAsal: "",
     posyanduAsal: "",
+    posyanduAsalId: null,
+    posyanduTujuanId: null,
     tglLahir: "",
     gender: "",
     statusPernikahan: "",
@@ -161,7 +161,6 @@ export default function DataSasaranPage({
     alamatAsal: "",
     posyanduAsal: "",
     alamatDomisiliBaru: "",
-    status: "",
   });
 
   // 9 Kategori Posyandu ILP Data (Sesuai Sidebar Pemeriksaan)
@@ -231,6 +230,73 @@ export default function DataSasaranPage({
     },
   ];
 
+  // =========================================================
+  // NORMALISASI KATEGORI FE -> BACKEND
+  // =========================================================
+  const FRONTEND_TO_BACKEND_CATEGORY = {
+    bumil: "bumil",
+    nifas: "busui",
+    "bayi-0-11": "bayi",
+    "balita-12-59": "balita",
+    "apras-60-72": "apras",
+    "usekrem-6-14": "uskrem_6_14",
+    "usekrem-15-18": "uskrem_15_18",
+    dewasa: "dewasa",
+    lansia: "lansia",
+  };
+
+  const AGE_BASED_CATEGORIES = new Set(["bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"]);
+
+  const calculateAgeInMonths = (birthDate, referenceDate = new Date()) => {
+    const birth = new Date(`${birthDate}T00:00:00Z`);
+
+    const reference = new Date(`${referenceDate.toISOString().split("T")[0]}T00:00:00Z`);
+
+    let months = (reference.getUTCFullYear() - birth.getUTCFullYear()) * 12 + (reference.getUTCMonth() - birth.getUTCMonth());
+
+    if (reference.getUTCDate() < birth.getUTCDate()) {
+      months -= 1;
+    }
+
+    return months;
+  };
+
+  const getAgeBasedCategory = (birthDate, referenceDate = new Date()) => {
+    const totalMonths = calculateAgeInMonths(birthDate, referenceDate);
+
+    const years = Math.floor(totalMonths / 12);
+
+    if (totalMonths >= 0 && totalMonths <= 11) {
+      return "bayi";
+    }
+
+    if (totalMonths >= 12 && totalMonths <= 59) {
+      return "balita";
+    }
+
+    if (years >= 5 && years < 6) {
+      return "apras";
+    }
+
+    if (years >= 6 && years <= 14) {
+      return "uskrem_6_14";
+    }
+
+    if (years >= 15 && years <= 18) {
+      return "uskrem_15_18";
+    }
+
+    if (years >= 19 && years <= 59) {
+      return "dewasa";
+    }
+
+    if (years >= 60) {
+      return "lansia";
+    }
+
+    return "dewasa";
+  };
+
   // Filter Logic
   const filteredData = (sasaranList || []).filter((item) => {
     if (!item) return false;
@@ -266,7 +332,6 @@ export default function DataSasaranPage({
       pekerjaan: "",
       posyandu: "",
       alamat: "",
-      status: "",
       statusMenyusui: "",
       hpht: "",
       hpl: "",
@@ -335,8 +400,47 @@ export default function DataSasaranPage({
     }
 
     const katId = selectedCategory?.id || "dewasa";
-    const isChild = ["bayi-0-11", "balita-12-59", "balita", "apras-60-72", "apras", "usekrem-6-14"].some((k) => katId.includes(k));
 
+    const backendCategory = FRONTEND_TO_BACKEND_CATEGORY[katId];
+
+    if (!backendCategory) {
+      showWarning("Kategori Tidak Valid", "Kategori sasaran yang dipilih tidak valid.");
+      return;
+    }
+
+    // =========================================================
+    // VALIDASI JENIS KELAMIN UNTUK BUMIL / NIFAS
+    // Bumil dan Nifas/Menyusui hanya boleh Perempuan.
+    // =========================================================
+    if (["bumil", "nifas"].includes(katId) && genderBackend === "L") {
+      showWarning("Validasi Jenis Kelamin", "Sasaran Ibu Hamil dan Nifas/Menyusui harus berjenis kelamin Perempuan.");
+      return;
+    }
+
+    // =========================================================
+    // VALIDASI KATEGORI BERDASARKAN TANGGAL LAHIR
+    // =========================================================
+    if (AGE_BASED_CATEGORIES.has(backendCategory)) {
+      const actualCategory = getAgeBasedCategory(categoryForm.tglLahir);
+
+      if (actualCategory !== backendCategory) {
+        const categoryLabels = {
+          bayi: "Bayi 0–11 Bln",
+          balita: "Balita 12–59 Bln",
+          apras: "Apras 60–72 Bln",
+          uskrem_6_14: "Usekrem 6–14 Thn",
+          uskrem_15_18: "Usekrem 15–18 Thn",
+          dewasa: "Dewasa",
+          lansia: "Lansia",
+        };
+
+        showWarning("Kategori Tidak Sesuai", `Tanggal lahir yang dimasukkan termasuk kategori "${categoryLabels[actualCategory]}". Silakan pilih kategori yang sesuai dengan usia sasaran.`);
+
+        return;
+      }
+    }
+
+    const isChild = ["bayi-0-11", "balita-12-59", "balita", "apras-60-72", "apras", "usekrem-6-14", "usekrem-15-18"].some((k) => katId.includes(k));
     // 6. Validasi Khusus Anak: Nama Ibu atau Nama Ayah wajib ada
     if (isChild && !categoryForm.namaIbu?.trim() && !categoryForm.namaAyah?.trim()) {
       showWarning("Validasi Orang Tua", "Untuk sasaran anak/balita, mohon isi minimal Nama Ibu atau Nama Ayah.");
@@ -394,6 +498,7 @@ export default function DataSasaranPage({
       nama_lengkap: categoryForm.nama.trim(),
       jenis_kelamin: genderBackend,
       tanggal_lahir: tglLahirFormatted,
+      kategori_sasaran: backendCategory,
       alamat: categoryForm.alamat.trim(),
       ...(categoryForm.noHp ? { telepon: categoryForm.noHp } : {}),
       nama_ibu: isDewasaOrLansia ? null : categoryForm.namaIbu || null,
@@ -548,6 +653,14 @@ export default function DataSasaranPage({
         throw new Error("Backend tidak mengembalikan data warga hasil verifikasi.");
       }
 
+      const posyanduAsalId = Number(verified?.posyandu_saat_ini?.id);
+
+      const posyanduTujuanId = Number(verified?.posyandu_tujuan?.id);
+
+      if (posyanduAsalId && posyanduTujuanId && posyanduAsalId === posyanduTujuanId) {
+        showWarning("Mutasi Tidak Dapat Dilakukan", "Warga tersebut sudah terdaftar di Posyandu tujuan.");
+        return;
+      }
       // Ambil detail warga dari endpoint resmi agar form berikutnya tidak
       const detailRes = await wargaService.getWargaById(verified.id);
       const warga = detailRes?.data || detailRes;
@@ -560,6 +673,8 @@ export default function DataSasaranPage({
         namaIbu: warga?.nama_ibu || verified.nama_ibu || prev.namaIbu,
         alamatAsal: warga?.alamat || "",
         posyanduAsal: warga?.posyandu?.nama_posyandu || verified.posyandu_saat_ini?.nama_posyandu || "",
+        posyanduAsalId,
+        posyanduTujuanId,
         tglLahir: warga?.tanggal_lahir ? String(warga.tanggal_lahir).split("T")[0] : "",
         gender: warga?.jenis_kelamin === "P" ? "Perempuan" : "Laki-laki",
         statusPernikahan: warga?.status_perkawinan === "menikah" ? "Menikah" : "Belum Menikah",
@@ -586,13 +701,14 @@ export default function DataSasaranPage({
       namaIbu: mutasiCheckForm.namaIbu,
       alamatAsal: mutasiCheckForm.alamatAsal,
       posyanduAsal: mutasiCheckForm.posyanduAsal,
+      posyanduAsalId: mutasiCheckForm.posyanduAsalId,
+      posyanduTujuanId: mutasiCheckForm.posyanduTujuanId,
       tglLahir: mutasiCheckForm.tglLahir,
       gender: mutasiCheckForm.gender,
       statusPernikahan: mutasiCheckForm.statusPernikahan,
       pekerjaan: mutasiCheckForm.pekerjaan,
       noHp: mutasiCheckForm.noHp,
       alamatDomisiliBaru: "",
-      status: "",
     }));
     setShowMutasiFormModal(true);
   };
@@ -620,6 +736,10 @@ export default function DataSasaranPage({
         nama_ibu: mutasiForm.namaIbu.trim(),
       });
 
+      if (Number(mutasiForm.posyanduAsalId) === Number(mutasiForm.posyanduTujuanId)) {
+        showWarning("Mutasi Tidak Dapat Dilakukan", "Warga tersebut sudah terdaftar di Posyandu tujuan.");
+        return;
+      }
       if (!confirmRes?.data?.id) {
         throw new Error("Backend tidak mengembalikan hasil mutasi yang valid.");
       }
@@ -1024,14 +1144,6 @@ export default function DataSasaranPage({
                     </div>
 
                     <div className="mb-3">
-                      <label className="form-label fw-medium small mb-1">Status Sasaran</label>
-                      <select className="form-select form-select-custom" value={categoryForm.status} onChange={(e) => setCategoryForm({ ...categoryForm, status: e.target.value })}>
-                        <option value="Aktif">Aktif</option>
-                        <option value="Non-Aktif">Non-Aktif</option>
-                      </select>
-                    </div>
-
-                    <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
                       <textarea
                         className="form-control form-control-custom"
@@ -1112,14 +1224,6 @@ export default function DataSasaranPage({
                           />
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mb-3">
-                      <label className="form-label fw-medium small mb-1">Status Sasaran</label>
-                      <select className="form-select form-select-custom" value={categoryForm.status} onChange={(e) => setCategoryForm({ ...categoryForm, status: e.target.value })}>
-                        <option value="Aktif">Aktif</option>
-                        <option value="Non-Aktif">Non-Aktif</option>
-                      </select>
                     </div>
                   </div>
 
@@ -1202,10 +1306,8 @@ export default function DataSasaranPage({
                         <div className="mb-3">
                           <label className="form-label fw-medium small mb-1">Status Pernikahan</label>
                           <select className="form-select form-select-custom" value={categoryForm.statusPernikahan} onChange={(e) => setCategoryForm({ ...categoryForm, statusPernikahan: e.target.value })}>
-                            <option value="Belum Menikah">Belum Menikah</option>
+                            <option value="Tidak Menikah">Tidak Menikah</option>
                             <option value="Menikah">Menikah</option>
-                            <option value="Cerai Hidup">Cerai Hidup</option>
-                            <option value="Cerai Mati">Cerai Mati</option>
                           </select>
                         </div>
 
@@ -1236,14 +1338,6 @@ export default function DataSasaranPage({
                         </select>
                       </div>
                     )}
-
-                    <div className="mb-3">
-                      <label className="form-label fw-medium small mb-1">Status Sasaran</label>
-                      <select className="form-select form-select-custom" value={categoryForm.status} onChange={(e) => setCategoryForm({ ...categoryForm, status: e.target.value })}>
-                        <option value="Aktif">Aktif</option>
-                        <option value="Non-Aktif">Non-Aktif</option>
-                      </select>
-                    </div>
                   </div>
 
                   {/* Kolom Kanan */}
@@ -1866,14 +1960,6 @@ export default function DataSasaranPage({
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Pekerjaan</label>
                   <input type="text" className="form-control form-control-custom" value={mutasiForm.pekerjaan} onChange={(e) => setMutasiForm({ ...mutasiForm, pekerjaan: e.target.value })} />
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label fw-medium small mb-1">Status Sasaran</label>
-                  <select className="form-select form-select-custom" value={mutasiForm.status} onChange={(e) => setMutasiForm({ ...mutasiForm, status: e.target.value })}>
-                    <option value="Aktif">Aktif</option>
-                    <option value="Non-Aktif">Non-Aktif</option>
-                  </select>
                 </div>
               </div>
 

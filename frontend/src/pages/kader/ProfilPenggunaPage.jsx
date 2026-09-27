@@ -1,16 +1,48 @@
-import React, { useState, useRef } from "react";
-import { User, Lock, Save, KeyRound, Camera, ShieldAlert, Eye, EyeOff } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { User, Save, KeyRound, Camera, Eye, EyeOff, Pencil, X, LockKeyhole, CircleCheck } from "lucide-react";
 import { Modal, Button } from "react-bootstrap";
 import { useNotification } from "../../context/NotificationContext";
 import { userService } from "../../services";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+
+/**
+ * Backend menyimpan profile_picture sebagai:
+ * /uploads/profile/filename.jpg
+ *
+ * Karena frontend dan backend bisa berjalan pada
+ * host/port yang berbeda, ubah relative path menjadi
+ * absolute backend URL.
+ */
+const resolveProfileImageUrl = (image) => {
+  if (!image) return null;
+
+  if (image.startsWith("data:") || image.startsWith("blob:") || /^https?:\/\//i.test(image)) {
+    return image;
+  }
+
+  const backendBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
+
+  const normalizedPath = image.startsWith("/") ? image : `/${image}`;
+
+  return `${backendBaseUrl}${normalizedPath}`;
+};
+
+const getProfileImageFromUser = (userData) => {
+  return userData?.profile_picture || userData?.profilePicture || userData?.foto || userData?.avatar || null;
+};
+
 export default function ProfilPenggunaPage({ user, onUpdateUser }) {
   const { showSuccess, showWarning, showError } = useNotification();
-  const fileInputRef = useRef(null);
-  const [profileImage, setProfileImage] = useState(user?.foto || user?.avatar || null);
 
-  const isPuskesmas = user?.roleType?.includes("puskesmas") || user?.posyandu?.toLowerCase().includes("puskesmas");
-  const isDinkes = user?.roleType?.includes("dinkes") || user?.posyandu?.toLowerCase().includes("dinas") || user?.nama?.toLowerCase().includes("dinas");
+  const fileInputRef = useRef(null);
+
+  // =========================================================
+  // ROLE THEME
+  // =========================================================
+  const isPuskesmas = user?.roleType?.includes("puskesmas") || user?.posyandu?.toLowerCase()?.includes("puskesmas");
+
+  const isDinkes = user?.roleType?.includes("dinkes") || user?.posyandu?.toLowerCase()?.includes("dinas") || user?.nama?.toLowerCase()?.includes("dinas");
 
   const getRoleTheme = () => {
     if (isDinkes) {
@@ -21,15 +53,16 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
         textColor: "#1e3a8a",
       };
     }
+
     if (isPuskesmas) {
       return {
-        primary: "#428A75", // Aussie Surf (Teal Garage)
-        primaryHover: "#2E4E52", // Dark Slate Grey
+        primary: "#428A75",
+        primaryHover: "#2E4E52",
         bgLight: "rgba(66, 138, 117, 0.12)",
         textColor: "#428A75",
       };
     }
-    // Kader / Posyandu
+
     return {
       primary: "#2b2e4a",
       primaryHover: "#1e2034",
@@ -40,16 +73,39 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
 
   const theme = getRoleTheme();
 
-  const [profileData, setProfileData] = useState({
-    nama: user?.nama || "",
-    nik: user?.nik || "",
-    email: user?.email || "",
-    telepon: user?.telepon || "",
-    posyandu: user?.posyandu || "",
-    password: "",
+  // =========================================================
+  // PROFILE DATA
+  // =========================================================
+  const createProfileData = (data) => ({
+    nama: data?.nama_lengkap || data?.nama || "",
+    nik: data?.nik || "",
+    email: data?.email || "",
+    telepon: data?.telepon || "",
+    posyandu: data?.posyandu?.nama_posyandu || data?.posyandu || "",
   });
 
+  const initialProfileData = createProfileData(user);
+
+  const [profileData, setProfileData] = useState(initialProfileData);
+
+  const [originalProfileData, setOriginalProfileData] = useState(initialProfileData);
+
+  const [isEditing, setIsEditing] = useState(false);
+
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // =========================================================
+  // PROFILE PHOTO
+  // =========================================================
+  const [profileImage, setProfileImage] = useState(resolveProfileImageUrl(getProfileImageFromUser(user)));
+
+  // =========================================================
+  // PASSWORD
+  // =========================================================
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: "",
     newPassword: "",
@@ -57,65 +113,336 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
   });
 
   const [showOldPassword, setShowOldPassword] = useState(false);
+
   const [showNewPassword, setShowNewPassword] = useState(false);
+
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Handle Photo Upload & Instant Realtime Sync
-  const handlePhotoChange = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        showWarning("Ukuran Berkas Terlalu Besar", "Ukuran foto yang diunggah melebihi batas maksimal 5 MB. Silakan pilih foto dengan resolusi lebih kecil.");
-        return;
-      }
+  // =========================================================
+  // LOAD PROFILE FROM BACKEND
+  // =========================================================
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchProfile = async () => {
       try {
-        await userService.uploadProfilePicture(file);
-      } catch (err) {
-        console.info("Upload foto ke backend (simulasi lokal).");
+        setIsLoadingProfile(true);
+
+        const response = await userService.getMe();
+
+        /*
+         * api.js mengembalikan response.data.
+         * Karena response backend:
+         *
+         * {
+         *   success: true,
+         *   data: user
+         * }
+         *
+         * maka response.data = object user.
+         */
+        const backendUser = response?.data;
+
+        if (!backendUser || !mounted) {
+          return;
+        }
+
+        const freshProfileData = {
+          nama: backendUser.nama_lengkap || backendUser.nama || user?.nama || "",
+
+          nik: backendUser.nik ?? user?.nik ?? "",
+
+          email: backendUser.email ?? user?.email ?? "",
+
+          telepon: backendUser.telepon ?? user?.telepon ?? "",
+
+          // Jangan bergantung pada GET /users/me
+          // karena endpoint tersebut tidak include relasi posyandu.
+          posyandu: backendUser.posyandu?.nama_posyandu || backendUser.posyandu || user?.posyandu || "",
+        };
+
+        const rawPhoto = getProfileImageFromUser(backendUser);
+
+        const photoUrl = resolveProfileImageUrl(rawPhoto);
+
+        /*
+         * Ambil data lama dari DB.
+         * Tidak mengganti dengan string kosong
+         * selama field DB memang memiliki nilai.
+         */
+        setProfileData(freshProfileData);
+
+        setOriginalProfileData(freshProfileData);
+
+        setProfileImage(photoUrl);
+
+        /*
+         * Sinkronkan data ke global App state.
+         */
+        if (onUpdateUser) {
+          onUpdateUser({
+            ...user,
+            ...backendUser,
+
+            nama: freshProfileData.nama,
+
+            nama_lengkap: backendUser.nama_lengkap || freshProfileData.nama,
+
+            nik: freshProfileData.nik,
+
+            email: freshProfileData.email,
+
+            telepon: freshProfileData.telepon,
+
+            // Pertahankan Posyandu dari App/global state
+            posyandu: freshProfileData.posyandu,
+
+            profile_picture: rawPhoto || user?.profile_picture || null,
+          });
+        }
+      } catch (error) {
+        console.error("Gagal mengambil profil user:", error);
+
+        /*
+         * Fallback ke data yang sudah ada.
+         */
+        if (mounted) {
+          const fallback = createProfileData(user);
+
+          setProfileData(fallback);
+          setOriginalProfileData(fallback);
+
+          setProfileImage(resolveProfileImageUrl(getProfileImageFromUser(user)));
+        }
+      } finally {
+        if (mounted) {
+          setIsLoadingProfile(false);
+        }
+      }
+    };
+
+    fetchProfile();
+
+    return () => {
+      mounted = false;
+    };
+
+    // Hanya load sekali ketika halaman dibuka.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // =========================================================
+  // START EDIT
+  // =========================================================
+  const handleStartEdit = () => {
+    /*
+     * Simpan snapshot data lama.
+     * TIDAK ada API call di sini.
+     */
+    setOriginalProfileData({
+      ...profileData,
+    });
+
+    /*
+     * Pastikan data lama tetap dipakai.
+     */
+    setProfileData({
+      ...profileData,
+    });
+
+    setIsEditing(true);
+  };
+
+  // =========================================================
+  // CANCEL EDIT
+  // =========================================================
+  const handleCancelEdit = () => {
+    setProfileData({
+      ...originalProfileData,
+    });
+
+    setIsEditing(false);
+  };
+
+  // =========================================================
+  // FIELD CHANGE
+  // =========================================================
+  const handleProfileChange = (field, value) => {
+    setProfileData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // =========================================================
+  // SAVE PROFILE
+  // =========================================================
+  const handleSaveProfile = async () => {
+    if (isSavingProfile) {
+      return;
+    }
+
+    const nama = profileData.nama.trim();
+
+    const telepon = profileData.telepon.trim();
+
+    if (!nama) {
+      showWarning("Nama Lengkap Wajib Diisi", "Silakan masukkan nama lengkap Anda.");
+      return;
+    }
+
+    try {
+      setIsSavingProfile(true);
+
+      const response = await userService.updateMe({
+        nama_lengkap: nama,
+        telepon,
+      });
+
+      const backendUser = response?.data || {};
+
+      const updatedData = {
+        ...profileData,
+
+        nama: backendUser.nama_lengkap || nama,
+
+        telepon: backendUser.telepon ?? telepon,
+      };
+
+      setProfileData(updatedData);
+      setOriginalProfileData(updatedData);
+
+      setIsEditing(false);
+
+      if (onUpdateUser) {
+        onUpdateUser({
+          ...user,
+          ...backendUser,
+
+          nama: updatedData.nama,
+
+          nama_lengkap: updatedData.nama,
+
+          nik: updatedData.nik,
+
+          email: updatedData.email,
+
+          telepon: updatedData.telepon,
+
+          posyandu: updatedData.posyandu,
+
+          profile_picture: user?.profile_picture || getProfileImageFromUser(backendUser) || null,
+        });
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const newImageData = reader.result;
-        setProfileImage(newImageData);
-        if (onUpdateUser) {
-          onUpdateUser({ ...user, ...profileData, foto: newImageData, avatar: newImageData });
-        }
-        showSuccess("Foto Profil Diperbarui", "Foto profil akun Anda berhasil diubah.");
-      };
-      reader.readAsDataURL(file);
+      showSuccess("Profil Tersimpan", "Perubahan profil Anda berhasil disimpan.");
+    } catch (error) {
+      console.error("Gagal memperbarui profil:", error);
+
+      const message = error?.message || error?.errors?.[0]?.message || "Gagal menyimpan perubahan profil. Silakan coba lagi.";
+
+      showError("Gagal Menyimpan Profil", message);
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
-  const handleSaveProfile = async (e) => {
-    e.preventDefault();
+  // =========================================================
+  // UPLOAD PROFILE PHOTO
+  // =========================================================
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    /*
+     * Backend multer = maksimum 2 MB.
+     */
+    if (file.size > 2 * 1024 * 1024) {
+      showWarning("Ukuran Foto Terlalu Besar", "Ukuran foto maksimal 2 MB.");
+
+      e.target.value = "";
+      return;
+    }
+
     try {
-      await userService.updateMe({
-        nama_lengkap: profileData.nama,
-        telepon: profileData.telepon,
-      });
-    } catch (err) {
-      console.info("Backend update user info notice:", err);
-    }
+      const response = await userService.uploadProfilePicture(file);
 
-    if (onUpdateUser) {
-      onUpdateUser({ ...user, ...profileData, foto: profileImage, avatar: profileImage });
+      /*
+       * Controller backend mengembalikan:
+       *
+       * data: {
+       *   profile_picture:
+       *     "/uploads/profile/..."
+       * }
+       */
+      let rawPhoto = response?.data?.profile_picture || response?.profile_picture || response?.data?.user?.profile_picture || response?.user?.profile_picture || null;
+
+      /*
+       * Apabila response upload tidak membawa
+       * path foto, ambil ulang langsung dari DB.
+       */
+      if (!rawPhoto) {
+        const meResponse = await userService.getMe();
+
+        rawPhoto = getProfileImageFromUser(meResponse?.data);
+      }
+
+      if (!rawPhoto) {
+        throw new Error("Foto berhasil diunggah, tetapi lokasi foto tidak ditemukan.");
+      }
+
+      const baseUrl = resolveProfileImageUrl(rawPhoto);
+
+      /*
+       * Cache bust supaya browser tidak menggunakan
+       * gambar lama yang masih tersimpan di cache.
+       */
+      const photoUrl = `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}v=${Date.now()}`;
+
+      setProfileImage(photoUrl);
+
+      if (onUpdateUser) {
+        onUpdateUser({
+          ...user,
+          profile_picture: rawPhoto,
+          foto: rawPhoto,
+          avatar: rawPhoto,
+        });
+      }
+
+      showSuccess("Foto Profil Diperbarui", "Foto profil berhasil diubah.");
+    } catch (error) {
+      console.error("Gagal upload foto profil:", error);
+
+      const message = error?.message || error?.errors?.[0]?.message || "Gagal mengunggah foto profil. Silakan coba lagi.";
+
+      showError("Gagal Mengubah Foto Profil", message);
+    } finally {
+      e.target.value = "";
     }
-    showSuccess("Profil Tersimpan", "Perubahan nomor telepon dan profil akun berhasil disimpan.");
   };
 
+  // =========================================================
+  // PASSWORD
+  // =========================================================
   const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
+
     if (passwordForm.newPassword.length < 8) {
       showWarning("Validasi Kata Sandi", "Password baru minimal 8 karakter.");
       return;
     }
+
     if (passwordForm.newPassword === passwordForm.oldPassword) {
       showWarning("Validasi Kata Sandi", "Password baru harus berbeda dari password lama.");
       return;
     }
+
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      showWarning("Validasi Kata Sandi", "Konfirmasi kata sandi baru tidak cocok. Pastikan kata sandi baru dan konfirmasinya sama.");
+      showWarning("Validasi Kata Sandi", "Konfirmasi password baru tidak cocok.");
       return;
     }
 
@@ -125,202 +452,322 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
         new_password: passwordForm.newPassword,
         confirm_password: passwordForm.confirmPassword,
       });
-      setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+
+      setPasswordForm({
+        oldPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
       setShowPasswordModal(false);
-      showSuccess("Kata Sandi Diperbarui", "Kata sandi akun Anda telah berhasil diperbarui dan siap digunakan untuk login berikutnya.");
-    } catch (err) {
-      const errorMsg = err.errors?.[0]?.message || err.message || "Gagal memperbarui password. Silakan coba lagi.";
-      showError("Gagal Memperbarui Password", errorMsg);
+
+      showSuccess("Kata Sandi Diperbarui", "Kata sandi akun Anda berhasil diperbarui.");
+    } catch (error) {
+      console.error("Gagal mengubah password:", error);
+
+      const message = error?.message || error?.errors?.[0]?.message || "Gagal memperbarui password. Silakan coba lagi.";
+
+      showError("Gagal Memperbarui Password", message);
     }
   };
+
+  // =========================================================
+  // FIELD STYLE HELPERS
+  // =========================================================
+  const editableInputClass = isEditing ? "form-control form-control-custom bg-white text-dark border py-2 fw-medium" : "form-control form-control-custom bg-white text-muted border-0 py-2 fw-medium";
+
+  const readonlyInputClass = "form-control form-control-custom bg-light text-muted border-0 py-2 fw-medium";
 
   return (
     <div className="container-fluid p-0">
       <div className="card card-custom p-4 border-0 shadow-sm rounded-4 bg-white">
-        {/* User Profile Avatar & Header */}
+        {/* ===================================================
+            PROFILE HEADER
+        ==================================================== */}
         <div className="d-flex flex-column align-items-center mb-4 text-center">
           <div className="position-relative mb-3">
-            <div className="rounded-circle d-flex align-items-center justify-content-center shadow-sm overflow-hidden" style={{ width: "104px", height: "104px", backgroundColor: theme.bgLight, border: `3px solid ${theme.primary}` }}>
-              {profileImage ? <img src={profileImage} alt="Foto Profil" className="w-100 h-100 object-fit-cover" /> : <User size={52} style={{ color: theme.primary }} />}
+            <div
+              className="rounded-circle d-flex align-items-center justify-content-center shadow-sm overflow-hidden"
+              style={{
+                width: "104px",
+                height: "104px",
+                backgroundColor: theme.bgLight,
+                border: `3px solid ${theme.primary}`,
+              }}
+            >
+              {profileImage ? (
+                <img
+                  src={profileImage}
+                  alt="Foto Profil"
+                  className="w-100 h-100 object-fit-cover"
+                  onError={(e) => {
+                    console.error("Foto profil gagal dimuat:", profileImage);
+
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                <User
+                  size={52}
+                  style={{
+                    color: theme.primary,
+                  }}
+                />
+              )}
             </div>
 
-            {/* Interactive Camera Button Overlay for Photo Upload */}
+            {/* UBAH FOTO */}
             <button
               type="button"
               className="btn position-absolute bottom-0 end-0 rounded-circle p-2 d-flex align-items-center justify-content-center shadow"
-              style={{ backgroundColor: theme.primary, color: "#ffffff", border: "2px solid #ffffff" }}
+              style={{
+                backgroundColor: theme.primary,
+                color: "#ffffff",
+                border: "2px solid #ffffff",
+              }}
               title="Ubah Foto Profil"
-              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              onClick={() => fileInputRef.current?.click()}
             >
               <Camera size={16} />
             </button>
 
-            {/* Hidden File Input */}
-            <input type="file" ref={fileInputRef} accept="image/*" className="d-none" onChange={handlePhotoChange} />
+            <input type="file" ref={fileInputRef} accept="image/jpeg,image/png,image/webp" className="d-none" onChange={handlePhotoChange} />
           </div>
 
-          <h3 className="fw-bold text-dark mb-1">{profileData.nama}</h3>
-          <p className="text-muted fw-medium small mb-0">{profileData.posyandu}</p>
+          <h3 className="fw-bold text-dark mb-1">{isLoadingProfile ? "Memuat..." : profileData.nama || "-"}</h3>
+
+          <p className="text-muted fw-medium small mb-0">{profileData.posyandu || user?.posyandu || "-"}</p>
         </div>
 
-        {/* Form Area (Informasi Akun: Telepon & Password Editable, Lainnya Read-Only) */}
-        <form onSubmit={handleSaveProfile}>
-          <div className="p-3 p-md-4 rounded-4 mb-4" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0" }}>
-            <div className="row g-3">
-              {/* Nama Lengkap (Read-Only) */}
-              <div className="col-12 col-md-6">
-                <div className="mb-1">
-                  <label className="form-label fw-bold text-dark small mb-0">Nama Lengkap</label>
-                </div>
-                <input type="text" className="form-control form-control-custom bg-white text-muted border-0 py-2 fw-medium" value={profileData.nama} disabled readOnly />
-              </div>
+        {/* ===================================================
+            PROFILE INFORMATION
+        ==================================================== */}
+        <div
+          className="p-3 p-md-4 rounded-4 mb-4"
+          style={{
+            backgroundColor: "#f8fafc",
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <div className="row g-4">
+            {/* NAMA LENGKAP */}
+            <div className="col-12 col-md-6">
+              <label className="form-label fw-bold text-dark small mb-1">Nama Lengkap</label>
 
-              {/* NIK (Read-Only) */}
-              <div className="col-12 col-md-6">
-                <div className="mb-1">
-                  <label className="form-label fw-bold text-dark small mb-0">Nomor Induk Kependudukan (NIK)</label>
-                </div>
-                <input type="text" className="form-control form-control-custom bg-white text-muted border-0 py-2 fw-medium font-monospace" value={profileData.nik} disabled readOnly />
-              </div>
+              <input
+                type="text"
+                className={`form-control form-control-custom py-2 fw-medium ${isEditing ? "bg-white text-dark border" : "bg-light text-muted border-0"}`}
+                value={profileData.nama}
+                onChange={(e) => handleProfileChange("nama", e.target.value)}
+                disabled={!isEditing}
+              />
+            </div>
 
-              {/* Alamat Email (Read-Only) */}
-              <div className="col-12 col-md-6">
-                <div className="mb-1">
-                  <label className="form-label fw-bold text-dark small mb-0">Alamat Email</label>
-                </div>
-                <input type="email" className="form-control form-control-custom bg-white text-muted border-0 py-2 fw-medium" value={profileData.email} disabled readOnly />
-              </div>
+            {/* NIK */}
+            <div className="col-12 col-md-6">
+              <label className="form-label fw-bold text-dark small mb-1">Nomor Induk Kependudukan (NIK)</label>
 
-              {/* Nomor Handphone / WhatsApp (Dapat Diedit) */}
-              <div className="col-12 col-md-6">
-                <div className="mb-1">
-                  <label className="form-label fw-bold text-dark small mb-0">Nomor Handphone / WhatsApp</label>
-                </div>
-                <input
-                  type="text"
-                  className="form-control form-control-custom bg-white text-dark border py-2 fw-medium font-monospace"
-                  value={profileData.telepon}
-                  onChange={(e) => setProfileData({ ...profileData, telepon: e.target.value })}
-                  placeholder="Contoh: 088227683468"
-                />
-              </div>
+              <input type="text" className="form-control form-control-custom bg-light text-muted border-0 py-2 fw-medium font-monospace" value={profileData.nik || "-"} disabled readOnly />
+            </div>
 
-              {/* Posyandu (Read-Only) */}
-              <div className="col-12">
-                <div className="mb-1">
-                  <label className="form-label fw-bold text-dark small mb-0">Posyandu</label>
-                </div>
-                <input type="text" className="form-control form-control-custom bg-white text-muted border-0 py-2 fw-medium" value={profileData.posyandu} disabled readOnly />
-              </div>
+            {/* EMAIL */}
+            <div className="col-12 col-md-6">
+              <label className="form-label fw-bold text-dark small mb-1">Alamat Email</label>
 
-              {/* Password & Ubah Password Action Link (Editable) */}
-              <div className="col-12">
-                <label className="form-label fw-bold text-dark small mb-1">Password</label>
-                <div className="position-relative">
-                  <input type="password" className="form-control form-control-custom bg-white border-0 py-2 fw-medium" value={profileData.password || "••••••••"} readOnly />
-                  <div className="text-end mt-2">
-                    <button type="button" className="btn btn-link p-0 text-decoration-underline fw-bold small" style={{ color: theme.primary }} onClick={() => setShowPasswordModal(true)}>
-                      Ubah Password
-                    </button>
-                  </div>
+              <input type="email" className="form-control form-control-custom bg-light text-muted border-0 py-2 fw-medium" value={profileData.email || "-"} disabled readOnly />
+            </div>
+
+            {/* TELEPON */}
+            <div className="col-12 col-md-6">
+              <label className="form-label fw-bold text-dark small mb-1">Nomor Handphone / WhatsApp</label>
+
+              <input
+                type="text"
+                className={`form-control form-control-custom py-2 fw-medium font-monospace ${isEditing ? "bg-white text-dark border" : "bg-light text-muted border-0"}`}
+                value={profileData.telepon}
+                onChange={(e) => handleProfileChange("telepon", e.target.value)}
+                placeholder=""
+                disabled={!isEditing}
+              />
+            </div>
+
+            {/* PASSWORD TERPISAH */}
+            <div className="col-12">
+              <div
+                className="d-flex align-items-center justify-content-between p-3 rounded-3"
+                style={{
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div>
+                  <div className="fw-bold text-dark small">Kata Sandi</div>
                 </div>
+
+                <button
+                  type="button"
+                  className="btn btn-link p-0 text-decoration-underline fw-bold small d-flex align-items-center gap-1"
+                  style={{
+                    color: theme.primary,
+                  }}
+                  onClick={() => setShowPasswordModal(true)}
+                >
+                  <KeyRound size={16} />
+                  Ubah Password
+                </button>
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="d-flex justify-content-end">
-            <button type="submit" className="btn text-white px-4 py-2 d-flex align-items-center gap-2 rounded-3 shadow-xs fw-semibold" style={{ backgroundColor: theme.primary, borderColor: theme.primary }}>
-              <Save size={18} />
-              <span>Simpan Perubahan Profil</span>
+        {/* ===================================================
+            BUTTON AREA
+        ==================================================== */}
+        <div className="d-flex justify-content-end gap-2">
+          {!isEditing ? (
+            <button
+              type="button"
+              className="btn text-white px-4 py-2 d-flex align-items-center gap-2 rounded-3 shadow-xs fw-semibold"
+              style={{
+                backgroundColor: theme.primary,
+                borderColor: theme.primary,
+              }}
+              onClick={handleStartEdit}
+            >
+              <Pencil size={18} />
+              <span>Edit Profil</span>
             </button>
-          </div>
-        </form>
+          ) : (
+            <>
+              <button type="button" className="btn btn-light px-4 py-2 d-flex align-items-center gap-2 rounded-3 fw-semibold" onClick={handleCancelEdit} disabled={isSavingProfile}>
+                <X size={18} />
+                <span>Batal</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn text-white px-4 py-2 d-flex align-items-center gap-2 rounded-3 shadow-xs fw-semibold"
+                style={{
+                  backgroundColor: theme.primary,
+                  borderColor: theme.primary,
+                }}
+                onClick={handleSaveProfile}
+                disabled={isSavingProfile}
+              >
+                <Save size={18} />
+                <span>{isSavingProfile ? "Menyimpan..." : "Simpan Perubahan"}</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Modal Ubah Password */}
+      {/* =====================================================
+          MODAL UBAH PASSWORD
+      ====================================================== */}
       <Modal show={showPasswordModal} onHide={() => setShowPasswordModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title className="fw-bold d-flex align-items-center gap-2">
-            <KeyRound size={20} style={{ color: theme.primary }} />
+            <KeyRound
+              size={20}
+              style={{
+                color: theme.primary,
+              }}
+            />
             <span>Ubah Password Akun</span>
           </Modal.Title>
         </Modal.Header>
+
         <form onSubmit={handleChangePasswordSubmit}>
           <Modal.Body className="p-4">
-            {/* Password Lama */}
+            {/* PASSWORD LAMA */}
             <div className="mb-3">
               <label className="form-label fw-medium small">Password Lama</label>
+
               <div className="position-relative">
                 <input
                   type={showOldPassword ? "text" : "password"}
                   className="form-control form-control-custom py-2 pe-5"
                   placeholder="Masukkan password lama"
                   value={passwordForm.oldPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                  onChange={(e) =>
+                    setPasswordForm({
+                      ...passwordForm,
+                      oldPassword: e.target.value,
+                    })
+                  }
                   required
                 />
-                <button
-                  type="button"
-                  className="btn border-0 text-muted position-absolute top-50 translate-middle-y end-0 me-2 p-1"
-                  onClick={() => setShowOldPassword(!showOldPassword)}
-                  title={showOldPassword ? "Sembunyikan Password" : "Lihat Password"}
-                >
+
+                <button type="button" className="btn border-0 text-muted position-absolute top-50 translate-middle-y end-0 me-2 p-1" onClick={() => setShowOldPassword(!showOldPassword)}>
                   {showOldPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            {/* Password Baru */}
+            {/* PASSWORD BARU */}
             <div className="mb-3">
               <label className="form-label fw-medium small">Password Baru</label>
+
               <div className="position-relative">
                 <input
                   type={showNewPassword ? "text" : "password"}
                   className="form-control form-control-custom py-2 pe-5"
                   placeholder="Masukkan password baru"
                   value={passwordForm.newPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  onChange={(e) =>
+                    setPasswordForm({
+                      ...passwordForm,
+                      newPassword: e.target.value,
+                    })
+                  }
                   required
                 />
-                <button
-                  type="button"
-                  className="btn border-0 text-muted position-absolute top-50 translate-middle-y end-0 me-2 p-1"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  title={showNewPassword ? "Sembunyikan Password" : "Lihat Password"}
-                >
+
+                <button type="button" className="btn border-0 text-muted position-absolute top-50 translate-middle-y end-0 me-2 p-1" onClick={() => setShowNewPassword(!showNewPassword)}>
                   {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            {/* Konfirmasi Password Baru */}
+            {/* KONFIRMASI */}
             <div className="mb-3">
               <label className="form-label fw-medium small">Konfirmasi Password Baru</label>
+
               <div className="position-relative">
                 <input
                   type={showConfirmPassword ? "text" : "password"}
                   className="form-control form-control-custom py-2 pe-5"
                   placeholder="Ulangi password baru"
                   value={passwordForm.confirmPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  onChange={(e) =>
+                    setPasswordForm({
+                      ...passwordForm,
+                      confirmPassword: e.target.value,
+                    })
+                  }
                   required
                 />
-                <button
-                  type="button"
-                  className="btn border-0 text-muted position-absolute top-50 translate-middle-y end-0 me-2 p-1"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  title={showConfirmPassword ? "Sembunyikan Password" : "Lihat Password"}
-                >
+
+                <button type="button" className="btn border-0 text-muted position-absolute top-50 translate-middle-y end-0 me-2 p-1" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
                   {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
           </Modal.Body>
+
           <Modal.Footer>
             <Button variant="light" onClick={() => setShowPasswordModal(false)}>
               Batal
             </Button>
-            <Button type="submit" className="text-white px-4 fw-semibold border-0" style={{ backgroundColor: theme.primary }}>
+
+            <Button
+              type="submit"
+              className="text-white px-4 fw-semibold border-0"
+              style={{
+                backgroundColor: theme.primary,
+              }}
+            >
               Update Password
             </Button>
           </Modal.Footer>
