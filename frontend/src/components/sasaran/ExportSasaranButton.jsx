@@ -6,12 +6,35 @@ export default function ExportSasaranButton({ params = {}, themeColor = "#2b2e4a
   const [isExporting, setIsExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const extractBlob = (response) => {
+    if (response instanceof Blob) return response;
+    if (response?.data instanceof Blob) return response.data;
+    return null;
+  };
+
+  const readBlobError = async (error) => {
+    const candidate = error?.data instanceof Blob ? error.data : error?.response?.data instanceof Blob ? error.response.data : null;
+    if (!candidate) return null;
+    try {
+      const text = await candidate.text();
+      const parsed = JSON.parse(text);
+      return parsed?.message || parsed?.error || null;
+    } catch {
+      return null;
+    }
+  };
+
   const handleDownload = async () => {
     setIsExporting(true);
     setErrorMessage("");
+
     try {
-      const blob = await wargaService.exportWargaExcel(params);
-      if (!(blob instanceof Blob)) throw new Error("Backend tidak mengembalikan file Excel.");
+      const response = await wargaService.exportWargaExcel(params);
+      const blob = extractBlob(response);
+
+      if (!blob) {
+        throw new Error("Backend tidak mengembalikan file Excel.");
+      }
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -22,7 +45,8 @@ export default function ExportSasaranButton({ params = {}, themeColor = "#2b2e4a
       link.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
-      setErrorMessage(error?.message || "Export data sasaran gagal.");
+      const backendMessage = await readBlobError(error);
+      setErrorMessage(backendMessage || error?.message || "Export data sasaran gagal.");
     } finally {
       setIsExporting(false);
     }

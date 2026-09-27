@@ -66,6 +66,24 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
 
   const selectedGroup = CATEGORY_GROUPS[selectedFormatCategory] || CATEGORY_GROUPS.all;
 
+  const extractBlob = (response) => {
+    if (response instanceof Blob) return response;
+    if (response?.data instanceof Blob) return response.data;
+    return null;
+  };
+
+  const readBlobError = async (error) => {
+    const candidate = error?.data instanceof Blob ? error.data : error?.response?.data instanceof Blob ? error.response.data : null;
+    if (!candidate) return null;
+    try {
+      const text = await candidate.text();
+      const parsed = JSON.parse(text);
+      return parsed?.message || parsed?.error || null;
+    } catch {
+      return null;
+    }
+  };
+
   const handleDownload = async () => {
     setIsExporting(true);
     setErrorMessage("");
@@ -79,15 +97,14 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
         params.end_date = `${year}-12-31`;
       }
 
-      // Backend export currently accepts one kategori_sasaran filter at a time.
-      // For grouped formats, omit the category filter so the backend returns the
-      // complete authorized workbook rather than silently returning an incomplete group.
       if (selectedGroup.categories.length === 1) {
         params.kategori_sasaran = selectedGroup.categories[0];
       }
 
-      const blob = await pemeriksaanService.exportPemeriksaanExcel(params);
-      if (!(blob instanceof Blob)) {
+      const response = await pemeriksaanService.exportPemeriksaanExcel(params);
+      const blob = extractBlob(response);
+
+      if (!blob) {
         throw new Error("Backend tidak mengembalikan file Excel.");
       }
 
@@ -104,7 +121,8 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
       window.setTimeout(() => setShowSuccess(false), 2500);
     } catch (error) {
       console.error("Export rekap error:", error);
-      setErrorMessage(error?.message || "Export rekapitulasi gagal.");
+      const backendMessage = await readBlobError(error);
+      setErrorMessage(backendMessage || error?.message || "Export rekapitulasi gagal.");
     } finally {
       setIsExporting(false);
     }

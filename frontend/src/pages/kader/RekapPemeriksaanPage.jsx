@@ -1,23 +1,53 @@
 import React, { useState, useMemo } from "react";
 import { Download, Search, Users, CheckCircle, Clock, AlertTriangle, Filter, Calendar, Eye, Edit, FileText, Printer } from "lucide-react";
+import { pemeriksaanService } from "../../services";
 import DetailRekapModal, { resolve5StepDetails } from "../../components/pemeriksaan/DetailRekapModal";
 import ExportRekapModal from "../../components/pemeriksaan/ExportRekapModal";
 
 export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData }) {
-  // Month & Year Filter State
   const [selectedMonthNum, setSelectedMonthNum] = useState("Semua");
   const [selectedYear, setSelectedYear] = useState("Semua");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Semua Kategori (Semua Siklus)");
 
-  // Modal State for Single-Page View
   const [selectedCitizen, setSelectedCitizen] = useState(null);
+  const [selectedExamDetail, setSelectedExamDetail] = useState(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
-  // Modal State for Export Excel
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-  // Dynamic Unified Rekap Data derived from globalSasaranList and globalPemeriksaanData (Hanya yang sudah periksa)
+  const getDateOnly = (value) => {
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    const text = String(value || "");
+    const isoMatch = text.match(/^\d{4}-\d{2}-\d{2}/);
+    if (isoMatch) return isoMatch[0];
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+  };
+
+  const getAgeText = (birthDate, referenceDate = new Date()) => {
+    const birthDateOnly = getDateOnly(birthDate);
+    const referenceDateOnly = getDateOnly(referenceDate);
+    if (!birthDateOnly || !referenceDateOnly) return "";
+
+    const birth = new Date(`${birthDateOnly}T00:00:00Z`);
+    const reference = new Date(`${referenceDateOnly}T00:00:00Z`);
+    if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime())) return "";
+
+    let months = (reference.getUTCFullYear() - birth.getUTCFullYear()) * 12 + reference.getUTCMonth() - birth.getUTCMonth();
+
+    if (reference.getUTCDate() < birth.getUTCDate()) months -= 1;
+    if (months < 0) return "";
+
+    const years = Math.floor(months / 12);
+    const remainingMonths = months % 12;
+
+    if (years <= 0) return `${remainingMonths} bulan`;
+    return `${years} tahun${remainingMonths ? ` ${remainingMonths} bulan` : ""}`;
+  };
+
   const allRekapList = useMemo(() => {
     if (!globalSasaranList || globalSasaranList.length === 0) return [];
 
@@ -36,11 +66,12 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
           nik: s.nik || "",
           kategori: s.kategori || "",
           subKategori: s.subKategori || "",
-          subText: s.usia || "",
+          subText: s.usia || getAgeText(s.tglLahir, exam?.tanggal || new Date()),
           tglLahir: s.tglLahir || "",
           gender: s.gender || "",
           keteranganKeluarga: s.keteranganIbuSuami || s.namaIbu || s.namaAyah || "",
           tglPeriksa: resolved.tglPeriksa || s.tglPeriksa || "",
+          pemeriksaanId: exam?.id || resolved?.idPemeriksaan || null,
           status: isExamined ? "Sudah" : "Belum",
         };
       })
@@ -48,14 +79,11 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
       .filter((item) => item.status === "Sudah");
   }, [globalSasaranList, globalPemeriksaanData]);
 
-  // Filtered List Logic (Search, Category, Month & Year)
   const filteredList = useMemo(() => {
     return (allRekapList || []).filter((item) => {
       if (!item) return false;
-      // 1. Search match
       const matchSearch = (item.nama || "").toLowerCase().includes((searchTerm || "").toLowerCase()) || (item.nik || "").includes(searchTerm || "");
 
-      // 2. Category match
       let matchCat = true;
       if (selectedCategory !== "Semua Kategori (Semua Siklus)") {
         const itemKat = (item.kategori || "").toLowerCase();
@@ -64,7 +92,6 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
         matchCat = itemKat.includes(targetCat) || itemSubKat.includes(targetCat) || targetCat.includes(itemKat);
       }
 
-      // 3. Month & Year Filter (Supports DD-MM-YYYY, YYYY-MM-DD, DD/MM/YYYY)
       let matchMonthYear = true;
       if (selectedMonthNum !== "Semua" || selectedYear !== "Semua") {
         if (!item.tglPeriksa || item.tglPeriksa === "-") {
@@ -77,11 +104,9 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
 
           if (parts.length === 3) {
             if (parts[0].length === 4) {
-              // YYYY-MM-DD
               itemYear = parts[0];
               itemMonth = parts[1].padStart(2, "0");
             } else {
-              // DD-MM-YYYY
               itemMonth = parts[1].padStart(2, "0");
               itemYear = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
             }
@@ -100,12 +125,34 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
     });
   }, [allRekapList, searchTerm, selectedCategory, selectedMonthNum, selectedYear]);
 
-  const handleOpenDetail = (citizen) => {
+  const handleOpenDetail = async (citizen) => {
     setSelectedCitizen(citizen);
+    setSelectedExamDetail(null);
+
+    const pemeriksaanId = citizen?.pemeriksaanId;
+    if (!pemeriksaanId) {
+      setIsLoadingDetail(false);
+      return;
+    }
+
+    setIsLoadingDetail(true);
+
+    try {
+      const response = await pemeriksaanService.getPemeriksaanById(pemeriksaanId);
+      const detail = response?.data || response || null;
+      setSelectedExamDetail(detail);
+    } catch (error) {
+      console.error("Gagal mengambil detail pemeriksaan:", error);
+      setSelectedExamDetail(null);
+    } finally {
+      setIsLoadingDetail(false);
+    }
   };
 
   const handleCloseDetail = () => {
     setSelectedCitizen(null);
+    setSelectedExamDetail(null);
+    setIsLoadingDetail(false);
   };
 
   const handlePeriksaClick = (subKategori, wargaId) => {
@@ -116,17 +163,14 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
 
   return (
     <div className="container-fluid p-0">
-      {/* Top Action Bar: Export Excel Button */}
       <div className="d-flex justify-content-end mb-3">
         <button className="btn btn-dark-custom btn-top-action shadow-xs" onClick={() => setIsExportModalOpen(true)} title="Export Laporan Rekapitulasi ke Excel">
           <Download size={16} /> <span>Export Excel</span>
         </button>
       </div>
 
-      {/* Filter Bar Section */}
       <div className="card card-custom p-3 mb-4 bg-white border-0 shadow-sm rounded-4">
         <div className="row g-2 align-items-center">
-          {/* Dropdown Filter Bulan */}
           <div className="col-12 col-sm-6 col-md-2">
             <div className="input-group">
               <span className="input-group-text bg-light border-end-0 text-muted px-2">
@@ -150,7 +194,6 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
             </div>
           </div>
 
-          {/* Dropdown Filter Tahun */}
           <div className="col-12 col-sm-6 col-md-2">
             <select className="form-select bg-light text-dark fw-semibold small py-2" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} title="Pilih Tahun Periksa">
               <option value="Semua">Semua Tahun</option>
@@ -170,7 +213,6 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
             </select>
           </div>
 
-          {/* Search Bar */}
           <div className="col-12 col-md-4">
             <div className="input-group">
               <span className="input-group-text bg-light border-end-0 text-muted px-2">
@@ -180,7 +222,6 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
             </div>
           </div>
 
-          {/* Category Dropdown */}
           <div className="col-12 col-md-4">
             <select className="form-select bg-light text-dark small py-2" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
               <option value="Semua Kategori (Semua Siklus)">Semua Kategori</option>
@@ -198,7 +239,6 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
         </div>
       </div>
 
-      {/* Info Alert Banner */}
       <div className="alert bg-white border border-light-subtle rounded-3 p-3 mb-4 shadow-xs d-flex align-items-center gap-2">
         <span className="text-muted fs-5">ⓘ</span>
         <span className="text-secondary small mb-0">
@@ -206,7 +246,6 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
         </span>
       </div>
 
-      {/* Data Table Card */}
       <div className="card card-custom p-0 bg-white border-0 shadow-sm rounded-4 overflow-hidden">
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0">
@@ -271,7 +310,6 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
           </table>
         </div>
 
-        {/* Footer Pagination Bar */}
         <div className="p-3 bg-light-subtle d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2 border-top">
           <span className="text-muted small">
             Menampilkan {filteredList.length} dari {allRekapList.length} sasaran
@@ -298,10 +336,11 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
         </div>
       </div>
 
-      {/* SINGLE-PAGE DETAIL MODAL (Menampilkan Seluruh Langkah 1 s/d 5 Dalam Satu Halaman Utuh) */}
       {selectedCitizen && (
         <DetailRekapModal
           citizen={selectedCitizen}
+          examData={selectedExamDetail}
+          isLoading={isLoadingDetail}
           onClose={handleCloseDetail}
           theme="kader"
           onEdit={(citizen) => {
@@ -311,7 +350,6 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
         />
       )}
 
-      {/* EXPORT REKAP MODAL (Mendukung Template Kemenkes RI 14 Kolom Bumil/Nifas) */}
       <ExportRekapModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
