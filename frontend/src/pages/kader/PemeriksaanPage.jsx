@@ -350,10 +350,11 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   const [pemeriksaanByWarga, setPemeriksaanByWarga] = useState({});
   const [backendPlottingByWarga, setBackendPlottingByWarga] = useState({});
 
-  // Status Step 2 yang sudah tersimpan di backend untuk kunjungan hari ini.
-  // Dipakai agar sasaran tidak muncul lagi di antrean Step 2 setelah pengukuran tersimpan,
-  // termasuk setelah halaman direfresh / state frontend di-reset.
+  // Status penyelesaian step yang sudah tersimpan di backend untuk kunjungan hari ini.
+  // Dipakai agar sasaran tidak muncul lagi di antrean step terkait setelah halaman direfresh.
   const [backendStep2CompletedWarga, setBackendStep2CompletedWarga] = useState({});
+  const [backendStep4CompletedWarga, setBackendStep4CompletedWarga] = useState({});
+  const [backendStep5CompletedWarga, setBackendStep5CompletedWarga] = useState({});
 
   // Presensi Kehadiran Langkah 1 (Status Kehadiran Hari Ini: { [wargaId]: true/false })
   const [kehadiranWarga, setKehadiranWarga] = useState({});
@@ -397,13 +398,26 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     return hadirWargaList;
   }, [hadirWargaList]);
 
+  // Di Langkah 4: hanya tampilkan sasaran yang hadir DAN belum selesai Step 4.
+  // Completion dicek dari state lokal + status kunjungan backend hari ini.
   const availableWargaStep4 = useMemo(() => {
-    return hadirWargaList.filter((w) => !completedSteps[String(w.id)]?.step4);
-  }, [hadirWargaList, completedSteps]);
+    return hadirWargaList.filter((w) => {
+      const wargaId = String(w.id);
+      const localCompleted = completedSteps[wargaId]?.step4 === true;
+      const backendCompleted = backendStep4CompletedWarga[wargaId] === true;
+      return !localCompleted && !backendCompleted;
+    });
+  }, [hadirWargaList, completedSteps, backendStep4CompletedWarga]);
 
+  // Di Langkah 5: hanya tampilkan sasaran yang hadir DAN belum selesai Step 5.
   const availableWargaStep5 = useMemo(() => {
-    return hadirWargaList.filter((w) => !completedSteps[String(w.id)]?.step5);
-  }, [hadirWargaList, completedSteps]);
+    return hadirWargaList.filter((w) => {
+      const wargaId = String(w.id);
+      const localCompleted = completedSteps[wargaId]?.step5 === true;
+      const backendCompleted = backendStep5CompletedWarga[wargaId] === true;
+      return !localCompleted && !backendCompleted;
+    });
+  }, [hadirWargaList, completedSteps, backendStep5CompletedWarga]);
 
   // Selected citizen for each step (Step 2 to 5)
   const [selectedWargaStep2, setSelectedWargaStep2] = useState("");
@@ -424,6 +438,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         if (!activeWargaList.length) {
           if (!cancelled) {
             setBackendStep2CompletedWarga({});
+            setBackendStep4CompletedWarga({});
+            setBackendStep5CompletedWarga({});
             setBackendRegisteredWarga({});
           }
           return;
@@ -470,6 +486,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
         const visits = visitGroups.flat();
         const completedStep2 = {};
+        const completedStep4 = {};
+        const completedStep5 = {};
         const registeredWarga = {};
         const kunjunganIds = {};
 
@@ -481,14 +499,30 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
           registeredWarga[id] = true;
           if (visit?.id) kunjunganIds[id] = Number(visit.id);
 
-          const status = String(visit?.status_langkah || "").toLowerCase();
+          const status = String(visit?.status_langkah || "")
+            .trim()
+            .toLowerCase();
+
+          // Step 2 selesai saat status kunjungan sudah melewati langkah 1.
           if (["langkah_2", "langkah_3", "langkah_4", "langkah_5"].includes(status)) {
             completedStep2[id] = true;
+          }
+
+          // Step 4 selesai saat status kunjungan sudah langkah 4 atau langkah 5.
+          if (["langkah_4", "langkah_5"].includes(status)) {
+            completedStep4[id] = true;
+          }
+
+          // Step 5 selesai saat status kunjungan sudah langkah 5.
+          if (status === "langkah_5") {
+            completedStep5[id] = true;
           }
         });
 
         if (!cancelled) {
           setBackendStep2CompletedWarga(completedStep2);
+          setBackendStep4CompletedWarga(completedStep4);
+          setBackendStep5CompletedWarga(completedStep5);
           setBackendRegisteredWarga(registeredWarga);
           setKunjunganIdByWarga((prev) => ({ ...prev, ...kunjunganIds }));
 
@@ -1069,6 +1103,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     }
   };
 
+  const isRemajaPerempuan =
+    String(activeCitizenStep4?.gender || "")
+      .trim()
+      .toLowerCase() === "perempuan" ||
+    String(activeCitizenStep4?.gender || "")
+      .trim()
+      .toUpperCase() === "P";
+
   const getLangkah4Value = (field) => {
     const src = examinationMode === "per-step" ? langkah4Form : sequentialForm;
     if (!src) return "";
@@ -1489,7 +1531,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       if (!pemeriksaanId) throw new Error("Backend tidak mengembalikan ID pemeriksaan setelah Step 2.");
       setPemeriksaanByWarga((prev) => ({ ...prev, [String(targetWarga.id)]: pemeriksaanId }));
 
-      const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), formData);
+      const screeningForm = activeSubmenu === "usekrem-15-18" && !isRemajaPerempuan ? { ...langkah4Form, periksaHb: "" } : langkah4Form;
+
+      const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), screeningForm);
       const step4Res = await pemeriksaanService.saveStep4({
         kunjungan_id: Number(kunjunganId),
         detail_skrining: screeningPayload,
@@ -1691,7 +1735,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     const warga = getWargaForId(targetId);
     try {
       const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga));
-      const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), langkah4Form);
+      const screeningForm = activeSubmenu === "usekrem-15-18" && !isRemajaPerempuan ? { ...sequentialForm, periksaHb: "" } : sequentialForm;
+
+      const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), screeningForm);
       const res = await pemeriksaanService.saveStep4({
         kunjungan_id: Number(kunjunganId),
         detail_skrining: screeningPayload,
@@ -1703,6 +1749,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
       setStepDataByWarga((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), warga, langkah4: res.data.detail_skrining || screeningPayload } }));
       setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step4: true } }));
+      setBackendStep4CompletedWarga((prev) => ({ ...prev, [targetId]: true }));
       showSuccess("Langkah 4 Tersimpan", `Skrining untuk "${warga?.nama || "Warga"}" berhasil disimpan ke database.`);
     } catch (err) {
       showWarning("Gagal Menyimpan Skrining", err?.message || "Skrining gagal disimpan ke backend.");
@@ -1752,6 +1799,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       setLangkah5Form(savedLangkah5);
       setSequentialForm((prev) => ({ ...prev, ...savedLangkah5 }));
       setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step5: true } }));
+      setBackendStep5CompletedWarga((prev) => ({ ...prev, [targetId]: true }));
       showSuccess("Langkah 5 Tersimpan", `Pemeriksaan untuk "${warga?.nama || "Warga"}" selesai dan tersimpan di database.`);
       onRefreshData?.();
     } catch (err) {
@@ -1833,7 +1881,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       }
       try {
         const kunjunganId = kunjunganIdByWarga[String(selectedWargaId)] || (await ensureKunjunganId(getWargaForId(selectedWargaId)));
-        const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), sequentialForm);
+        const screeningForm = activeSubmenu === "usekrem-15-18" && !isRemajaPerempuan ? { ...sequentialForm, periksaHb: "" } : sequentialForm;
+
+        const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), screeningForm);
         const res = await pemeriksaanService.saveStep4({
           kunjungan_id: Number(kunjunganId),
           detail_skrining: screeningPayload,
@@ -3250,7 +3300,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       </div>
 
                       {/* C2. SKRINING KESEHATAN JIWA (DEWASA) SESUAI FORMAT BUKU KIA / KEMENKES */}
-                      {(activeSubmenu === "dewasa" || activeSubmenu === "lansia") && (
+                      {(activeSubmenu === "dewasa" || activeSubmenu === "lansia" || activeSubmenu === "usekrem-15-18") && (
                         <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
                           <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 pb-2 border-bottom gap-2">
                             <div>
@@ -4158,24 +4208,33 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           </select>
                         </div>
 
-                        <div className="col-md-6">
-                          <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
-                          <select
-                            className="form-select bg-light border-0 py-2"
-                            value={examinationMode === "per-step" ? langkah4Form.periksaHb || "" : sequentialForm.periksaHb || ""}
-                            onChange={(e) => {
-                              if (examinationMode === "per-step") {
-                                setLangkah4Form({ ...langkah4Form, periksaHb: e.target.value });
-                              } else {
-                                setSequentialForm({ ...sequentialForm, periksaHb: e.target.value });
-                              }
-                            }}
-                          >
-                            <option value="">-- Pilih Status --</option>
-                            <option value="Sudah">Sudah</option>
-                            <option value="Belum">Belum</option>
-                          </select>
-                        </div>
+                        {isRemajaPerempuan && (
+                          <div className="col-md-6">
+                            <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
+
+                            <select
+                              className="form-select bg-light border-0 py-2"
+                              value={examinationMode === "per-step" ? langkah4Form.periksaHb || "" : sequentialForm.periksaHb || ""}
+                              onChange={(e) => {
+                                if (examinationMode === "per-step") {
+                                  setLangkah4Form({
+                                    ...langkah4Form,
+                                    periksaHb: e.target.value,
+                                  });
+                                } else {
+                                  setSequentialForm({
+                                    ...sequentialForm,
+                                    periksaHb: e.target.value,
+                                  });
+                                }
+                              }}
+                            >
+                              <option value="">-- Pilih Status --</option>
+                              <option value="Sudah">Sudah</option>
+                              <option value="Belum">Belum</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
