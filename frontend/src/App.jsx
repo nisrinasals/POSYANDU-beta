@@ -236,46 +236,53 @@ export default function App() {
     try {
       if (canAccessPersonalData) {
         const resWarga = await wargaService.getAllWarga({
+          page: 1,
+          limit: 100,
           status_domisili: "all",
         });
 
-        const wargaItems = resWarga?.data?.items || resWarga?.data || (Array.isArray(resWarga) ? resWarga : null);
+        // Normalisasi berbagai kemungkinan bentuk response service
+        const wargaPayload = resWarga?.data ?? resWarga;
 
-        if (Array.isArray(wargaItems)) {
-          const mapped = wargaItems.map(mapBackendWargaToFrontend).filter(Boolean);
+        const wargaItems = Array.isArray(wargaPayload) ? wargaPayload : Array.isArray(wargaPayload?.items) ? wargaPayload.items : Array.isArray(wargaPayload?.data) ? wargaPayload.data : [];
 
-          setGlobalSasaranList((prev) => {
-            return mapped.map((w) => {
-              const existing = prev.find((p) => String(p.id) === String(w.id));
+        console.log("[APP] Data warga awal:", {
+          response: resWarga,
+          total: wargaItems.length,
+        });
 
-              const exam = backendPemMap[w.id] || backendPemMap[String(w.id)];
+        const mapped = wargaItems.map(mapBackendWargaToFrontend).filter(Boolean);
 
-              const statusLangkah = exam?.kunjungan?.status_langkah;
+        setGlobalSasaranList((prev) => {
+          return mapped.map((w) => {
+            const existing = prev.find((p) => String(p.id) === String(w.id));
 
-              const isCompleted = statusLangkah === "langkah_5";
+            const exam = backendPemMap[w.id] || backendPemMap[String(w.id)];
 
-              if (isCompleted) {
-                return {
+            const statusLangkah = exam?.kunjungan?.status_langkah;
+
+            const isCompleted = statusLangkah === "langkah_5";
+
+            if (isCompleted) {
+              return {
+                ...w,
+                statusPemeriksaan: "Sudah",
+                tglPeriksa: exam?.tanggal ? String(exam.tanggal).split("T")[0] : "",
+              };
+            }
+
+            return existing
+              ? {
+                  ...existing,
                   ...w,
-                  statusPemeriksaan: "Sudah",
-                  tglPeriksa: exam?.tanggal ? String(exam.tanggal).split("T")[0] : "",
-                };
-              }
-
-              return existing
-                ? {
-                    ...existing,
-                    ...w,
-                  }
-                : w;
-            });
+                }
+              : w;
           });
-        }
+        });
       }
     } catch (err) {
       console.error("Gagal mengambil Data Warga dari backend:", err);
     }
-
     // =======================================================
     // JADWAL
     // =======================================================

@@ -540,6 +540,7 @@ const getStep3Pemeriksaan = async (req, res, next) => {
     const prevAnnual = current.kunjungan?.warga_id ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id) : null;
     const isAnnualCompleted = Boolean(prevAnnual || current.detail_skrining?.is_skrining_tahunan === true);
     const config = await getScreeningConfig();
+    const referralReasons = getCombinedReferralReasons(current.detail_skrining, plotData);
 
     return res.status(200).json({
       success: true,
@@ -562,6 +563,7 @@ const getStep3Pemeriksaan = async (req, res, next) => {
         },
         standar_plot: STANDAR_PLOT[current.kategori_sasaran] || null,
         hasil_plot: plotData,
+        referral_reasons: referralReasons,
         historis: history,
         growth_history: history,
         usia_kehamilan: calculatePregnancyAge(periodeAcuan?.hpht, current.tanggal),

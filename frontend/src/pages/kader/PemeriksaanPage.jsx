@@ -290,7 +290,11 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   const [kunjunganIdByWarga, setKunjunganIdByWarga] = useState({});
   const [pemeriksaanByWarga, setPemeriksaanByWarga] = useState({});
   const [backendPlottingByWarga, setBackendPlottingByWarga] = useState({});
-  const [screeningHistoryByExam, setScreeningHistoryByExam] = useState({});
+
+  // Status Step 2 yang sudah tersimpan di backend untuk kunjungan hari ini.
+  // Dipakai agar sasaran tidak muncul lagi di antrean Step 2 setelah pengukuran tersimpan,
+  // termasuk setelah halaman direfresh / state frontend di-reset.
+  const [backendStep2CompletedWarga, setBackendStep2CompletedWarga] = useState({});
 
   // Presensi Kehadiran Langkah 1 (Status Kehadiran Hari Ini: { [wargaId]: true/false })
   const [kehadiranWarga, setKehadiranWarga] = useState({});
@@ -302,30 +306,36 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   // State pencarian warga di Langkah 1 Presensi
   const [searchWargaQuery, setSearchWargaQuery] = useState("");
 
-  // Sesuai permintaan: Jika belum di-search, data tidak langsung muncul semua.
-  // Hanya muncul jika dicari, atau jika sudah ditandai presensinya hari ini.
+  // Step 1: tampilkan semua sasaran kategori secara default.
+  // Search hanya digunakan untuk memfilter daftar yang sudah ada.
   const filteredSasaranLangkah1 = useMemo(() => {
     const q = searchWargaQuery.trim().toLowerCase();
-    if (q) {
-      return activeWargaList.filter((w) => (w.nama && w.nama.toLowerCase().includes(q)) || (w.nik && String(w.nik).includes(q)) || (w.alamat && w.alamat.toLowerCase().includes(q)));
-    }
-    // Jika tidak ada kata kunci pencarian, hanya tampilkan yang sudah ditandai presensi (Datang / Tidak Datang)
-    return activeWargaList.filter((w) => kehadiranWarga[String(w.id)] !== undefined);
-  }, [activeWargaList, searchWargaQuery, kehadiranWarga]);
+    if (!q) return activeWargaList;
+
+    return activeWargaList.filter((w) => (w.nama && w.nama.toLowerCase().includes(q)) || (w.nik && String(w.nik).includes(q)) || (w.alamat && w.alamat.toLowerCase().includes(q)));
+  }, [activeWargaList, searchWargaQuery]);
 
   // Daftar sasaran yang SUDAH HADIR di Langkah 1 untuk kategori ini
   const hadirWargaList = useMemo(() => {
     return activeWargaList.filter((w) => kehadiranWarga[String(w.id)] === true);
   }, [activeWargaList, kehadiranWarga]);
 
-  // Di Langkah 2 s/d 5: HANYA menampilkan sasaran yang SUDAH HADIR di Langkah 1
+  // Di Langkah 2: hanya tampilkan sasaran yang sudah hadir DAN belum selesai Step 2.
+  // Status completion dibaca dari state lokal + status kunjungan backend hari ini.
   const availableWargaStep2 = useMemo(() => {
-    return hadirWargaList.filter((w) => !completedSteps[String(w.id)]?.step2);
-  }, [hadirWargaList, completedSteps]);
+    return hadirWargaList.filter((w) => {
+      const wargaId = String(w.id);
+      const localCompleted = completedSteps[wargaId]?.step2 === true;
+      const backendCompleted = backendStep2CompletedWarga[wargaId] === true;
+      return !localCompleted && !backendCompleted;
+    });
+  }, [hadirWargaList, completedSteps, backendStep2CompletedWarga]);
 
+  // Langkah 3 tetap menampilkan SEMUA sasaran yang sudah terdaftar sebagai DATANG
+  // pada Step 1. Step 3 read-only, jadi warga yang sudah pernah diplot tetap bisa dipilih.
   const availableWargaStep3 = useMemo(() => {
-    return hadirWargaList.filter((w) => !completedSteps[String(w.id)]?.step3);
-  }, [hadirWargaList, completedSteps]);
+    return hadirWargaList;
+  }, [hadirWargaList]);
 
   const availableWargaStep4 = useMemo(() => {
     return hadirWargaList.filter((w) => !completedSteps[String(w.id)]?.step4);
@@ -342,6 +352,49 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   const [selectedWargaStep5, setSelectedWargaStep5] = useState("");
 
   // Automatically keep selected citizen in sync with available list
+  // Sinkronkan status Step 2 dengan kunjungan backend pada hari berjalan.
+  // Backend mengubah status_langkah menjadi langkah_2 setelah Step 2 berhasil disimpan,
+  // dan tetap langkah_3/4/5 ketika proses sudah berlanjut.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBackendStep2Status = async () => {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const response = await kunjunganService.getKunjunganList({
+          page: 1,
+          limit: 100,
+          start_date: today,
+          end_date: today,
+        });
+
+        const visits = Array.isArray(response?.data) ? response.data : Array.isArray(response?.data?.items) ? response.data.items : [];
+
+        const completed = {};
+        visits.forEach((visit) => {
+          const wargaId = visit?.warga_id || visit?.warga?.id;
+          const status = String(visit?.status_langkah || "").toLowerCase();
+
+          if (wargaId && ["langkah_2", "langkah_3", "langkah_4", "langkah_5"].includes(status)) {
+            completed[String(wargaId)] = true;
+          }
+        });
+
+        if (!cancelled) {
+          setBackendStep2CompletedWarga(completed);
+        }
+      } catch (error) {
+        // State lokal tetap dipakai bila endpoint riwayat kunjungan gagal.
+      }
+    };
+
+    loadBackendStep2Status();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSubmenu]);
+
   useEffect(() => {
     if (availableWargaStep2.length > 0) {
       if (!availableWargaStep2.some((w) => String(w.id) === String(selectedWargaStep2))) {
@@ -431,30 +484,11 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     };
   }, [currentSelectedWarga, currentExamListRecord, backendPlottingByWarga]);
 
-  useEffect(() => {
-    const examId = currentExamListRecord?.id;
-    if (!examId || screeningHistoryByExam[String(examId)]) return;
-
-    let cancelled = false;
-    pemeriksaanService
-      .getScreeningHistory(examId)
-      .then((res) => {
-        if (!cancelled && res?.data) {
-          setScreeningHistoryByExam((prev) => ({ ...prev, [String(examId)]: res.data }));
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentExamListRecord, screeningHistoryByExam]);
-
   // Keep legacy list metadata only; detailed clinical values come from backend Step 3.
   const currentExamData = useMemo(() => currentExamListRecord || null, [currentExamListRecord]);
 
   // Helper evaluasi riwayat skrining tahunan warga
-  const getRiwayatSkriningTahunanInfo = (warga, exam, historyResponse) => {
+  const getRiwayatSkriningTahunanInfo = (warga, exam) => {
     if (!warga) {
       return {
         hasHistory: false,
@@ -477,15 +511,13 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       (examL4.skriningJiwa && examL4.skriningJiwa !== ""),
     );
 
-    const historyItems = Array.isArray(historyResponse?.history) ? historyResponse.history : Array.isArray(historyResponse?.screening_history) ? historyResponse.screening_history : [];
-    const latestHistory = historyResponse?.latest || historyItems[0] || null;
-    let rawDate = latestHistory?.tanggal || latestHistory?.tanggal_pemeriksaan || latestHistory?.created_at || null;
+    let rawDate = null;
     if (hasExamAnnual) {
-      rawDate = rawDate || examL4.tglSkriningTahunan || exam?.tglPemeriksaan || warga.tglSkriningTahunanTerakhir || warga.tglPeriksa;
+      rawDate = examL4.tglSkriningTahunan || exam?.tglPemeriksaan || warga.tglSkriningTahunanTerakhir || warga.tglPeriksa;
     } else if (warga.tglSkriningTahunanTerakhir) {
-      rawDate = rawDate || warga.tglSkriningTahunanTerakhir;
+      rawDate = warga.tglSkriningTahunanTerakhir;
     } else if (warga.tglPeriksa && warga.statusPemeriksaan === "Sudah") {
-      rawDate = rawDate || warga.tglPeriksa;
+      rawDate = warga.tglPeriksa;
     }
 
     if (!rawDate) {
@@ -558,9 +590,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   }, [activeCitizenStep4, globalPemeriksaanData, currentExamData]);
 
   const annualScreeningInfo = useMemo(() => {
-    const examId = activeExamDataStep4?.id;
-    return getRiwayatSkriningTahunanInfo(activeCitizenStep4, activeExamDataStep4, screeningHistoryByExam[String(examId)]);
-  }, [activeCitizenStep4, activeExamDataStep4, screeningHistoryByExam]);
+    return getRiwayatSkriningTahunanInfo(activeCitizenStep4, activeExamDataStep4);
+  }, [activeCitizenStep4, activeExamDataStep4]);
 
   // Helper render riwayat pemeriksaan sebelumnya (ditiadakan sesuai masukan kader)
   const renderRiwayatPemeriksaanTerakhir = () => null;
@@ -1266,7 +1297,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         topik_penyuluhan: String(formData.topikPenyuluhan || "").trim(),
         is_perlu_rujukan: statusRujukan.toLowerCase().includes("rujuk"),
         alasan_rujukan: formData.alasanRujukan || undefined,
-        status_kehadiran_rujukan: formData.statusKehadiranRujukan || undefined,
       });
       if (!step5Res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
 
@@ -1484,7 +1514,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
           .toLowerCase()
           .includes("rujuk"),
         alasan_rujukan: langkah5Form.alasanRujukan || undefined,
-        status_kehadiran_rujukan: langkah5Form.statusKehadiranRujukan || undefined,
       });
       if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
@@ -1628,6 +1657,50 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   }, [examinationMode, selectedWargaId, selectedWargaStep3, backendPlottingByWarga]);
 
   const plottingResult = activeBackendPlotting?.hasil_plot || null;
+
+  // Auto-rujukan Step 5 dihitung sekali di scope komponen agar dapat dipakai
+  // secara konsisten baik pada mode per-step maupun sequential.
+  const step5AutoReferral = useMemo(() => {
+    const form4 = examinationMode === "per-step" ? langkah4Form : sequentialForm;
+
+    const tbcFields = ["batukTbc", "demamTbc", "bbTurunTbc", "kontakTbc", "lesuTbc", "batukBesarTbc", "nafsuMakanTbc", "bbMenurunTbc", "lemahLesuTbc", "berkeringatMalamTbc", "batukDarahTbc", "sesakNafasTbc"];
+    const tbcRisiko = tbcFields.some((field) => form4[field] === "Ya");
+
+    const pr = plottingResult;
+    const imtRisiko = Boolean(pr && pr.imtKey && pr.imtKey !== "normal");
+    const lilaRisiko = Boolean(
+      pr &&
+      (activeSubmenu === "lansia"
+        ? pr.lilaLansiaKey && pr.lilaLansiaKey !== "normal"
+        : activeSubmenu === "dewasa" || activeSubmenu === "bumil" || activeSubmenu === "nifas"
+          ? pr.lilaDewasaKey && pr.lilaDewasaKey !== "normal"
+          : ["bayi-0-11", "balita-12-59"].includes(activeSubmenu)
+            ? pr.lilaBayiKey && pr.lilaBayiKey !== "normal"
+            : activeSubmenu === "apras"
+              ? pr.lilaAprasKey && pr.lilaAprasKey !== "normal"
+              : false),
+    );
+    const tensiRisiko = Boolean(pr && pr.tensiAdultKey && pr.tensiAdultKey !== "normal");
+    const gulaRisiko = Boolean(pr?.isGulaRisiko);
+    const lpRisiko = Boolean(pr && pr.lpPlottingKey && pr.lpPlottingKey !== "normal");
+    const aksRisiko = activeSubmenu === "lansia" && Boolean(currentAks.perluRujuk);
+    const skilasRisiko = activeSubmenu === "lansia" && Boolean(currentSkilas.adaRisiko);
+
+    const reasons = [];
+    if (tbcRisiko) reasons.push("Gejala TBC Positif");
+    if (imtRisiko) reasons.push(`IMT: ${pr?.imtDewasaStatus || pr?.imtAprasStatus || pr?.imtUsekremStatus || pr?.imtStatus || "Berisiko"}`);
+    if (lilaRisiko) reasons.push("LiLA Berisiko / KEK");
+    if (tensiRisiko) reasons.push(`Tensi: ${pr?.tensiStatus || pr?.tensiRemajaStatus || "Berisiko"}`);
+    if (gulaRisiko) reasons.push("Gula Darah Risiko");
+    if (lpRisiko) reasons.push("Lingkar Perut Berisiko");
+    if (aksRisiko) reasons.push(`AKS: ${currentAks.kategori}`);
+    if (skilasRisiko) reasons.push(`SKILAS: ${currentSkilas.issues.join(", ")}`);
+
+    return {
+      perluRujuk: tbcRisiko || imtRisiko || lilaRisiko || tensiRisiko || gulaRisiko || lpRisiko || aksRisiko || skilasRisiko,
+      reasons,
+    };
+  }, [examinationMode, langkah4Form, sequentialForm, plottingResult, activeSubmenu, currentAks, currentSkilas]);
 
   // Sinkronisasi status rujukan hanya dari hasil backend plotting.
   useEffect(() => {
@@ -4538,7 +4611,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
               const skilasRisiko = activeSubmenu === "lansia" && currentSkilas.adaRisiko;
 
               // Gabungan: apakah perlu dirujuk berdasarkan skrining
-              const isPerluRujukFromSkrining = tbcRisiko || imtRisiko || lilaRisiko || tensiRisiko || gulaRisiko || lpRisiko || aksRisiko || skilasRisiko;
 
               // Daftar alasan rujukan untuk ditampilkan
               const alasanRujukan = [];
@@ -4553,7 +4625,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
               // Auto-set: gunakan nilai terkomputasi langsung (tidak setState di dalam render)
               // State rujukan tetap bisa diupdate melalui useEffect atau onChange
-              const effectiveRujukan = isPerluRujukFromSkrining ? "Rujuk ke Puskesmas / Pustu" : examinationMode === "per-step" ? langkah5Form.statusRujukan : sequentialForm.statusRujukan;
+              const effectiveRujukan = step5AutoReferral.perluRujuk ? "Rujuk ke Puskesmas / Pustu" : examinationMode === "per-step" ? langkah5Form.statusRujukan : sequentialForm.statusRujukan;
 
               return (
                 <form onSubmit={examinationMode === "per-step" ? handleSaveLangkah5 : handleSaveSequentialAll}>
@@ -4625,9 +4697,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       <select
                         className="form-select form-select-custom bg-white border-0 py-3"
                         value={effectiveRujukan}
-                        disabled={isPerluRujukFromSkrining}
+                        disabled={step5AutoReferral.perluRujuk}
                         onChange={(e) => {
-                          if (!isPerluRujukFromSkrining) {
+                          if (!step5AutoReferral.perluRujuk) {
                             if (examinationMode === "per-step") {
                               setLangkah5Form({ ...langkah5Form, statusRujukan: e.target.value });
                             } else {
