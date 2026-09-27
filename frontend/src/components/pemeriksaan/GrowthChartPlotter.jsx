@@ -1070,76 +1070,150 @@ const GrowthChart = ({ indicator, plottingData, standard, result, config, gender
 };
 
 // ============================================================
-// NON GRAPH RESULT CARD
+// NON GRAPH MEASUREMENT HELPERS
 // ============================================================
 
-const ResultCard = ({ indicator, result, standard }) => {
-  if (!result) {
-    return null;
+const normalizeIndicatorKey = (value) =>
+  normalizeText(value)
+    .replace(/[\/\\]/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const getMeasurementDefinition = (indicatorName) => {
+  const key = normalizeIndicatorKey(indicatorName);
+
+  if (key === "imt" || key === "imt sebelum hamil") {
+    return {
+      resultKeys: ["imt", "imt_sebelum_hamil"],
+      value: (measurements, result) => result?.imt ?? result?.nilai_imt ?? calculateImt(measurements?.bb_kg, measurements?.tb_cm),
+      unit: "kg/m²",
+    };
   }
 
-  const risk = result?.is_merah === true;
+  if (key === "lingkar perut") {
+    return {
+      resultKeys: ["lingkar_perut"],
+      value: (measurements, result) => result?.nilai ?? measurements?.lingkar_perut_cm,
+      unit: "cm",
+    };
+  }
 
-  const explanation = getPlotExplanation(standard, result, null);
+  if (key === "lila" || key === "lingkar lengan atas") {
+    return {
+      resultKeys: ["lila"],
+      value: (measurements, result) => result?.nilai ?? measurements?.lila_cm,
+      unit: "cm",
+    };
+  }
 
-  const value = result?.nilai_riil ?? result?.nilai ?? result?.nilai_imt ?? result?.nilai_bb ?? result?.imt ?? null;
+  if (key === "tekanan darah") {
+    return {
+      resultKeys: ["tekanan_darah"],
+      value: (measurements, result) => {
+        if (result?.nilai) return result.nilai;
+        const systole = measurements?.td_sistole;
+        const diastole = measurements?.td_diastole;
+        if (systole == null && diastole == null) return null;
+        return `${systole ?? "-"}/${diastole ?? "-"}`;
+      },
+      unit: "mmHg",
+    };
+  }
 
-  const zscore = toNumber(result?.zscore) ?? toNumber(result?.z_score);
+  if (key === "kadar gula darah") {
+    return {
+      resultKeys: ["kadar_gula_darah"],
+      value: (measurements, result) => result?.nilai_riil ?? result?.nilai ?? measurements?.kadar_gula,
+      unit: "mg/dl",
+    };
+  }
+
+  if (key === "lingkar kepala") {
+    return {
+      resultKeys: ["lingkar_kepala"],
+      value: (measurements, result) => result?.nilai ?? measurements?.lingkar_kepala_cm,
+      unit: "cm",
+    };
+  }
+
+  return null;
+};
+
+const getResultForIndicator = (indicatorName, results) => {
+  const definition = getMeasurementDefinition(indicatorName);
+  if (!definition) return null;
+  return definition.resultKeys.map((key) => results?.[key]).find(Boolean) || null;
+};
+
+const getMeasurementRows = (standards, plottingData, results) => {
+  const measurements = plottingData?.pengukuran_step_2 || {};
+
+  return standards
+    .map((standard) => {
+      const definition = getMeasurementDefinition(standard?.nama);
+      if (!definition) return null;
+
+      const result = getResultForIndicator(standard?.nama, results);
+      const value = definition.value(measurements, result);
+
+      if (value === null || value === undefined || value === "") return null;
+
+      const explanation = getPlotExplanation(standard, result || {}, null);
+
+      return {
+        indicator: standard.nama,
+        value,
+        unit: definition.unit,
+        category: result?.kategori || explanation.kategori || "-",
+        code: result?.kode || explanation.kode || "-",
+        batas: result?.batas || explanation.batas || "-",
+        risk: result?.is_merah === true,
+      };
+    })
+    .filter(Boolean);
+};
+
+// ============================================================
+// NON GRAPH RESULT TABLE
+// ============================================================
+
+const MeasurementResultTable = ({ rows }) => {
+  if (!rows.length) return null;
 
   return (
-    <div className="col-12 col-md-6">
-      <div className="card border rounded-4 shadow-sm h-100">
-        <div className="card-body">
-          <div className="d-flex justify-content-between align-items-center gap-2 mb-3">
-            <h6 className="fw-bold mb-0">{indicator}</h6>
+    <div className="mt-3">
+      <div className="d-flex align-items-center gap-2 mb-3">
+        <Activity size={17} className="text-primary" />
+        <h6 className="fw-bold mb-0">Hasil Pengukuran</h6>
+      </div>
 
-            {risk ? (
-              <span className="badge bg-danger-subtle text-danger rounded-pill d-flex align-items-center gap-1">
-                <AlertTriangle size={12} />
-                Berisiko
-              </span>
-            ) : (
-              <span className="badge bg-success-subtle text-success rounded-pill d-flex align-items-center gap-1">
-                <CheckCircle2 size={12} />
-                Normal
-              </span>
-            )}
-          </div>
-
-          <div className="small">
-            <div className="d-flex justify-content-between border-bottom py-2">
-              <span className="text-muted">Nilai</span>
-
-              <strong>{value ?? "-"}</strong>
-            </div>
-
-            {zscore !== null && (
-              <div className="d-flex justify-content-between border-bottom py-2">
-                <span className="text-muted">Z-Score</span>
-
-                <strong>{zscore.toFixed(2)} SD</strong>
-              </div>
-            )}
-
-            <div className="d-flex justify-content-between border-bottom py-2">
-              <span className="text-muted">Kategori</span>
-
-              <strong>{explanation.kategori}</strong>
-            </div>
-
-            <div className="d-flex justify-content-between border-bottom py-2">
-              <span className="text-muted">Kode</span>
-
-              <strong>{explanation.kode}</strong>
-            </div>
-
-            <div className="d-flex justify-content-between pt-2">
-              <span className="text-muted">Batas</span>
-
-              <strong>{explanation.batas || "-"}</strong>
-            </div>
-          </div>
-        </div>
+      <div className="table-responsive border rounded-3">
+        <table className="table table-hover align-middle mb-0">
+          <thead className="table-light">
+            <tr>
+              <th>Pengukuran</th>
+              <th>Hasil</th>
+              <th>Kategori</th>
+              <th>Kode</th>
+              <th>Batas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.indicator}>
+                <td className="fw-semibold">{row.indicator}</td>
+                <td className="fw-semibold">
+                  {row.value} {row.unit}
+                </td>
+                <td>
+                  <span className={`badge rounded-pill ${row.risk ? "bg-danger-subtle text-danger" : "bg-success-subtle text-success"}`}>{row.category}</span>
+                </td>
+                <td>{row.code}</td>
+                <td>{row.batas}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -1214,36 +1288,13 @@ export default function GrowthChartPlotter({ plottingData }) {
   }, [standards, usiaBulan, results, safePlottingData]);
 
   // ==========================================================
-  // NON GRAPH INDICATORS
+  // NON GRAPH MEASUREMENTS
+  // Semua plot yang tidak memiliki grafik standar ditampilkan
+  // sebagai tabel hasil pengukuran. Tidak lagi bergantung pada
+  // adanya config chart.
   // ==========================================================
 
-  const nonGraphIndicators = useMemo(() => {
-    return standards
-      .map((standard) => {
-        const config = getIndicatorConfig(standard?.nama, usiaBulan, results);
-
-        if (!config || !config.result || config.result.error) {
-          return null;
-        }
-
-        const hasStandardCurve = Array.isArray(config.result?.grafik_sd?.points) && config.result.grafik_sd.points.length > 0;
-
-        const current = getCurrentPoint(safePlottingData, config.result, config);
-
-        if (hasStandardCurve || current) {
-          return null;
-        }
-
-        return {
-          indicator: standard.nama,
-
-          standard,
-
-          result: config.result,
-        };
-      })
-      .filter(Boolean);
-  }, [standards, usiaBulan, results, safePlottingData]);
+  const measurementRows = useMemo(() => getMeasurementRows(standards, safePlottingData, results), [standards, safePlottingData, results]);
 
   // ==========================================================
   // REFERRAL
@@ -1255,7 +1306,7 @@ export default function GrowthChartPlotter({ plottingData }) {
   // NO PLOTTING
   // ==========================================================
 
-  if (!safePlottingData || (graphIndicators.length === 0 && nonGraphIndicators.length === 0)) {
+  if (!safePlottingData || (graphIndicators.length === 0 && measurementRows.length === 0)) {
     return null;
   }
 
@@ -1294,25 +1345,7 @@ export default function GrowthChartPlotter({ plottingData }) {
           <GrowthChart key={indicator} indicator={indicator} plottingData={safePlottingData} standard={standard} result={result} config={config} gender={gender} />
         ))}
 
-        {/* ====================================================
-            NON-GRAPH RESULTS
-        ==================================================== */}
-
-        {nonGraphIndicators.length > 0 && (
-          <div className="mt-3">
-            <div className="d-flex align-items-center gap-2 mb-3">
-              <Activity size={17} className="text-primary" />
-
-              <h6 className="fw-bold mb-0">Hasil Pemeriksaan Lainnya</h6>
-            </div>
-
-            <div className="row g-3">
-              {nonGraphIndicators.map(({ indicator, standard, result }) => (
-                <ResultCard key={indicator} indicator={indicator} standard={standard} result={result} />
-              ))}
-            </div>
-          </div>
-        )}
+        <MeasurementResultTable rows={measurementRows} />
       </div>
     </div>
   );
