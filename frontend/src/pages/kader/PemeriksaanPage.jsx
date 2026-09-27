@@ -7,6 +7,27 @@ import GrowthChartPlotter from "../../components/pemeriksaan/GrowthChartPlotter"
 import { mapFlatScreeningToBackend } from "../../utils/screeningPayload";
 import { pemeriksaanService, kunjunganService, wargaService, sesiService } from "../../services";
 
+// Hitung umur dalam bulan untuk menentukan apakah layanan ASI eksklusif (0-6 bulan) ditampilkan.
+const getAgeInMonths = (warga, referenceDate = new Date()) => {
+  if (!warga) return null;
+
+  const rawBirthDate = warga.tglLahir || warga._raw?.tanggal_lahir || warga.tanggal_lahir;
+  if (!rawBirthDate) return null;
+
+  const birthText = String(rawBirthDate).slice(0, 10);
+  const refText = String(referenceDate).slice(0, 10);
+  const birth = new Date(`${birthText}T00:00:00Z`);
+  const reference = new Date(`${refText}T00:00:00Z`);
+
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime())) return null;
+
+  let months = (reference.getUTCFullYear() - birth.getUTCFullYear()) * 12 + (reference.getUTCMonth() - birth.getUTCMonth());
+
+  if (reference.getUTCDate() < birth.getUTCDate()) months -= 1;
+
+  return Math.max(0, months);
+};
+
 // Opsi Langkah 1: Pemeriksaan Sesuai Umur Kehamilan (Ibu Hamil) - Format Buku KIA
 const OPSI_UMUR_KEHAMILAN_BUMIL = ["<4 minggu", "4-8 minggu", "8-12 minggu", "12-16 minggu", "16-20 minggu", "20-24 minggu", "24-28 minggu", "28-32 minggu", "32-36 minggu", "36-40 minggu"];
 
