@@ -44,6 +44,25 @@ const verifyMutasiWarga = async (req, res, next) => {
       include: [{ model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "puskesmas_id"] }],
     });
 
+    const previousPosyanduId = warga.posyandu_id;
+
+    if (Number(previousPosyanduId) === Number(destination.id)) {
+      await transaction.rollback();
+
+      return res.status(409).json({
+        success: false,
+        code: "MUTATION_SAME_POSYANDU",
+        message: "Warga tersebut sudah terdaftar di Posyandu tujuan dan tidak dapat dimutasi ke Posyandu yang sama.",
+      });
+    }
+
+    await warga.update(
+      {
+        posyandu_id: destination.id,
+      },
+      { transaction },
+    );
+
     if (!warga) return res.status(404).json({ success: false, message: "Data warga tidak cocok dengan NIK, nama lengkap, dan nama ibu." });
     return res.status(200).json({
       success: true,
