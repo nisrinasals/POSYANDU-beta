@@ -12,19 +12,39 @@ import { emptyImunisasiRows, mergeImunisasiRows } from "../../data/imunisasi";
 // Hitung umur dalam bulan untuk menentukan apakah layanan ASI eksklusif (0-6 bulan) ditampilkan.
 const getAgeInMonths = (warga, referenceDate = new Date()) => {
   if (!warga) return null;
-  const rawBirthDate = warga.tglLahir || warga._raw?.tanggal_lahir || warga.tanggal_lahir;
+
+  const rawBirthDate = warga.tglLahir || warga.tanggal_lahir || warga._raw?.tanggal_lahir || warga._raw?.tglLahir;
+
   if (!rawBirthDate) return null;
 
-  const birthText = String(rawBirthDate).slice(0, 10);
-  const refText = String(referenceDate).slice(0, 10);
-  const birth = new Date(`${birthText}T00:00:00Z`);
-  const reference = new Date(`${refText}T00:00:00Z`);
+  let birth;
 
-  if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime())) return null;
+  const birthString = String(rawBirthDate).trim();
+
+  // Format YYYY-MM-DD / ISO
+  if (/^\d{4}-\d{2}-\d{2}/.test(birthString)) {
+    const datePart = birthString.slice(0, 10);
+    birth = new Date(`${datePart}T00:00:00Z`);
+  }
+  // Format DD/MM/YYYY
+  else if (/^\d{2}\/\d{2}\/\d{4}$/.test(birthString)) {
+    const [day, month, year] = birthString.split("/");
+    birth = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  } else {
+    birth = new Date(birthString);
+  }
+
+  if (Number.isNaN(birth.getTime())) return null;
+
+  const reference = new Date(referenceDate);
+
+  if (Number.isNaN(reference.getTime())) return null;
 
   let months = (reference.getUTCFullYear() - birth.getUTCFullYear()) * 12 + (reference.getUTCMonth() - birth.getUTCMonth());
 
-  if (reference.getUTCDate() < birth.getUTCDate()) months -= 1;
+  if (reference.getUTCDate() < birth.getUTCDate()) {
+    months -= 1;
+  }
 
   return Math.max(0, months);
 };
@@ -225,47 +245,64 @@ export function YesNoCard({ label, name, value, onChange, className = "", yesLab
 }
 
 export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData, activePemeriksaanWargaId, onRefreshData }) {
-  const ensureKunjunganId = async (warga) => {
-    if (!warga?.id) throw new Error("Warga pemeriksaan tidak valid.");
+  const getLocalDateOnly = () => {
+    const now = new Date();
+    const localMs = now.getTime() - now.getTimezoneOffset() * 60 * 1000;
+    return new Date(localMs).toISOString().slice(0, 10);
+  };
 
-    // Reuse today's queue entry when one already exists.
-    try {
-      const queueRes = await kunjunganService.getAntreanHariIni();
-      const queue = Array.isArray(queueRes?.data) ? queueRes.data : [];
-      const existing = queue.find((item) => Number(item.warga_id || item.warga?.id) === Number(warga.id));
-      if (existing?.id) return existing.id;
-    } catch (error) {
-      // Continue by looking for an open session.
-    }
-
+  const getTodaySessionForWarga = async (warga) => {
     const posyanduId = warga?._raw?.posyandu_id || warga?.posyandu_id;
     if (!posyanduId) {
       throw new Error("Warga belum memiliki Posyandu pada backend.");
     }
 
+    const today = getLocalDateOnly();
     const sesiRes = await sesiService.getSesiList({
       page: 1,
       limit: 100,
-      posyandu_id: posyanduId,
-      status: "open",
+      posyandu_id: Number(posyanduId),
+      tanggal: today,
     });
-    const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : [];
-    const today = new Date().toISOString().slice(0, 10);
-    const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === today) || sessions[0];
+    const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : Array.isArray(sesiRes?.data?.items) ? sesiRes.data.items : [];
 
+    const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === today);
     if (!session?.id) {
-      throw new Error("Tidak ada sesi Posyandu terbuka. Buat atau buka sesi Posyandu terlebih dahulu.");
+      throw new Error("Tidak ada sesi Posyandu untuk hari ini. Buat atau buka sesi Posyandu terlebih dahulu.");
     }
 
-    const visitRes = await kunjunganService.createKunjungan({
+    return session;
+  };
+
+  const ensureKunjunganId = async (warga) => {
+    if (!warga?.id) throw new Error("Warga pemeriksaan tidak valid.");
+
+    // Selalu cari kunjungan pada SESI HARI INI terlebih dahulu.
+    // Jangan memakai /antrean-hari-ini karena endpoint tersebut hanya
+    // mengembalikan antrean pemeriksaan yang belum selesai.
+    const session = await getTodaySessionForWarga(warga);
+
+    const visitRes = await kunjunganService.getKunjunganList({
+      page: 1,
+      limit: 100,
+      sesi_posyandu_id: Number(session.id),
+      warga_id: Number(warga.id),
+    });
+    const visits = Array.isArray(visitRes?.data) ? visitRes.data : Array.isArray(visitRes?.data?.items) ? visitRes.data.items : [];
+
+    const existing = visits.find((item) => Number(item.warga_id || item.warga?.id) === Number(warga.id));
+    if (existing?.id) return existing.id;
+
+    const createdRes = await kunjunganService.createKunjungan({
       warga_id: Number(warga.id),
       sesi_posyandu_id: Number(session.id),
     });
 
-    if (!visitRes?.data?.id) {
+    if (!createdRes?.data?.id) {
       throw new Error("Backend tidak mengembalikan ID kunjungan.");
     }
-    return visitRes.data.id;
+
+    return createdRes.data.id;
   };
 
   const { showSuccess, showWarning } = useNotification();
@@ -320,6 +357,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   // Presensi Kehadiran Langkah 1 (Status Kehadiran Hari Ini: { [wargaId]: true/false })
   const [kehadiranWarga, setKehadiranWarga] = useState({});
+  const [backendRegisteredWarga, setBackendRegisteredWarga] = useState({});
 
   // Keterangan Waktu Kunjungan Langkah 1 (Presensi): Minggu (Bumil) / Bulan (Nifas, Bayi, Balita, Apras)
   // Format: { [wargaId]: string }
@@ -377,45 +415,102 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   // Sinkronkan status Step 2 dengan kunjungan backend pada hari berjalan.
   // Backend mengubah status_langkah menjadi langkah_2 setelah Step 2 berhasil disimpan,
   // dan tetap langkah_3/4/5 ketika proses sudah berlanjut.
+
   useEffect(() => {
     let cancelled = false;
 
-    const loadBackendStep2Status = async () => {
+    const loadBackendTodayStatus = async () => {
       try {
-        const today = new Date().toISOString().slice(0, 10);
-        const response = await kunjunganService.getKunjunganList({
-          page: 1,
-          limit: 100,
-          start_date: today,
-          end_date: today,
-        });
+        if (!activeWargaList.length) {
+          if (!cancelled) {
+            setBackendStep2CompletedWarga({});
+            setBackendRegisteredWarga({});
+          }
+          return;
+        }
 
-        const visits = Array.isArray(response?.data) ? response.data : Array.isArray(response?.data?.items) ? response.data.items : [];
+        const posyanduIds = Array.from(
+          new Set(
+            activeWargaList
+              .map((w) => w?._raw?.posyandu_id || w?.posyandu_id)
+              .filter(Boolean)
+              .map(Number),
+          ),
+        );
 
-        const completed = {};
+        const visitGroups = await Promise.all(
+          posyanduIds.map(async (posyanduId) => {
+            try {
+              const today = getLocalDateOnly();
+              const sesiRes = await sesiService.getSesiList({
+                page: 1,
+                limit: 100,
+                posyandu_id: posyanduId,
+                tanggal: today,
+              });
+
+              const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : Array.isArray(sesiRes?.data?.items) ? sesiRes.data.items : [];
+              const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === today);
+
+              if (!session?.id) return [];
+
+              const visitRes = await kunjunganService.getKunjunganList({
+                page: 1,
+                limit: 100,
+                sesi_posyandu_id: Number(session.id),
+              });
+
+              return Array.isArray(visitRes?.data) ? visitRes.data : Array.isArray(visitRes?.data?.items) ? visitRes.data.items : [];
+            } catch (error) {
+              console.error(`Gagal mengambil kunjungan sesi Posyandu ${posyanduId}:`, error);
+              return [];
+            }
+          }),
+        );
+
+        const visits = visitGroups.flat();
+        const completedStep2 = {};
+        const registeredWarga = {};
+        const kunjunganIds = {};
+
         visits.forEach((visit) => {
           const wargaId = visit?.warga_id || visit?.warga?.id;
-          const status = String(visit?.status_langkah || "").toLowerCase();
+          if (!wargaId) return;
 
-          if (wargaId && ["langkah_2", "langkah_3", "langkah_4", "langkah_5"].includes(status)) {
-            completed[String(wargaId)] = true;
+          const id = String(wargaId);
+          registeredWarga[id] = true;
+          if (visit?.id) kunjunganIds[id] = Number(visit.id);
+
+          const status = String(visit?.status_langkah || "").toLowerCase();
+          if (["langkah_2", "langkah_3", "langkah_4", "langkah_5"].includes(status)) {
+            completedStep2[id] = true;
           }
         });
 
         if (!cancelled) {
-          setBackendStep2CompletedWarga(completed);
+          setBackendStep2CompletedWarga(completedStep2);
+          setBackendRegisteredWarga(registeredWarga);
+          setKunjunganIdByWarga((prev) => ({ ...prev, ...kunjunganIds }));
+
+          setKehadiranWarga((prev) => {
+            const next = { ...prev };
+            Object.keys(registeredWarga).forEach((id) => {
+              next[id] = true;
+            });
+            return next;
+          });
         }
       } catch (error) {
-        // State lokal tetap dipakai bila endpoint riwayat kunjungan gagal.
+        console.error("Gagal mengambil status presensi hari ini:", error);
       }
     };
 
-    loadBackendStep2Status();
+    loadBackendTodayStatus();
 
     return () => {
       cancelled = true;
     };
-  }, [activeSubmenu]);
+  }, [activeSubmenu, activeWargaList]);
 
   useEffect(() => {
     if (availableWargaStep2.length > 0) {
@@ -480,6 +575,75 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   }, [globalPemeriksaanData, currentSelectedWarga]);
 
   const currentBackendPlotting = currentSelectedWarga ? backendPlottingByWarga[String(currentSelectedWarga.id)] || null : null;
+
+  useEffect(() => {
+    if (examinationMode !== "per-step" || !selectedWargaStep2) return;
+
+    const targetId = String(selectedWargaStep2);
+    const warga = getWargaForId(targetId);
+
+    if (!warga) return;
+
+    const exam = globalPemeriksaanData?.[targetId] || globalPemeriksaanData?.[warga.id] || null;
+
+    const existingPlot = backendPlottingByWarga[targetId];
+
+    const applyStep2Data = (plotData = null) => {
+      const measurements = plotData?.pengukuran_step_2 || plotData?.pengukuran || {};
+
+      setLangkah2Form({
+        bb: measurements.bb_kg ?? exam?.bb_kg ?? warga?.bb ?? "",
+        tb: measurements.tb_cm ?? exam?.tb_cm ?? warga?.tb ?? "",
+        lila: measurements.lila_cm ?? exam?.lila_cm ?? "",
+        lk: measurements.lingkar_kepala_cm ?? exam?.lingkar_kepala_cm ?? "",
+        lp: measurements.lingkar_perut_cm ?? exam?.lingkar_perut_cm ?? "",
+        tensiSistol: measurements.td_sistole ?? exam?.td_sistole ?? "",
+        tensiDiastol: measurements.td_diastole ?? exam?.td_diastole ?? "",
+        gulaDarah: measurements.kadar_gula ?? exam?.kadar_gula ?? "",
+      });
+    };
+
+    // Kalau plotting untuk warga ini sudah ada, langsung pakai.
+    if (existingPlot) {
+      applyStep2Data(existingPlot);
+      return;
+    }
+
+    // Kalau belum ada plotting, ambil dari pemeriksaan backend.
+    const examId = exam?.id;
+    if (!examId) {
+      applyStep2Data();
+      return;
+    }
+
+    let cancelled = false;
+
+    pemeriksaanService
+      .getStep3Plotting(examId)
+      .then((res) => {
+        if (cancelled) return;
+
+        const data = res?.data || null;
+
+        if (data) {
+          setBackendPlottingByWarga((prev) => ({
+            ...prev,
+            [targetId]: data,
+          }));
+        }
+
+        applyStep2Data(data);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          applyStep2Data();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [examinationMode, selectedWargaStep2, globalPemeriksaanData, backendPlottingByWarga, activeSubmenu]);
 
   useEffect(() => {
     const warga = currentSelectedWarga;
@@ -1273,7 +1437,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       if (!data?.topikPenyuluhan || !String(data.topikPenyuluhan).trim()) {
         missing.push("Topik Penyuluhan");
       }
-      if (!data?.statusRujukan || !String(data.statusRujukan).trim()) {
+
+      const statusRujukan = String(data?.statusRujukan || "Tidak Perlu Rujukan").trim();
+
+      if (!statusRujukan) {
         missing.push("Status Rujukan");
       }
     }
@@ -1331,11 +1498,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       if (!step4Res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
       await saveImunisasiRows(targetWarga.id, imunisasiRowsByWarga[String(targetWarga.id)] || emptyImunisasiRows());
 
-      const statusRujukan = String(formData.statusRujukan || "");
+      const statusRujukan = String(formData.statusRujukan || "").trim();
+
       const step5Res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
         topik_penyuluhan: String(formData.topikPenyuluhan || "").trim(),
-        is_perlu_rujukan: statusRujukan.toLowerCase().includes("rujuk"),
+        is_perlu_rujukan: statusRujukan === "Rujuk ke Puskesmas / Pustu",
         alasan_rujukan: formData.alasanRujukan || undefined,
       });
       if (!step5Res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
@@ -1370,13 +1538,15 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   const handleSavePresensiLangkah1 = async () => {
     try {
       const hadirIds = Object.entries(kehadiranWarga)
-        .filter(([, hadir]) => hadir)
+        .filter(([id, hadir]) => hadir && !backendRegisteredWarga[id])
         .map(([id]) => id);
       for (const id of hadirIds) {
         const w = getWargaForId(id);
         if (!w) continue;
         const kunjunganId = await ensureKunjunganId(w);
         setKunjunganIdByWarga((prev) => ({ ...prev, [String(id)]: kunjunganId }));
+        setBackendRegisteredWarga((prev) => ({ ...prev, [String(id)]: true }));
+        setKehadiranWarga((prev) => ({ ...prev, [String(id)]: true }));
         setCompletedSteps((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), step1: true } }));
         setStepDataByWarga((prev) => ({
           ...prev,
@@ -1472,10 +1642,16 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       setKunjunganIdByWarga((prev) => ({ ...prev, [String(selectedWargaStep2)]: kunjunganId }));
       setPemeriksaanByWarga((prev) => ({ ...prev, [String(selectedWargaStep2)]: res.data.id }));
       setStepDataByWarga((prev) => ({ ...prev, [String(selectedWargaStep2)]: { ...(prev[String(selectedWargaStep2)] || {}), warga, langkah2: { ...langkah2Form } } }));
-      setCompletedSteps((prev) => ({ ...prev, [String(selectedWargaStep2)]: { ...(prev[String(selectedWargaStep2)] || {}), step2: true } }));
+      const savedWargaId = String(selectedWargaStep2);
+      setCompletedSteps((prev) => ({ ...prev, [savedWargaId]: { ...(prev[savedWargaId] || {}), step2: true } }));
+      setBackendStep2CompletedWarga((prev) => ({ ...prev, [savedWargaId]: true }));
       const plotRes = await pemeriksaanService.getStep3Plotting(res.data.id);
-      if (plotRes?.data) setBackendPlottingByWarga((prev) => ({ ...prev, [String(selectedWargaStep2)]: plotRes.data }));
+      if (plotRes?.data) setBackendPlottingByWarga((prev) => ({ ...prev, [savedWargaId]: plotRes.data }));
+
+      // Bersihkan form dan pindahkan dropdown ke warga berikutnya.
+      const nextWarga = availableWargaStep2.find((item) => String(item.id) !== savedWargaId);
       setLangkah2Form({ bb: "", tb: "", lila: "", lk: "", lp: "", tensiSistol: "", tensiDiastol: "", gulaDarah: "" });
+      setSelectedWargaStep2(nextWarga ? String(nextWarga.id) : "");
       showSuccess("Langkah 2 Tersimpan", `Pengukuran untuk "${warga?.nama || "Warga"}" berhasil disimpan ke database.`);
     } catch (err) {
       showWarning("Gagal Menyimpan Pengukuran", err?.message || "Pengukuran gagal disimpan ke backend.");
@@ -1551,15 +1727,30 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       const res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
         topik_penyuluhan: String(langkah5Form.topikPenyuluhan || "").trim(),
-        is_perlu_rujukan: String(langkah5Form.statusRujukan || "")
-          .toLowerCase()
-          .includes("rujuk"),
-        alasan_rujukan: langkah5Form.alasanRujukan || undefined,
+        is_perlu_rujukan: String(langkah5Form.statusRujukan || "").trim() === "Rujuk ke Puskesmas",
       });
       if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
+
+      const savedRujukanStatus = res?.rujukan || res?.data?.is_perlu_rujukan === true ? "Rujuk ke Puskesmas" : "Tidak Perlu Rujukan";
+      const savedLangkah5 = {
+        ...langkah5Form,
+        topikPenyuluhan: res?.data?.topik_penyuluhan ?? langkah5Form.topikPenyuluhan ?? "",
+        statusRujukan: savedRujukanStatus,
+      };
+
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
       setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
       setGlobalPemeriksaanData?.((prev) => ({ ...prev, [targetId]: res.data }));
+      setStepDataByWarga((prev) => ({
+        ...prev,
+        [targetId]: {
+          ...(prev[targetId] || {}),
+          warga,
+          langkah5: savedLangkah5,
+        },
+      }));
+      setLangkah5Form(savedLangkah5);
+      setSequentialForm((prev) => ({ ...prev, ...savedLangkah5 }));
       setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step5: true } }));
       showSuccess("Langkah 5 Tersimpan", `Pemeriksaan untuk "${warga?.nama || "Warga"}" selesai dan tersimpan di database.`);
       onRefreshData?.();
@@ -1700,6 +1891,64 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   const plottingResult = activeBackendPlotting?.hasil_plot || null;
 
+  const activeStep5TargetId = examinationMode === "per-step" ? selectedWargaStep5 : selectedWargaId;
+  const activeStep5BackendExam = useMemo(() => {
+    if (!activeStep5TargetId) return null;
+    return globalPemeriksaanData?.[String(activeStep5TargetId)] || globalPemeriksaanData?.[activeStep5TargetId] || null;
+  }, [globalPemeriksaanData, activeStep5TargetId]);
+
+  // Step 5 harus mengambil keputusan rujukan yang sudah tersimpan di backend
+  // untuk SESI HARI INI, bukan mengandalkan default state frontend.
+  useEffect(() => {
+    if (activeStep !== 5 || !activeStep5TargetId) return undefined;
+
+    let cancelled = false;
+    const hydrateStep5FromBackend = async () => {
+      try {
+        const warga = getWargaForId(activeStep5TargetId);
+        if (!warga) return;
+
+        const session = await getTodaySessionForWarga(warga);
+        const response = await pemeriksaanService.getAllPemeriksaan({
+          page: 1,
+          limit: 10,
+          warga_id: Number(activeStep5TargetId),
+          sesi_posyandu_id: Number(session.id),
+        });
+
+        const items = Array.isArray(response?.data) ? response.data : Array.isArray(response?.data?.items) ? response.data.items : [];
+        const backendExam = items[0] || activeStep5BackendExam;
+        if (!backendExam || cancelled) return;
+
+        const persistedRujukan = backendExam?.is_perlu_rujukan === true || Boolean(backendExam?.rujukan) ? "Rujuk ke Puskesmas / Pustu" : backendExam?.is_perlu_rujukan === false ? "Tidak Perlu Rujukan" : "";
+        const persistedTopik = backendExam?.topik_penyuluhan ?? "";
+
+        setGlobalPemeriksaanData?.((prev) => ({ ...prev, [String(activeStep5TargetId)]: backendExam }));
+
+        if (examinationMode === "per-step") {
+          setLangkah5Form((prev) => ({
+            ...prev,
+            topikPenyuluhan: persistedTopik || prev.topikPenyuluhan || "",
+            statusRujukan: persistedRujukan || prev.statusRujukan || "",
+          }));
+        } else {
+          setSequentialForm((prev) => ({
+            ...prev,
+            topikPenyuluhan: persistedTopik || prev.topikPenyuluhan || "",
+            statusRujukan: persistedRujukan || prev.statusRujukan || "",
+          }));
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data Step 5 dari backend:", error);
+      }
+    };
+
+    hydrateStep5FromBackend();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStep, examinationMode, activeStep5TargetId]);
+
   // Auto-rujukan Step 5 dihitung sekali di scope komponen agar dapat dipakai
   // secara konsisten baik pada mode per-step maupun sequential.
   const step5AutoReferral = useMemo(() => {
@@ -1746,15 +1995,32 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   // Sinkronisasi status rujukan hanya dari hasil backend plotting.
   useEffect(() => {
-    if (activeStep !== 5 || !activeBackendPlotting) return;
-    const perluRujukan = Boolean(activeBackendPlotting.hasil_plot?.is_perlu_rujukan);
-    if (!perluRujukan) return;
+    if (activeStep !== 5) return;
+
+    const perluRujukan = Boolean(activeBackendPlotting?.hasil_plot?.is_perlu_rujukan || step5AutoReferral?.perluRujuk);
+
+    const effectiveStatus = perluRujukan ? "Rujuk ke Puskesmas" : "Tidak Perlu Rujukan";
+
     if (examinationMode === "per-step") {
-      setLangkah5Form((prev) => (prev.statusRujukan ? prev : { ...prev, statusRujukan: "Rujuk ke Puskesmas / Pustu" }));
+      setLangkah5Form((prev) => {
+        if (prev.statusRujukan === effectiveStatus) return prev;
+
+        return {
+          ...prev,
+          statusRujukan: effectiveStatus,
+        };
+      });
     } else {
-      setSequentialForm((prev) => (prev.statusRujukan ? prev : { ...prev, statusRujukan: "Rujuk ke Puskesmas / Pustu" }));
+      setSequentialForm((prev) => {
+        if (prev.statusRujukan === effectiveStatus) return prev;
+
+        return {
+          ...prev,
+          statusRujukan: effectiveStatus,
+        };
+      });
     }
-  }, [activeStep, activeBackendPlotting, examinationMode]);
+  }, [activeStep, activeBackendPlotting, examinationMode, step5AutoReferral]);
 
   return (
     <div className="container-fluid p-0">
@@ -1967,15 +2233,17 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       ) : (
                         filteredSasaranLangkah1.map((warga, idx) => {
                           const wId = String(warga.id);
-                          const presenceStatus = kehadiranWarga[wId]; // true | false | undefined
+
+                          const presenceStatus = kehadiranWarga[wId];
+                          const isAlreadyRegistered = backendRegisteredWarga[wId] === true;
                           const isHadir = presenceStatus === true;
                           const isTidakHadir = presenceStatus === false;
+                          const isBelumDatang = !isAlreadyRegistered && presenceStatus === undefined;
                           const isSelectedSequential = examinationMode === "sequential" && selectedWargaId === wId;
-
-                          // Perhitungan umur dan format tanggal lahir yang akurat tanpa NaN
-                          const displayTgl = warga.tglLahir || "";
-                          const displayUsia = warga.usia || "";
-
+                          const rawTglLahir = warga.tglLahir || warga.tanggal_lahir || warga._raw?.tanggal_lahir || warga._raw?.tglLahir || "";
+                          const displayTgl = rawTglLahir ? String(rawTglLahir).slice(0, 10) : "-";
+                          const ageInMonths = getAgeInMonths(warga);
+                          const displayUsia = ageInMonths === null ? "-" : ageInMonths < 12 ? `${ageInMonths} bulan` : `${Math.floor(ageInMonths / 12)} tahun${ageInMonths % 12 !== 0 ? ` ${ageInMonths % 12} bulan` : ""}`;
                           return (
                             <tr
                               key={warga.id}
@@ -2092,50 +2360,102 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               <td className="px-3 text-secondary">{warga.alamat || ""}</td>
 
                               <td className="text-center px-2">
-                                <div className="btn-group btn-group-sm" role="group" onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    className={`btn px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1 ${isHadir ? "shadow-xs" : "bg-white text-secondary"}`}
+                                {isAlreadyRegistered ? (
+                                  <span
+                                    className="badge rounded-pill px-3 py-2 fw-semibold"
                                     style={{
-                                      fontSize: "0.76rem",
-                                      ...(isHadir ? { backgroundColor: "#e8f5e9", borderColor: "#81c784", color: "#1e6b37" } : { backgroundColor: "#ffffff", borderColor: "#cbd5e1", color: "#475569" }),
-                                    }}
-                                    onClick={() => {
-                                      handleToggleKehadiran(wId, true);
-                                      if (examinationMode === "sequential") {
-                                        setSelectedWargaId(wId);
-                                        setSequentialForm((prev) => ({
-                                          ...prev,
-                                          nik: warga.nik || "",
-                                          nama: warga.nama || "",
-                                          tglLahir: warga.tglLahir || "",
-                                          gender: warga.gender || "",
-                                          pekerjaan: warga.pekerjaan || prev.pekerjaan || "",
-                                          statusPernikahan: warga.statusPernikahan || prev.statusPernikahan || "",
-                                          sekolah: warga.sekolah || prev.sekolah || "",
-                                          kelas: warga.kelas || prev.kelas || "",
-                                          tb: warga.tb || prev.tb,
-                                          bb: warga.bb || prev.bb,
-                                        }));
-                                      }
+                                      backgroundColor: "#e8f5e9",
+                                      color: "#1e6b37",
+                                      border: "1px solid #81c784",
                                     }}
                                   >
-                                    <UserCheck size={12.5} />
-                                    <span>Datang</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={`btn px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1 ${isTidakHadir ? "shadow-xs" : "bg-white text-secondary"}`}
-                                    style={{
-                                      fontSize: "0.76rem",
-                                      ...(isTidakHadir ? { backgroundColor: "#ffebee", borderColor: "#ef9a9a", color: "#b71c1c" } : { backgroundColor: "#ffffff", borderColor: "#cbd5e1", color: "#475569" }),
-                                    }}
-                                    onClick={() => handleToggleKehadiran(wId, false)}
-                                  >
-                                    <UserX size={12.5} />
-                                    <span>Tidak Datang</span>
-                                  </button>
-                                </div>
+                                    <UserCheck size={12} className="me-1" />
+                                    Sudah Datang
+                                  </span>
+                                ) : (
+                                  <div className="d-flex flex-column align-items-center gap-1.5">
+                                    {isBelumDatang && (
+                                      <span
+                                        className="badge rounded-pill px-2.5 py-1 fw-medium"
+                                        style={{
+                                          backgroundColor: "#f1f5f9",
+                                          color: "#64748b",
+                                          border: "1px solid #cbd5e1",
+                                          fontSize: "0.7rem",
+                                        }}
+                                      >
+                                        Belum Datang
+                                      </span>
+                                    )}
+
+                                    <div className="btn-group btn-group-sm" role="group" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        type="button"
+                                        className={`btn px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1 ${isHadir ? "shadow-xs" : "bg-white text-secondary"}`}
+                                        style={{
+                                          fontSize: "0.76rem",
+                                          ...(isHadir
+                                            ? {
+                                                backgroundColor: "#e8f5e9",
+                                                borderColor: "#81c784",
+                                                color: "#1e6b37",
+                                              }
+                                            : {
+                                                backgroundColor: "#ffffff",
+                                                borderColor: "#cbd5e1",
+                                                color: "#475569",
+                                              }),
+                                        }}
+                                        onClick={() => {
+                                          handleToggleKehadiran(wId, true);
+
+                                          if (examinationMode === "sequential") {
+                                            setSelectedWargaId(wId);
+                                            setSequentialForm((prev) => ({
+                                              ...prev,
+                                              nik: warga.nik || "",
+                                              nama: warga.nama || "",
+                                              tglLahir: warga.tglLahir || "",
+                                              gender: warga.gender || "",
+                                              pekerjaan: warga.pekerjaan || prev.pekerjaan || "",
+                                              statusPernikahan: warga.statusPernikahan || prev.statusPernikahan || "",
+                                              sekolah: warga.sekolah || prev.sekolah || "",
+                                              kelas: warga.kelas || prev.kelas || "",
+                                              tb: warga.tb || prev.tb,
+                                              bb: warga.bb || prev.bb,
+                                            }));
+                                          }
+                                        }}
+                                      >
+                                        <UserCheck size={12.5} />
+                                        <span>Datang</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={`btn px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1 ${isTidakHadir ? "shadow-xs" : "bg-white text-secondary"}`}
+                                        style={{
+                                          fontSize: "0.76rem",
+                                          ...(isTidakHadir
+                                            ? {
+                                                backgroundColor: "#ffebee",
+                                                borderColor: "#ef9a9a",
+                                                color: "#b71c1c",
+                                              }
+                                            : {
+                                                backgroundColor: "#ffffff",
+                                                borderColor: "#cbd5e1",
+                                                color: "#475569",
+                                              }),
+                                        }}
+                                        onClick={() => handleToggleKehadiran(wId, false)}
+                                      >
+                                        <UserX size={12.5} />
+                                        <span>Tidak Datang</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           );
@@ -2197,23 +2517,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       style={{ minWidth: "220px" }}
                       value={selectedWargaStep2}
                       onChange={(e) => {
-                        const wId = e.target.value;
-                        setSelectedWargaStep2(wId);
-                        const saved = stepDataByWarga[wId]?.langkah2;
-                        if (saved) {
-                          setLangkah2Form({ ...saved });
-                        } else {
-                          setLangkah2Form({
-                            bb: "",
-                            tb: "",
-                            lila: "",
-                            lk: "",
-                            lp: "",
-                            tensiSistol: "",
-                            tensiDiastol: "",
-                            gulaDarah: "",
-                          });
-                        }
+                        setSelectedWargaStep2(e.target.value);
                       }}
                     >
                       {availableWargaStep2.length === 0 ? (
@@ -3779,7 +4083,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
                           <span className="badge bg-primary-subtle text-primary fw-bold px-2.5 py-1 rounded-pill">1x / Tahun</span>
-                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan Remaja Putri</h5>
+                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan Remaja</h5>
                         </div>
                         <p className="text-muted small mb-0">Skrining Kesehatan Jiwa &amp; Pemeriksaan Anemia (Hb) berkala tahunan.</p>
                       </div>
@@ -3994,7 +4298,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
                           <span className="badge bg-primary-subtle text-primary fw-bold px-2.5 py-1 rounded-pill">1x / Tahun</span>
-                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan Remaja Putri</h5>
+                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan Remaja</h5>
                         </div>
                         <p className="text-muted small mb-0">Skrining Kesehatan Jiwa &amp; Pemeriksaan Anemia (Hb) berkala tahunan.</p>
                       </div>
@@ -4604,7 +4908,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
               // Auto-set: gunakan nilai terkomputasi langsung (tidak setState di dalam render)
               // State rujukan tetap bisa diupdate melalui useEffect atau onChange
-              const effectiveRujukan = step5AutoReferral.perluRujuk ? "Rujuk ke Puskesmas / Pustu" : examinationMode === "per-step" ? langkah5Form.statusRujukan : sequentialForm.statusRujukan;
+              const backendPersistedRujukan = activeStep5BackendExam?.is_perlu_rujukan === true || Boolean(activeStep5BackendExam?.rujukan);
+              const effectiveRujukan = step5AutoReferral.perluRujuk || backendPersistedRujukan ? "Rujuk ke Puskesmas / Pustu" : examinationMode === "per-step" ? langkah5Form.statusRujukan : sequentialForm.statusRujukan;
 
               return (
                 <form onSubmit={examinationMode === "per-step" ? handleSaveLangkah5 : handleSaveSequentialAll}>
@@ -4623,10 +4928,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           onChange={(e) => {
                             const wId = e.target.value;
                             setSelectedWargaStep5(wId);
-                            const saved = stepDataByWarga[wId]?.langkah5;
-                            if (saved) {
-                              setLangkah5Form({ ...saved });
-                            }
+                            setLangkah5Form({ topikPenyuluhan: "", mengikutiKelas: "", statusRujukan: "" });
                           }}
                         >
                           {availableWargaStep5.length === 0 ? (
@@ -4676,9 +4978,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       <select
                         className="form-select form-select-custom bg-white border-0 py-3"
                         value={effectiveRujukan}
-                        disabled={step5AutoReferral.perluRujuk}
+                        disabled={step5AutoReferral.perluRujuk || backendPersistedRujukan}
                         onChange={(e) => {
-                          if (!step5AutoReferral.perluRujuk) {
+                          if (!step5AutoReferral.perluRujuk && !backendPersistedRujukan) {
                             if (examinationMode === "per-step") {
                               setLangkah5Form({ ...langkah5Form, statusRujukan: e.target.value });
                             } else {
