@@ -44,11 +44,10 @@ const verifyMutasiWarga = async (req, res, next) => {
       include: [{ model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "puskesmas_id"] }],
     });
 
-    const previousPosyanduId = warga.posyandu_id;
+    const posyanduAsalId = warga.posyandu_id;
+    const posyanduTujuanId = Number(destination.id);
 
-    if (Number(previousPosyanduId) === Number(destination.id)) {
-      await transaction.rollback();
-
+    if (posyanduAsalId && posyanduTujuanId && posyanduAsalId === posyanduTujuanId) {
       return res.status(409).json({
         success: false,
         code: "MUTATION_SAME_POSYANDU",
@@ -56,14 +55,6 @@ const verifyMutasiWarga = async (req, res, next) => {
       });
     }
 
-    await warga.update(
-      {
-        posyandu_id: destination.id,
-      },
-      { transaction },
-    );
-
-    if (!warga) return res.status(404).json({ success: false, message: "Data warga tidak cocok dengan NIK, nama lengkap, dan nama ibu." });
     return res.status(200).json({
       success: true,
       message: "Data warga ditemukan. Silakan konfirmasi mutasi.",
@@ -72,8 +63,18 @@ const verifyMutasiWarga = async (req, res, next) => {
         nik: warga.nik,
         nama_lengkap: warga.nama_lengkap,
         nama_ibu: warga.nama_ibu,
-        posyandu_saat_ini: warga.posyandu,
-        posyandu_tujuan: { id: destination.id, nama_posyandu: destination.nama_posyandu, puskesmas_id: destination.puskesmas_id },
+        posyandu_saat_ini: warga.posyandu
+          ? {
+              id: warga.posyandu.id,
+              nama_posyandu: warga.posyandu.nama_posyandu,
+              puskesmas_id: warga.posyandu.puskesmas_id,
+            }
+          : null,
+        posyandu_tujuan: {
+          id: destination.id,
+          nama_posyandu: destination.nama_posyandu,
+          puskesmas_id: destination.puskesmas_id,
+        },
       },
     });
   } catch (error) {
