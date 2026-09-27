@@ -1,4 +1,4 @@
- "use strict";
+"use strict";
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
@@ -312,14 +312,7 @@ module.exports = {
       type: "check",
       name: "chk_users_role",
       where: {
-        role: [
-          "kader",
-          "puskesmas",
-          "puskesmasAdmin",
-          "dinkes",
-          "dinkesAdmin",
-          "sa",
-        ],
+        role: ["kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin", "sa"],
       },
     });
 
@@ -401,17 +394,11 @@ module.exports = {
       },
     });
 
-    await queryInterface.addIndex(
-      "profile_kehamilan",
-      ["warga_id", "status_kehamilan"],
-      {
-        name: "idx_profile_kehamilan_warga_status",
-      }
-    );
+    await queryInterface.addIndex("profile_kehamilan", ["warga_id", "status_kehamilan"], {
+      name: "idx_profile_kehamilan_warga_status",
+    });
 
-    await queryInterface.sequelize.query(
-      'CREATE UNIQUE INDEX "uq_profile_kehamilan_active_hamil" ON "profile_kehamilan" ("warga_id") WHERE "status_kehamilan" = \'hamil\''
-    );
+    await queryInterface.sequelize.query('CREATE UNIQUE INDEX "uq_profile_kehamilan_active_hamil" ON "profile_kehamilan" ("warga_id") WHERE "status_kehamilan" = \'hamil\'');
 
     // ============================================================
     // 8. SESI POSYANDU
@@ -516,13 +503,7 @@ module.exports = {
       type: "check",
       name: "chk_kunjungan_status_langkah",
       where: {
-        status_langkah: [
-          "langkah_1",
-          "langkah_2",
-          "langkah_3",
-          "langkah_4",
-          "langkah_5",
-        ],
+        status_langkah: ["langkah_1", "langkah_2", "langkah_3", "langkah_4", "langkah_5"],
       },
     });
 
@@ -538,13 +519,9 @@ module.exports = {
       name: "uq_kunjungan_sesi_antrean",
     });
 
-    await queryInterface.addIndex(
-      "kunjungan_posyandu",
-      ["sesi_posyandu_id", "nomor_antrean"],
-      {
-        name: "idx_kunjungan_antrean",
-      }
-    );
+    await queryInterface.addIndex("kunjungan_posyandu", ["sesi_posyandu_id", "nomor_antrean"], {
+      name: "idx_kunjungan_antrean",
+    });
 
     // ============================================================
     // 10. PEMERIKSAAN
@@ -675,17 +652,7 @@ module.exports = {
       type: "check",
       name: "chk_pemeriksaan_kategori",
       where: {
-        kategori_sasaran: [
-          "bumil",
-          "busui",
-          "bayi",
-          "balita",
-          "apras",
-          "uskrem_6_14",
-          "uskrem_15_18",
-          "dewasa",
-          "lansia",
-        ],
+        kategori_sasaran: ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"],
       },
     });
 
@@ -701,13 +668,9 @@ module.exports = {
           CHECK (td_diastole IS NULL OR td_diastole > 0);
     `);
 
-    await queryInterface.addIndex(
-      "pemeriksaan",
-      ["kategori_sasaran", "tanggal"],
-      {
-        name: "idx_pemeriksaan_kategori_tanggal",
-      }
-    );
+    await queryInterface.addIndex("pemeriksaan", ["kategori_sasaran", "tanggal"], {
+      name: "idx_pemeriksaan_kategori_tanggal",
+    });
 
     await queryInterface.sequelize.query(`
       CREATE INDEX idx_pemeriksaan_detail_skrining_gin
@@ -804,13 +767,9 @@ module.exports = {
       },
     });
 
-    await queryInterface.addIndex(
-      "email_otp",
-      ["email", "purpose", "is_used", "expires_at"],
-      {
-        name: "idx_email_otp_lookup",
-      }
-    );
+    await queryInterface.addIndex("email_otp", ["email", "purpose", "is_used", "expires_at"], {
+      name: "idx_email_otp_lookup",
+    });
 
     // ============================================================
     // 13. IMUNISASI
@@ -836,19 +795,39 @@ module.exports = {
         type: Sequelize.STRING(100),
         allowNull: false,
       },
+      is_diberikan: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       tanggal_imunisasi: {
         type: Sequelize.DATEONLY,
+        allowNull: true,
+      },
+      tempat: {
+        type: Sequelize.ENUM("puskesmas", "klinik", "rs"),
+        allowNull: true,
+      },
+      no_batch: {
+        type: Sequelize.STRING(100),
+        allowNull: true,
+      },
+      created_at: {
+        type: Sequelize.DATE,
         allowNull: false,
+        defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
+      },
+      updated_at: {
+        type: Sequelize.DATE,
+        allowNull: false,
+        defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
       },
     });
 
-    await queryInterface.addIndex(
-      "imunisasi",
-      ["warga_id", "tanggal_imunisasi"],
-      {
-        name: "idx_imunisasi_warga_tanggal",
-      }
-    );
+    await queryInterface.addIndex("imunisasi", ["warga_id", "jenis_imunisasi"], {
+      unique: true,
+      name: "uq_imunisasi_warga_jenis",
+    });
 
     // ============================================================
     // 14. RUJUKAN
@@ -938,13 +917,9 @@ module.exports = {
       name: "idx_rujukan_warga_id",
     });
 
-    await queryInterface.addIndex(
-      "rujukan",
-      ["puskesmas_id", "tanggal_rujukan"],
-      {
-        name: "idx_rujukan_puskesmas_tanggal",
-      }
-    );
+    await queryInterface.addIndex("rujukan", ["puskesmas_id", "tanggal_rujukan"], {
+      name: "idx_rujukan_puskesmas_tanggal",
+    });
 
     // ============================================================
     // 15. PROFIL KESEHATAN WARGA
@@ -994,14 +969,10 @@ module.exports = {
       },
     });
 
-    await queryInterface.addIndex(
-      "profil_kesehatan_warga",
-      ["warga_id"],
-      {
-        unique: true,
-        name: "idx_profil_kesehatan_warga_warga_id",
-      }
-    );
+    await queryInterface.addIndex("profil_kesehatan_warga", ["warga_id"], {
+      unique: true,
+      name: "idx_profil_kesehatan_warga_warga_id",
+    });
 
     // ============================================================
     // 16. SCREENING CONFIG
@@ -1042,26 +1013,18 @@ module.exports = {
     // ============================================================
     // 17. INDEX TAMBAHAN
     // ============================================================
-    await queryInterface.addIndex(
-      "warga",
-      ["posyandu_id", "status_domisili"],
-      {
-        name: "idx_warga_posyandu_domisili",
-      }
-    );
+    await queryInterface.addIndex("warga", ["posyandu_id", "status_domisili"], {
+      name: "idx_warga_posyandu_domisili",
+    });
 
     await queryInterface.sequelize.query(`
       CREATE INDEX idx_warga_mutasi_3faktor
       ON warga(nik, tanggal_lahir, LOWER(nama_ibu));
     `);
 
-    await queryInterface.addIndex(
-      "sesi_posyandu",
-      ["posyandu_id", "status", "tanggal_pelaksanaan"],
-      {
-        name: "idx_sesi_posyandu_status",
-      }
-    );
+    await queryInterface.addIndex("sesi_posyandu", ["posyandu_id", "status", "tanggal_pelaksanaan"], {
+      name: "idx_sesi_posyandu_status",
+    });
 
     // ============================================================
     // 18. BACKFILL EMAIL VERIFICATION
@@ -1074,19 +1037,15 @@ module.exports = {
       },
       {
         status: "active",
-      }
+      },
     );
   },
 
   async down(queryInterface) {
     // Hapus index yang dibuat dengan raw SQL
-    await queryInterface.sequelize.query(
-      'DROP INDEX IF EXISTS "uq_profile_kehamilan_active_hamil"'
-    );
+    await queryInterface.sequelize.query('DROP INDEX IF EXISTS "uq_profile_kehamilan_active_hamil"');
 
-    await queryInterface.sequelize.query(
-      'DROP INDEX IF EXISTS "idx_warga_mutasi_3faktor"'
-    );
+    await queryInterface.sequelize.query('DROP INDEX IF EXISTS "idx_warga_mutasi_3faktor"');
 
     // Hapus tabel dalam urutan berlawanan dari dependency
     await queryInterface.dropTable("screening_config");

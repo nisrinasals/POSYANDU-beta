@@ -199,6 +199,12 @@ const getAllPemeriksaan = async (req, res, next) => {
                   as: "posyandu",
                   attributes: ["id", "nama_posyandu"],
                 },
+                {
+                  model: Imunisasi,
+                  as: "imunisasi",
+                  required: false,
+                  attributes: ["id", "jenis_imunisasi", "is_diberikan", "tanggal_imunisasi", "tempat"],
+                },
               ],
             },
             {
@@ -452,7 +458,10 @@ const getStep3Pemeriksaan = async (req, res, next) => {
               as: "warga",
               required: true,
               attributes: ["id", "nik", "nama_lengkap", "tanggal_lahir", "jenis_kelamin"],
-              include: [{ model: ProfileKehamilan, as: "profileKehamilan", required: false, attributes: ["id", "hpht", "tanggal_persalinan", "status_kehamilan", "is_menyusui"] }],
+              include: [
+                { model: ProfileKehamilan, as: "profileKehamilan", required: false, attributes: ["id", "hpht", "tanggal_persalinan", "status_kehamilan", "is_menyusui"] },
+                { model: Imunisasi, as: "imunisasi", required: false, attributes: ["id", "jenis_imunisasi", "is_diberikan", "tanggal_imunisasi", "tempat"] },
+              ],
             },
             {
               model: SesiPosyandu,

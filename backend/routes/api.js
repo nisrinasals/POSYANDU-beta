@@ -60,6 +60,7 @@ api.patch("/warga/mutasi/confirm", personalAuthenticated, validator.warga.confir
 
 api.get("/imunisasi/warga/:warga_id", personalAuthenticated, validator.imunisasi.wargaParam, validateResult, imunisasiController.getImunisasiByWarga);
 api.get("/imunisasi/:id", personalAuthenticated, validator.imunisasi.id, validateResult, imunisasiController.getImunisasiById);
+api.post("/imunisasi/bulk", personalAuthenticated, validator.imunisasi.bulk, validateResult, imunisasiController.bulkUpsertImunisasi);
 api.post("/imunisasi", personalAuthenticated, validator.imunisasi.create, validateResult, imunisasiController.createImunisasi);
 api.put("/imunisasi/:id", personalAuthenticated, validator.imunisasi.update, validateResult, imunisasiController.updateImunisasi);
 

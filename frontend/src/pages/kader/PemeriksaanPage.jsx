@@ -4,8 +4,10 @@ import { kategoriPemeriksaan } from "../../data/kategoriPemeriksaan";
 import { useNotification } from "../../context/NotificationContext";
 import { validateNik, formatNikInput, validateMeasurements } from "../../utils/validators";
 import GrowthChartPlotter from "../../components/pemeriksaan/GrowthChartPlotter";
+import ImunisasiTableHistory from "../../components/pemeriksaan/ImunisasiTableHistory";
 import { mapFlatScreeningToBackend } from "../../utils/screeningPayload";
-import { pemeriksaanService, kunjunganService, wargaService, sesiService } from "../../services";
+import { pemeriksaanService, kunjunganService, wargaService, sesiService, imunisasiService } from "../../services";
+import { emptyImunisasiRows, mergeImunisasiRows } from "../../data/imunisasi";
 
 // Hitung umur dalam bulan untuk menentukan apakah layanan ASI eksklusif (0-6 bulan) ditampilkan.
 const getAgeInMonths = (warga, referenceDate = new Date()) => {
@@ -657,10 +659,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     rutinVitA: "",
     menyusui: "",
     kbPascaPersalinan: "",
-    tempatImunisasi: "",
-    namaRsImunisasi: "",
-    jenisImunisasi: "",
-    jenisImunisasiLainnya: "",
     asiEksklusif: "",
     mpAsi: "",
     pmtPemulihan: "",
@@ -730,6 +728,39 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     statusRujukan: "",
   });
 
+  const [imunisasiRowsByWarga, setImunisasiRowsByWarga] = useState({});
+  const activeImunisasiWargaId = examinationMode === "per-step" ? selectedWargaStep4 : selectedWargaId;
+  const activeImunisasiRows = imunisasiRowsByWarga[String(activeImunisasiWargaId)] || emptyImunisasiRows();
+
+  useEffect(() => {
+    if (!activeImunisasiWargaId) return undefined;
+    let mounted = true;
+    imunisasiService
+      .getImunisasiByWarga(activeImunisasiWargaId)
+      .then((response) => {
+        if (mounted) setImunisasiRowsByWarga((previous) => ({ ...previous, [String(activeImunisasiWargaId)]: mergeImunisasiRows(response?.data) }));
+      })
+      .catch(() => {
+        if (mounted) setImunisasiRowsByWarga((previous) => ({ ...previous, [String(activeImunisasiWargaId)]: emptyImunisasiRows() }));
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeImunisasiWargaId]);
+
+  const updateActiveImunisasiRows = (rows) => {
+    if (!activeImunisasiWargaId) return;
+    setImunisasiRowsByWarga((previous) => ({ ...previous, [String(activeImunisasiWargaId)]: rows }));
+  };
+
+  const saveImunisasiRows = async (wargaId, rows) => {
+    const response = await imunisasiService.bulkUpsertImunisasi(
+      wargaId,
+      rows.map(({ jenis_imunisasi, is_diberikan, tanggal_imunisasi, tempat }) => ({ jenis_imunisasi, is_diberikan, tanggal_imunisasi: tanggal_imunisasi || null, tempat: tempat || null, no_batch: null })),
+    );
+    setImunisasiRowsByWarga((previous) => ({ ...previous, [String(wargaId)]: mergeImunisasiRows(response?.data) }));
+  };
+
   const [sequentialForm, setSequentialForm] = useState({
     isSkriningTahunan: false,
     nik: "",
@@ -768,10 +799,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     rutinVitA: "",
     menyusui: "",
     kbPascaPersalinan: "",
-    tempatImunisasi: "",
-    namaRsImunisasi: "",
-    jenisImunisasi: "",
-    jenisImunisasiLainnya: "",
     asiEksklusif: "",
     mpAsi: "",
     pmtPemulihan: "",
@@ -951,10 +978,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       rutinVitA: l4.rutinVitA || "",
       menyusui: l4.menyusui || "",
       kbPascaPersalinan: l4.kbPascaPersalinan || "",
-      tempatImunisasi: l4.tempatImunisasi || "",
-      namaRsImunisasi: l4.namaRsImunisasi || "",
-      jenisImunisasi: l4.jenisImunisasi || "",
-      jenisImunisasiLainnya: l4.jenisImunisasiLainnya || "",
       asiEksklusif: l4.asiEksklusif || "",
       mpAsi: l4.mpAsi || "",
       pmtPemulihan: l4.pmtPemulihan || "",
@@ -1056,10 +1079,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       rutinVitA: l4.rutinVitA || "",
       menyusui: l4.menyusui || "",
       kbPascaPersalinan: l4.kbPascaPersalinan || "",
-      tempatImunisasi: l4.tempatImunisasi || "",
-      namaRsImunisasi: l4.namaRsImunisasi || "",
-      jenisImunisasi: l4.jenisImunisasi || "",
-      jenisImunisasiLainnya: l4.jenisImunisasiLainnya || "",
       asiEksklusif: l4.asiEksklusif || "",
       mpAsi: l4.mpAsi || "",
       pmtPemulihan: l4.pmtPemulihan || "",
@@ -1310,6 +1329,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         is_skrining_tahunan: Boolean(formData.isSkriningTahunan),
       });
       if (!step4Res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+      await saveImunisasiRows(targetWarga.id, imunisasiRowsByWarga[String(targetWarga.id)] || emptyImunisasiRows());
 
       const statusRujukan = String(formData.statusRujukan || "");
       const step5Res = await pemeriksaanService.saveStep5({
@@ -1502,6 +1522,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         is_skrining_tahunan: Boolean(langkah4Form.isSkriningTahunan),
       });
       if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+      await saveImunisasiRows(targetId, imunisasiRowsByWarga[targetId] || emptyImunisasiRows());
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
       setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
       setStepDataByWarga((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), warga, langkah4: res.data.detail_skrining || screeningPayload } }));
@@ -1628,6 +1649,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
           is_skrining_tahunan: Boolean(sequentialForm.isSkriningTahunan),
         });
         if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+        await saveImunisasiRows(selectedWargaId, imunisasiRowsByWarga[String(selectedWargaId)] || emptyImunisasiRows());
         setKunjunganIdByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: kunjunganId }));
         setPemeriksaanByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: res.data.id }));
         setStepDataByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), langkah4: res.data.detail_skrining || screeningPayload } }));
@@ -4073,72 +4095,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
               ) : ["bayi-0-11", "balita-12-59"].includes(activeSubmenu) ? (
                 <>
                   {/* 1. Imunisasi */}
-                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
-                    <h5 className="fw-bold text-dark mb-3">Imunisasi</h5>
-
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold text-dark small mb-1">Tempat Imunisasi</label>
-                        <select
-                          className="form-select bg-light border-0 py-2"
-                          value={examinationMode === "per-step" ? langkah4Form.tempatImunisasi || "" : sequentialForm.tempatImunisasi || ""}
-                          onChange={(e) => {
-                            if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, tempatImunisasi: e.target.value });
-                            } else {
-                              setSequentialForm({ ...sequentialForm, tempatImunisasi: e.target.value });
-                            }
-                          }}
-                        >
-                          <option value="">-- Pilih Tempat Imunisasi --</option>
-                          <option value="Posyandu">Posyandu</option>
-                          <option value="Puskesmas">Puskesmas</option>
-                          <option value="Rumah Sakit">Rumah Sakit</option>
-                          <option value="Klinik / Praktik Mandiri">Klinik / Praktik Mandiri</option>
-                          <option value="Lainnya">Lainnya</option>
-                        </select>
-                      </div>
-
-                      {/* Pertanyaan Jika di Rumah Sakit / Faskes Luar: Rumah Sakit mana */}
-                      {["Rumah Sakit", "Klinik / Praktik Mandiri", "Lainnya"].includes(examinationMode === "per-step" ? langkah4Form.tempatImunisasi || "" : sequentialForm.tempatImunisasi || "") && (
-                        <div className="col-md-6">
-                          <label className="form-label fw-semibold text-dark small mb-1">
-                            {(examinationMode === "per-step" ? langkah4Form.tempatImunisasi : sequentialForm.tempatImunisasi) === "Rumah Sakit" ? "Nama Rumah Sakit" : "Nama Faskes / Tempat Pelayanan"}
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control bg-light border-0 py-2"
-                            placeholder="Contoh: RSUD Cibinong, RS Hermina, dll..."
-                            value={examinationMode === "per-step" ? langkah4Form.namaRsImunisasi || "" : sequentialForm.namaRsImunisasi || ""}
-                            onChange={(e) => {
-                              if (examinationMode === "per-step") {
-                                setLangkah4Form({ ...langkah4Form, namaRsImunisasi: e.target.value });
-                              } else {
-                                setSequentialForm({ ...sequentialForm, namaRsImunisasi: e.target.value });
-                              }
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold text-dark small mb-1">Jenis Imunisasi yang Diberikan</label>
-                        <input
-                          type="text"
-                          className="form-control bg-light border-0 py-2"
-                          placeholder="Masukkan jenis imunisasi yang diberikan (misal: DPT, Polio, Campak, dll)..."
-                          value={examinationMode === "per-step" ? langkah4Form.jenisImunisasi || "" : sequentialForm.jenisImunisasi || ""}
-                          onChange={(e) => {
-                            if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, jenisImunisasi: e.target.value });
-                            } else {
-                              setSequentialForm({ ...sequentialForm, jenisImunisasi: e.target.value });
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  <ImunisasiTableHistory rows={activeImunisasiRows} onChange={updateActiveImunisasiRows} />
 
                   {/* 2. Pemberian ASI & MP-ASI (Dipisah di bawah Imunisasi) */}
                   <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
@@ -5178,12 +5135,30 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
                           {activeSubmenu === "balita-12-59" && (
                             <>
-                              <div className="col-6">
-                                <strong>Tempat Imunisasi:</strong> {sequentialForm.tempatImunisasi || ""}
-                                {sequentialForm.namaRsImunisasi ? ` (${sequentialForm.namaRsImunisasi})` : ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Jenis Imunisasi:</strong> {sequentialForm.jenisImunisasi === "Lainnya" ? sequentialForm.jenisImunisasiLainnya || "" : sequentialForm.jenisImunisasi || ""}
+                              <div className="col-12">
+                                <strong>Imunisasi:</strong>
+                                <div className="table-responsive mt-2">
+                                  <table className="table table-sm align-middle mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th>Jenis</th>
+                                        <th>Status</th>
+                                        <th>Tanggal</th>
+                                        <th>Tempat</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {activeImunisasiRows.map((row) => (
+                                        <tr key={row.jenis_imunisasi}>
+                                          <td>{row.jenis_imunisasi}</td>
+                                          <td>{row.is_diberikan ? "Diberikan" : "Belum diberikan"}</td>
+                                          <td>{row.is_diberikan ? row.tanggal_imunisasi || "-" : "-"}</td>
+                                          <td>{row.is_diberikan ? row.tempat || "-" : "-"}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
                               <div className="col-6">
                                 <strong>Pemberian MP-ASI:</strong> {sequentialForm.mpAsi || ""}
@@ -5208,12 +5183,30 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
                           {activeSubmenu === "bayi-0-11" && (
                             <>
-                              <div className="col-6">
-                                <strong>Tempat Imunisasi:</strong> {sequentialForm.tempatImunisasi || ""}
-                                {sequentialForm.namaRsImunisasi ? ` (${sequentialForm.namaRsImunisasi})` : ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Jenis Imunisasi:</strong> {sequentialForm.jenisImunisasi === "Lainnya" ? sequentialForm.jenisImunisasiLainnya || "" : sequentialForm.jenisImunisasi || ""}
+                              <div className="col-12">
+                                <strong>Imunisasi:</strong>
+                                <div className="table-responsive mt-2">
+                                  <table className="table table-sm align-middle mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th>Jenis</th>
+                                        <th>Status</th>
+                                        <th>Tanggal</th>
+                                        <th>Tempat</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {activeImunisasiRows.map((row) => (
+                                        <tr key={row.jenis_imunisasi}>
+                                          <td>{row.jenis_imunisasi}</td>
+                                          <td>{row.is_diberikan ? "Diberikan" : "Belum diberikan"}</td>
+                                          <td>{row.is_diberikan ? row.tanggal_imunisasi || "-" : "-"}</td>
+                                          <td>{row.is_diberikan ? row.tempat || "-" : "-"}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
                               <div className="col-6">
                                 <strong>Pemberian ASI Eksklusif:</strong> {sequentialForm.asiEksklusif || ""}
