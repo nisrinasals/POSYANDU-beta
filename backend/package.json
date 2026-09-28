@@ -5,6 +5,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+<<<<<<< HEAD
+=======
+    "clear": "node clearData.js",
+    "seed": "node seedData.js",
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     "test": "node --test tests/*.test.js"
   },
   "keywords": [],

@@ -161,6 +161,7 @@ const calculateJiwa = (input) => {
   };
 };
 
+<<<<<<< HEAD
 const calculateSkilas = (input) => {
   const detail = input || {};
   const riskFields = [
@@ -180,6 +181,8 @@ const calculateSkilas = (input) => {
   return { is_rujukan_skilas: riskFields.some((value) => value === true) };
 };
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const finalizeScreeningScores = (category, detail, warga, options = {}) => {
   if (!detail) return { detail, errors: [] };
   const result = { detail: { ...detail }, errors: [] };
@@ -213,7 +216,11 @@ const finalizeScreeningScores = (category, detail, warga, options = {}) => {
       else result.detail.aks_aktifitas_harian = { ...aks, ...calculated.scores, total_skor_aks: calculated.total_skor_aks, status_aks: calculated.status_aks, kode_aks: calculated.kode_aks, is_rujukan_aks: calculated.is_rujukan_aks };
     }
     const skilas = detail.skilas;
+<<<<<<< HEAD
     if (skilas && options.skilasProvided !== false) result.detail.skilas = { ...skilas, ...calculateSkilas(skilas) };
+=======
+    if (skilas && options.skilasProvided !== false) result.detail.skilas = { ...skilas };
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   }
 
   const jiwa = detail.skrining_kesehatan_jiwa;
@@ -239,4 +246,8 @@ const finalizeScreeningScores = (category, detail, warga, options = {}) => {
   return result;
 };
 
+<<<<<<< HEAD
 module.exports = { PUMA_COMPONENTS, AKS_COMPONENTS, calculateAgeYears, calculatePuma, calculateAks, calculateTbc, calculateJiwa, calculateSkilas, isJiwaEligible, finalizeScreeningScores };
+=======
+module.exports = { PUMA_COMPONENTS, AKS_COMPONENTS, calculateAgeYears, calculatePuma, calculateAks, calculateTbc, calculateJiwa, isJiwaEligible, finalizeScreeningScores };
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

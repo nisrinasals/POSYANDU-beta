@@ -12,7 +12,10 @@
   "dependencies": {
     "axios": "^1.20.0",
     "bootstrap": "^5.3.8",
+<<<<<<< HEAD
     "chart.js": "^4.5.0",
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     "lucide-react": "^1.43.0",
     "react": "^19.2.8",
     "react-bootstrap": "^2.10.10",

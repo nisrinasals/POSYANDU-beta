@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 const { Warga, Posyandu, Puskesmas, KunjunganPosyandu, Pemeriksaan, ProfileKehamilan, ProfilKesehatanWarga } = require("../models");
+=======
+const { Warga, Posyandu, Puskesmas, KunjunganPosyandu, Pemeriksaan, ProfileKehamilan } = require("../models");
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const { Op } = require("sequelize");
 const ExcelJS = require("exceljs");
 const { tentukanKategori, tentukanKategoriAktif, hitungUmur, hitungRekapSasaran } = require("../utils/kategoriHelper");
@@ -9,8 +13,11 @@ const { getSasaranExportColumns, formatSasaranRow } = require("../utils/export/s
 // 9 Kategori Sasaran Resmi ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 
+<<<<<<< HEAD
 const AGE_BASED_KATEGORI = ["bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const VALID_STATUS_DOMISILI = ["aktif", "pindah", "meninggal"];
 const VALID_JENIS_KELAMIN = ["L", "P"];
 const VALID_STATUS_PERKAWINAN = ["menikah", "tidak_menikah"];
@@ -44,6 +51,7 @@ const verifyMutasiWarga = async (req, res, next) => {
       include: [{ model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "puskesmas_id"] }],
     });
 
+<<<<<<< HEAD
     const posyanduAsalId = warga.posyandu_id;
     const posyanduTujuanId = Number(destination.id);
 
@@ -55,6 +63,9 @@ const verifyMutasiWarga = async (req, res, next) => {
       });
     }
 
+=======
+    if (!warga) return res.status(404).json({ success: false, message: "Data warga tidak cocok dengan NIK, nama lengkap, dan nama ibu." });
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     return res.status(200).json({
       success: true,
       message: "Data warga ditemukan. Silakan konfirmasi mutasi.",
@@ -63,6 +74,7 @@ const verifyMutasiWarga = async (req, res, next) => {
         nik: warga.nik,
         nama_lengkap: warga.nama_lengkap,
         nama_ibu: warga.nama_ibu,
+<<<<<<< HEAD
         posyandu_saat_ini: warga.posyandu
           ? {
               id: warga.posyandu.id,
@@ -75,6 +87,10 @@ const verifyMutasiWarga = async (req, res, next) => {
           nama_posyandu: destination.nama_posyandu,
           puskesmas_id: destination.puskesmas_id,
         },
+=======
+        posyandu_saat_ini: warga.posyandu,
+        posyandu_tujuan: { id: destination.id, nama_posyandu: destination.nama_posyandu, puskesmas_id: destination.puskesmas_id },
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       },
     });
   } catch (error) {
@@ -200,11 +216,14 @@ const getAllWarga = async (req, res, next) => {
           separate: true,
           order: [["id", "DESC"]],
         },
+<<<<<<< HEAD
         {
           model: ProfilKesehatanWarga,
           as: "profilKesehatan",
           required: false,
         },
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       ],
     });
 
@@ -276,11 +295,14 @@ const getWargaById = async (req, res, next) => {
           required: false,
         },
         {
+<<<<<<< HEAD
           model: ProfilKesehatanWarga,
           as: "profilKesehatan",
           required: false,
         },
         {
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
           model: KunjunganPosyandu,
           as: "kunjunganPosyandu",
           limit: 10,
@@ -349,8 +371,11 @@ const createWarga = async (req, res, next) => {
       bb_lahir_kg,
       tb_lahir_cm,
       status_domisili = "aktif",
+<<<<<<< HEAD
 
       kategori_sasaran: kategoriInput,
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     } = req.body;
 
     const posyanduTarget = role === "kader" ? user.posyandu_id : inputPosyanduId;
@@ -366,6 +391,7 @@ const createWarga = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "tanggal_lahir tidak boleh di masa depan." });
     }
 
+<<<<<<< HEAD
     if (kategoriInput !== undefined) {
       if (!VALID_KATEGORI.includes(kategoriInput)) {
         return res.status(400).json({
@@ -394,6 +420,8 @@ const createWarga = async (req, res, next) => {
         }
       }
     }
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     if (!isValidNik(nik)) {
       return res.status(400).json({ success: false, message: "NIK harus terdiri dari 16 digit angka." });
     }
@@ -421,6 +449,7 @@ const createWarga = async (req, res, next) => {
       });
     }
 
+<<<<<<< HEAD
     const transaction = await Warga.sequelize.transaction();
     let newWarga;
     let createdProfil = null;
@@ -469,6 +498,27 @@ const createWarga = async (req, res, next) => {
       await transaction.rollback();
       throw createErr;
     }
+=======
+    const newWarga = await Warga.create({
+      nik,
+      nama_lengkap,
+      jenis_kelamin,
+      tanggal_lahir,
+      alamat: alamat || null,
+      rt: rt || null,
+      rw: rw || null,
+      telepon: telepon || null,
+      nama_ibu: nama_ibu || null,
+      nama_ayah: nama_ayah || null,
+      status_perkawinan: status_perkawinan || "tidak_menikah",
+      pekerjaan: pekerjaan || null,
+      pekerjaan_lainnya: pekerjaan_lainnya || null,
+      posyandu_id: posyanduTarget,
+      bb_lahir_kg: bb_lahir_kg || null,
+      tb_lahir_cm: tb_lahir_cm || null,
+      status_domisili,
+    });
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     const { umurText } = hitungUmur(tanggal_lahir);
 
@@ -481,16 +531,23 @@ const createWarga = async (req, res, next) => {
       newValue: newWarga.toJSON(),
     });
 
+<<<<<<< HEAD
     const plainWarga = newWarga.toJSON();
     if (createdProfil) {
       plainWarga.profilKesehatan = createdProfil.toJSON();
     }
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     return res.status(201).json({
       success: true,
       message: `Berhasil menambahkan data warga [${nama_lengkap}].`,
       data: {
+<<<<<<< HEAD
         ...plainWarga,
+=======
+        ...newWarga.toJSON(),
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
         umur_text: umurText,
         kategori_sasaran_estimasi: tentukanKategori(tanggal_lahir),
       },
@@ -580,6 +637,7 @@ const updateWarga = async (req, res, next) => {
       status_domisili: warga.status_domisili,
     };
 
+<<<<<<< HEAD
     const profilInput = req.body.profil_kesehatan !== undefined ? req.body.profil_kesehatan : req.body.profil_kesehatan_warga;
 
     const transaction = await Warga.sequelize.transaction();
@@ -644,6 +702,26 @@ const updateWarga = async (req, res, next) => {
       await transaction.rollback();
       throw updateErr;
     }
+=======
+    await warga.update({
+      nik: nik !== undefined ? nik : warga.nik,
+      nama_lengkap: nama_lengkap !== undefined ? nama_lengkap : warga.nama_lengkap,
+      jenis_kelamin: jenis_kelamin !== undefined ? jenis_kelamin : warga.jenis_kelamin,
+      tanggal_lahir: tanggal_lahir !== undefined ? tanggal_lahir : warga.tanggal_lahir,
+      alamat: alamat !== undefined ? alamat : warga.alamat,
+      rt: rt !== undefined ? rt : warga.rt,
+      rw: rw !== undefined ? rw : warga.rw,
+      telepon: telepon !== undefined ? telepon : warga.telepon,
+      nama_ibu: nama_ibu !== undefined ? nama_ibu : warga.nama_ibu,
+      nama_ayah: nama_ayah !== undefined ? nama_ayah : warga.nama_ayah,
+      status_perkawinan: status_perkawinan !== undefined ? status_perkawinan : warga.status_perkawinan,
+      pekerjaan: pekerjaan !== undefined ? pekerjaan : warga.pekerjaan,
+      pekerjaan_lainnya: pekerjaan_lainnya !== undefined ? pekerjaan_lainnya : warga.pekerjaan_lainnya,
+      bb_lahir_kg: bb_lahir_kg !== undefined ? bb_lahir_kg : warga.bb_lahir_kg,
+      tb_lahir_cm: tb_lahir_cm !== undefined ? tb_lahir_cm : warga.tb_lahir_cm,
+      status_domisili: status_domisili !== undefined ? status_domisili : warga.status_domisili,
+    });
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     await createAuditLog({
       userId: req.user?.id ?? null,
@@ -671,6 +749,7 @@ const updateWarga = async (req, res, next) => {
       },
     });
 
+<<<<<<< HEAD
     const updatedWargaData = await Warga.findByPk(warga.id, {
       include: [
         { model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "alamat", "puskesmas_id"] },
@@ -682,6 +761,12 @@ const updateWarga = async (req, res, next) => {
       success: true,
       message: "Data warga berhasil diperbarui.",
       data: updatedWargaData || warga,
+=======
+    return res.status(200).json({
+      success: true,
+      message: "Data warga berhasil diperbarui.",
+      data: warga,
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) return res.status(409).json({ success: false, message: "NIK sudah digunakan oleh warga lain." });

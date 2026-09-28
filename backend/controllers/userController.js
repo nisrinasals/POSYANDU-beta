@@ -2,7 +2,10 @@
 
 const fs = require("fs");
 const path = require("path");
+<<<<<<< HEAD
 const bcrypt = require("bcryptjs");
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const { User } = require("../models");
 const { Op } = require("sequelize");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
@@ -276,6 +279,7 @@ const deactivateUser = async (req, res, next) => {
   }
 };
 
+<<<<<<< HEAD
 const changePassword = async (req, res, next) => {
   try {
     const { old_password, new_password, confirm_password } = req.body;
@@ -332,6 +336,8 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 module.exports = {
   getUsers,
   getUserById,
@@ -343,7 +349,10 @@ module.exports = {
   deactivateUser,
   getMyProfile,
   updateMyProfile,
+<<<<<<< HEAD
   changePassword,
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   uploadProfilePicture,
   rejectSelf,
   canVerifyUser,

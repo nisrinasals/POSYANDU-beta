@@ -10,8 +10,11 @@ const kehamilanController = require("../controllers/kehamilanController");
 const userController = require("../controllers/userController");
 const imunisasiController = require("../controllers/imunisasiController");
 const rujukanController = require("../controllers/rujukanController");
+<<<<<<< HEAD
 const ScreeningConfigController = require("../controllers/screeningConfigController");
 const { getPublicPosyandu, getPublicPuskesmas } = require("../controllers/publicController");
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
 const uploadProfilePicture = require("../middleware/uploadProfilePicture");
 const { authenticateToken, authorize, denyDinkesPersonalData } = require("../middleware/authMiddleware");
@@ -21,6 +24,10 @@ const api = express.Router();
 
 const authenticated = [authenticateToken, authorize("kader", "puskesmas", "puskesmasAdmin", "dinkes", "dinkesAdmin", "sa")];
 const personalAuthenticated = [...authenticated, denyDinkesPersonalData];
+<<<<<<< HEAD
+=======
+
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 // ======================================================
 // Authentication routes
 // ======================================================
@@ -60,7 +67,10 @@ api.patch("/warga/mutasi/confirm", personalAuthenticated, validator.warga.confir
 
 api.get("/imunisasi/warga/:warga_id", personalAuthenticated, validator.imunisasi.wargaParam, validateResult, imunisasiController.getImunisasiByWarga);
 api.get("/imunisasi/:id", personalAuthenticated, validator.imunisasi.id, validateResult, imunisasiController.getImunisasiById);
+<<<<<<< HEAD
 api.post("/imunisasi/bulk", personalAuthenticated, validator.imunisasi.bulk, validateResult, imunisasiController.bulkUpsertImunisasi);
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 api.post("/imunisasi", personalAuthenticated, validator.imunisasi.create, validateResult, imunisasiController.createImunisasi);
 api.put("/imunisasi/:id", personalAuthenticated, validator.imunisasi.update, validateResult, imunisasiController.updateImunisasi);
 
@@ -84,7 +94,10 @@ api.put("/users/:id/puskesmas-admin", authenticateToken, authorize("dinkesAdmin"
 api.put("/users/:id/dinkes-admin", authenticateToken, authorize("dinkesAdmin", "sa"), validator.user.replaceDinkesAdmin, validateResult, userController.replaceDinkesAdmin);
 api.get("/users/me", authenticateToken, userController.getMyProfile);
 api.patch("/users/me", authenticateToken, validator.user.updateMyProfile, validateResult, userController.updateMyProfile);
+<<<<<<< HEAD
 api.patch("/users/me/password", authenticateToken, validator.user.changePassword, validateResult, userController.changePassword);
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 api.post("/users/me/profile-picture", authenticateToken, uploadProfilePicture, userController.uploadProfilePicture);
 api.get("/users", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin", "sa"), validator.user.getUsers, validateResult, userController.getUsers);
 api.get("/users/:id", authenticateToken, authorize("puskesmasAdmin", "dinkesAdmin", "sa"), validator.user.getUserById, validateResult, userController.getUserById);
@@ -117,9 +130,13 @@ api.delete("/kunjungan/:id", personalAuthenticated, validator.kunjungan.idOnly, 
 // ======================================================
 
 api.get("/pemeriksaan", personalAuthenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.getAllPemeriksaan);
+<<<<<<< HEAD
 api.get("/pemeriksaan/rekapitulasi", authenticated, validator.pemeriksaan.rekapFilters, validateResult, pemeriksaanController.getRekapitulasiPemeriksaan);
 api.get("/pemeriksaan/export", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.exportPemeriksaanExcel);
 api.get("/pemeriksaan/statistik-bulanan", authenticated, pemeriksaanController.getPemeriksaanStatistikBulanan);
+=======
+api.get("/pemeriksaan/export", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.exportPemeriksaanExcel);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 api.get("/pemeriksaan/:id/step-3", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getStep3Pemeriksaan);
 api.get("/pemeriksaan/:id/screening-history", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getScreeningHistory);
 api.get("/pemeriksaan/:id", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getPemeriksaanById);
@@ -138,6 +155,7 @@ api.get("/rujukan", personalAuthenticated, validator.rujukan.listFilters, valida
 api.get("/rujukan/:id/export", personalAuthenticated, validator.rujukan.idOnly, validateResult, rujukanController.exportRujukanPdf);
 api.get("/rujukan/:id", personalAuthenticated, validator.rujukan.idOnly, validateResult, rujukanController.getRujukanById);
 
+<<<<<<< HEAD
 // ======================================================
 // Screening Config routes
 // ======================================================
@@ -152,4 +170,6 @@ api.put("/screening-config/:id", authenticateToken, authorize("dinkesAdmin", "sa
 api.get("/public/posyandu", getPublicPosyandu);
 api.get("/public/puskesmas", getPublicPuskesmas);
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 module.exports = api;

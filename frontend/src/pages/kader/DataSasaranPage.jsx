@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useState, useEffect } from "react";
 import {
   Plus,
@@ -6,6 +7,16 @@ import {
   Edit,
   Eye,
   ChevronLeft,
+=======
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Plus, 
+  Search, 
+  Filter, 
+  Edit, 
+  Eye, 
+  ChevronLeft, 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   ChevronRight,
   User,
   UserPlus,
@@ -23,6 +34,7 @@ import {
   Activity,
   Calendar,
   Stethoscope,
+<<<<<<< HEAD
   Building2,
 } from "lucide-react";
 import { Modal, Button } from "react-bootstrap";
@@ -88,10 +100,44 @@ export default function DataSasaranPage({
 
   useEffect(() => {
     if (initialCategoryFilter && initialCategoryFilter !== "Semua Kategori" && initialCategoryFilter !== "all") {
+=======
+  Building2
+} from 'lucide-react';
+import { Modal, Button } from 'react-bootstrap';
+import { initialSasaranList, daftarPosyandu2026, posyanduList } from '../../data/mockData';
+import { wargaService, kehamilanService } from '../../services';
+import { mapBackendWargaToFrontend, formatIndoDate, formatUsiaByCategory } from '../../utils/dataMappers';
+import { validateNik, formatNikInput, validatePhone, formatPhoneInput, validateBirthDate, validateCategoryAge } from '../../utils/validators';
+import { useNotification } from '../../context/NotificationContext';
+import SearchablePosyanduSelect from '../../components/common/SearchablePosyanduSelect';
+import DetailSasaranModal from '../../components/sasaran/DetailSasaranModal';
+
+export default function DataSasaranPage({ 
+  globalSasaranList: sasaranList = [], 
+  setGlobalSasaranList: setSasaranList = () => {},
+  globalPemeriksaanData = {},
+  onNavigate = () => {},
+  initialCategoryFilter = 'Semua Kategori',
+  setCategoryFilterParam = () => {},
+  onRefreshData = () => {}
+}) {
+  const { showSuccess, showWarning } = useNotification();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('Semua Status');
+  const [kategoriFilter, setKategoriFilter] = useState(
+    initialCategoryFilter && initialCategoryFilter !== 'Semua Kategori' && initialCategoryFilter !== 'all' 
+      ? initialCategoryFilter 
+      : 'Semua Kategori'
+  );
+
+  useEffect(() => {
+    if (initialCategoryFilter && initialCategoryFilter !== 'Semua Kategori' && initialCategoryFilter !== 'all') {
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       setKategoriFilter(initialCategoryFilter);
     }
   }, [initialCategoryFilter]);
 
+<<<<<<< HEAD
   const [isLoadingSasaran, setIsLoadingSasaran] = useState(true);
 
   // Data Sasaran selalu bersumber dari backend. Backend melakukan scoping
@@ -125,11 +171,17 @@ export default function DataSasaranPage({
     };
   }, [setSasaranList]);
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   // Modal Visibility States
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null); // 'Ibu Hamil' | 'Bayi' | 'Standard'
   const [showCategoryFormModal, setShowCategoryFormModal] = useState(false);
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   // Mutasi Flow Modals (Step 1, Verification, & Step 2)
   const [showMutasiCheckModal, setShowMutasiCheckModal] = useState(false);
   const [showMutasiVerifyModal, setShowMutasiVerifyModal] = useState(false);
@@ -140,6 +192,7 @@ export default function DataSasaranPage({
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedSasaran, setSelectedSasaran] = useState(null);
 
+<<<<<<< HEAD
   // 1. Form State for 3 Variasi Form Sasaran (Bumil, Bayi, Standar + Status Menyusui)
   const [categoryForm, setCategoryForm] = useState({
     // Umum / Standar (Gambar 1)
@@ -199,11 +252,153 @@ export default function DataSasaranPage({
     alamatAsal: "",
     posyanduAsal: "",
     alamatDomisiliBaru: "",
+=======
+
+
+  // 1. Form State for 3 Variasi Form Sasaran (Bumil, Bayi, Standar + Status Menyusui)
+  const [categoryForm, setCategoryForm] = useState({
+    // Umum / Standar (Gambar 1)
+    nama: '',
+    nik: '',
+    tglLahir: '',
+    namaIbu: '',
+    namaAyah: '',
+    gender: '',
+    noHp: '',
+    statusPernikahan: '',
+    pekerjaan: '',
+    posyandu: '',
+    alamat: '',
+    status: 'Aktif',
+    // Khusus Nifas / Menyusui (Gambar 1 + Status Menyusui)
+    statusMenyusui: '',
+    // Khusus Bumil (Gambar 2)
+    hpht: '',
+    hpl: '',
+    anakKe: '',
+    jarakAnak: '',
+    tglPersalinan: '',
+    statusPersalinan: '',
+    caraPersalinan: '',
+    bb: '',
+    tb: '',
+    bbl: '',
+    pbl: ''
+  });
+
+  // 2. Form State for Mutasi Flow (Image 3 & 4)
+  const [mutasiCheckForm, setMutasiCheckForm] = useState({
+    nama: '',
+    nik: '',
+    namaIbu: '',
+    alamatAsal: '',
+    posyanduAsal: '',
+    tglLahir: '',
+    gender: 'Perempuan',
+    statusPernikahan: 'Menikah',
+    pekerjaan: 'Ibu Rumah Tangga',
+    noHp: ''
+  });
+
+  // State & Helper untuk Live Autocomplete & Autofill Sasaran Bumil dari Warga Terdaftar (Dewasa / Usekrem)
+  const [showNamaSuggestions, setShowNamaSuggestions] = useState(false);
+  const [isBumilAutofilled, setIsBumilAutofilled] = useState(false);
+  const [autofillCategoryLabel, setAutofillCategoryLabel] = useState('');
+
+  // Daftar warga perempuan yang sudah terdaftar di database Posyandu (Dewasa, Usekrem, dll.)
+  const calonBumilList = useMemo(() => {
+    return (sasaranList || []).filter(s => {
+      if (!s) return false;
+      const isFemale = (s.gender === 'Perempuan' || s.gender === 'P');
+      const isNotCurrentlyBumil = s.kategori !== 'Bumil' && s.subKategori !== 'bumil';
+      return isFemale && isNotCurrentlyBumil;
+    });
+  }, [sasaranList]);
+
+  // Saran nama yang cocok saat mengetik di input Nama
+  const matchingNamaSuggestions = useMemo(() => {
+    if (!categoryForm.nama || categoryForm.nama.trim().length < 2) return [];
+    const q = categoryForm.nama.trim().toLowerCase();
+    return calonBumilList.filter(w => 
+      w.nama && w.nama.toLowerCase().includes(q)
+    ).slice(0, 5);
+  }, [calonBumilList, categoryForm.nama]);
+
+  const handleSelectCitizenForBumil = (w) => {
+    let formattedTgl = w.tglLahir || '';
+    if (formattedTgl && formattedTgl.includes('-')) {
+      const parts = formattedTgl.split('-');
+      if (parts[2].length === 4) {
+        formattedTgl = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    setCategoryForm(prev => ({
+      ...prev,
+      nama: w.nama || '',
+      nik: w.nik || '',
+      tglLahir: formattedTgl || prev.tglLahir,
+      noHp: w.noHp || w.telepon || prev.noHp,
+      alamat: w.alamat || prev.alamat,
+      namaAyah: w.namaSuami || w.namaAyah || prev.namaAyah,
+      tb: w.tb || prev.tb,
+      bb: w.bb || prev.bb,
+      statusPernikahan: w.statusPernikahan || 'Menikah',
+      status: w.status || 'Aktif',
+      posyandu: w.posyandu || prev.posyandu
+    }));
+    setShowNamaSuggestions(false);
+    setIsBumilAutofilled(true);
+    setAutofillCategoryLabel(w.kategori || 'Warga Terdaftar');
+  };
+
+  const handleNamaBumilChange = (val) => {
+    setCategoryForm(prev => ({ ...prev, nama: val }));
+    if (val.trim().length >= 2) {
+      setShowNamaSuggestions(true);
+      const exact = calonBumilList.find(w => w.nama && w.nama.trim().toLowerCase() === val.trim().toLowerCase());
+      if (exact) {
+        handleSelectCitizenForBumil(exact);
+      } else {
+        setIsBumilAutofilled(false);
+      }
+    } else {
+      setShowNamaSuggestions(false);
+      setIsBumilAutofilled(false);
+    }
+  };
+
+  const handleNikBumilChange = (val) => {
+    const formatted = formatNikInput(val);
+    setCategoryForm(prev => ({ ...prev, nik: formatted }));
+    if (formatted.length === 16) {
+      const match = calonBumilList.find(w => w.nik === formatted);
+      if (match) {
+        handleSelectCitizenForBumil(match);
+      }
+    }
+  };
+
+  const [mutasiForm, setMutasiForm] = useState({
+    nama: '',
+    tglLahir: '',
+    nik: '',
+    namaIbu: '',
+    gender: '',
+    noHp: '',
+    statusPernikahan: '',
+    pekerjaan: '',
+    posyandu: '',
+    alamatAsal: '',
+    posyanduAsal: '',
+    alamatDomisiliBaru: '',
+    status: 'Aktif'
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   });
 
   // 9 Kategori Posyandu ILP Data (Sesuai Sidebar Pemeriksaan)
   const klasterList = [
     {
+<<<<<<< HEAD
       id: "bumil",
       title: "Bumil",
       sub: "Masa Kehamilan",
@@ -348,10 +543,100 @@ export default function DataSasaranPage({
     const normItemKat = (item.kategori || "").toLowerCase().replace(/[–—]/g, "-").trim();
     const normFilterKat = (kategoriFilter || "").toLowerCase().replace(/[–—]/g, "-").trim();
     const matchesKategori = kategoriFilter === "Semua Kategori" || normItemKat === normFilterKat || normItemKat.includes(normFilterKat) || normFilterKat.includes(normItemKat);
+=======
+      id: 'bumil',
+      title: 'Bumil',
+      sub: 'Masa Kehamilan',
+      icon: <Heart className="text-danger" size={24} />,
+      kategoriLabel: 'Bumil'
+    },
+    {
+      id: 'nifas',
+      title: 'Nifas/Menyusui',
+      sub: 'Pasca Bersalin & Masa Menyusui',
+      icon: <Users className="text-primary" size={24} />,
+      kategoriLabel: 'Nifas/Menyusui'
+    },
+    {
+      id: 'bayi-0-11',
+      title: 'Bayi 0–11 Bln',
+      sub: '0 – 11 Bulan',
+      icon: <Baby className="text-info" size={24} />,
+      kategoriLabel: 'Bayi 0–11 Bln'
+    },
+    {
+      id: 'balita-12-59',
+      title: 'Balita 12–59 Bln',
+      sub: '12 – 59 Bulan',
+      icon: <Baby className="text-success" size={24} />,
+      kategoriLabel: 'Balita 12–59 Bln'
+    },
+    {
+      id: 'apras-60-72',
+      title: 'Apras 60–72 Bln',
+      sub: 'Anak Pra Sekolah (60 – 72 Bulan)',
+      icon: <GraduationCap className="text-warning" size={24} />,
+      kategoriLabel: 'Apras 60–72 Bln'
+    },
+    {
+      id: 'usekrem-6-14',
+      title: 'Usekrem 6–14 Thn',
+      sub: 'Usia Sekolah / SD – SMP',
+      icon: <GraduationCap className="text-primary" size={24} />,
+      kategoriLabel: 'Usekrem 6–14 Thn'
+    },
+    {
+      id: 'usekrem-15-18',
+      title: 'Usekrem 15–18 Thn',
+      sub: 'Usia Remaja (15 – 18 Thn)',
+      icon: <Activity className="text-danger" size={24} />,
+      kategoriLabel: 'Usekrem 15–18 Thn'
+    },
+    {
+      id: 'dewasa',
+      title: 'Dewasa',
+      sub: 'Usia Produktif 19 – 59 Thn',
+      icon: <Users className="text-secondary" size={24} />,
+      kategoriLabel: 'Dewasa'
+    },
+    {
+      id: 'lansia',
+      title: 'Lansia',
+      sub: 'Usia Lanjut ≥ 60 Thn',
+      icon: <Calendar className="text-dark" size={24} />,
+      kategoriLabel: 'Lansia'
+    }
+  ];
+
+  // Dynamic Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Filter Logic
+  const filteredData = (sasaranList || []).filter(item => {
+    if (!item) return false;
+    const matchesSearch = 
+      (item.nama || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      (item.nik || '').includes(searchQuery || '') ||
+      (item.keteranganIbuSuami && item.keteranganIbuSuami.toLowerCase().includes((searchQuery || '').toLowerCase()));
+
+    const matchesStatus = 
+      statusFilter === 'Semua Status' || 
+      item.status === statusFilter;
+
+    const normItemKat = (item.kategori || '').toLowerCase().replace(/[–—]/g, '-').trim();
+    const normFilterKat = (kategoriFilter || '').toLowerCase().replace(/[–—]/g, '-').trim();
+    const matchesKategori = 
+      kategoriFilter === 'Semua Kategori' || 
+      normItemKat === normFilterKat ||
+      normItemKat.includes(normFilterKat) ||
+      normFilterKat.includes(normItemKat);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     return matchesSearch && matchesStatus && matchesKategori;
   });
 
+<<<<<<< HEAD
   // Handle click on Klaster Card (Image 1)
   const handleSelectKlaster = (klaster) => {
     setSelectedCategory(klaster);
@@ -382,15 +667,70 @@ export default function DataSasaranPage({
       tb: "",
       bbl: "",
       pbl: "",
+=======
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, kategoriFilter]);
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(start, start + itemsPerPage);
+  }, [filteredData, currentPage, itemsPerPage]);
+
+  // Handle click on Klaster Card (Image 1)
+  const handleSelectKlaster = (klaster) => {
+    setShowNamaSuggestions(false);
+    setIsBumilAutofilled(false);
+    setAutofillCategoryLabel('');
+    setSelectedCategory(klaster);
+    setShowCategoryModal(false);
+    setShowCategoryFormModal(true);
+    const isFemale = klaster.id === 'bumil' || klaster.id === 'nifas';
+    setCategoryForm({
+      nama: '',
+      nik: '',
+      tglLahir: '',
+      namaIbu: '',
+      namaAyah: '',
+      gender: isFemale ? 'Perempuan' : '',
+      noHp: '',
+      statusPernikahan: '',
+      pekerjaan: '',
+      posyandu: '',
+      alamat: '',
+      status: 'Aktif',
+      statusMenyusui: '',
+      hpht: '',
+      hpl: '',
+      anakKe: '',
+      jarakAnak: '',
+      tglPersalinan: '',
+      statusPersalinan: '',
+      caraPersalinan: '',
+      bb: '',
+      tb: '',
+      bbl: '',
+      pbl: '',
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       riwayatKeluarga: [],
       riwayatDiriSendiri: [],
       perilakuBerisikoUsekrem: [],
       perilakuBerisikoDewasa: {
+<<<<<<< HEAD
         merokok: "",
         tinggiGula: "",
         tinggiGaram: "",
         tinggiLemak: "",
       },
+=======
+        merokok: '',
+        tinggiGula: '',
+        tinggiGaram: '',
+        tinggiLemak: ''
+      }
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     });
   };
 
@@ -422,6 +762,18 @@ export default function DataSasaranPage({
       return;
     }
 
+<<<<<<< HEAD
+=======
+    const katId = selectedCategory?.id || 'dewasa';
+
+    // Validasi Kesesuaian Kategori vs Usia
+    const ageCategoryValidation = validateCategoryAge(katId, categoryForm.tglLahir, categoryForm.gender);
+    if (!ageCategoryValidation.isValid) {
+      showWarning("Kategori Sasaran Tidak Sesuai", ageCategoryValidation.message);
+      return;
+    }
+
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     // 4. Validasi Alamat (Wajib diisi)
     if (!categoryForm.alamat || categoryForm.alamat.trim().length < 3) {
       showWarning("Validasi Alamat", "Alamat domisili sasaran wajib diisi minimal 3 karakter.");
@@ -437,6 +789,7 @@ export default function DataSasaranPage({
       }
     }
 
+<<<<<<< HEAD
     const katId = selectedCategory?.id || "dewasa";
 
     const backendCategory = FRONTEND_TO_BACKEND_CATEGORY[katId];
@@ -483,6 +836,10 @@ export default function DataSasaranPage({
     }
 
     const isChild = ["bayi-0-11", "balita-12-59", "balita", "apras-60-72", "apras", "usekrem-6-14", "usekrem-15-18"].some((k) => katId.includes(k));
+=======
+    const isChild = ['bayi-0-11', 'balita-12-59', 'balita', 'apras-60-72', 'apras', 'usekrem-6-14'].some(k => katId.includes(k));
+
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     // 6. Validasi Khusus Anak: Nama Ibu atau Nama Ayah wajib ada
     if (isChild && !categoryForm.namaIbu?.trim() && !categoryForm.namaAyah?.trim()) {
       showWarning("Validasi Orang Tua", "Untuk sasaran anak/balita, mohon isi minimal Nama Ibu atau Nama Ayah.");
@@ -490,6 +847,7 @@ export default function DataSasaranPage({
     }
 
     // 7. Validasi Khusus Ibu Hamil: HPHT wajib diisi, sedangkan HPL nullable / opsional
+<<<<<<< HEAD
     if (katId === "bumil" && !categoryForm.hpht) {
       showWarning("Validasi Ibu Hamil", "HPHT (Hari Pertama Haid Terakhir) wajib diisi untuk sasaran Ibu Hamil.");
       return;
@@ -536,6 +894,45 @@ export default function DataSasaranPage({
       ket = categoryForm.namaAyah ? `Suami: ${categoryForm.namaAyah}` : categoryForm.namaSuami ? `Suami: ${categoryForm.namaSuami}` : "";
     } else if (["dewasa", "lansia"].includes(katId)) {
       ket = "";
+=======
+    if (katId === 'bumil' && !categoryForm.hpht) {
+      showWarning("Validasi Ibu Hamil", "HPHT (Hari Pertama Haid Terakhir) wajib diisi untuk sasaran Ibu Hamil.");
+      return;
+    }
+    const isUsekrem = ['usekrem-6-14', 'usekrem-15-18'].some(k => katId.includes(k));
+    const isDewasaOrLansia = ['dewasa', 'lansia'].some(k => katId.includes(k));
+    const isFemale = katId === 'bumil' || katId === 'nifas';
+
+    // Normalisasi status pernikahan (Backend: 'menikah' | 'tidak_menikah')
+    let statusPernikahanBackend = 'tidak_menikah';
+    const rawPernikahan = (categoryForm.statusPernikahan || '').toLowerCase();
+    if (rawPernikahan.includes('menikah') && !rawPernikahan.includes('belum') && !rawPernikahan.includes('tidak')) {
+      statusPernikahanBackend = 'menikah';
+    } else if (rawPernikahan.includes('kawin') && !rawPernikahan.includes('belum')) {
+      statusPernikahanBackend = 'menikah';
+    }
+
+    // Tanggal lahir default jika kosong
+    let tglLahirFormatted = categoryForm.tglLahir;
+    if (!tglLahirFormatted) {
+      if (katId === 'lansia') {
+        tglLahirFormatted = '1960-01-01';
+      } else if (isDewasaOrLansia) {
+        tglLahirFormatted = '1995-01-01';
+      } else {
+        tglLahirFormatted = new Date().toISOString().split('T')[0];
+      }
+    }
+
+    // Jenis Kelamin Backend: 'L' | 'P'
+    const genderBackend = (categoryForm.gender === 'Perempuan' || categoryForm.gender === 'P' || isFemale) ? 'P' : 'L';
+
+    let ket = '';
+    if (katId === 'bumil' || katId === 'nifas') {
+      ket = categoryForm.namaAyah ? `Suami: ${categoryForm.namaAyah}` : (categoryForm.namaSuami ? `Suami: ${categoryForm.namaSuami}` : '');
+    } else if (['dewasa', 'lansia'].includes(katId)) {
+      ket = '-';
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     } else if (categoryForm.namaIbu) {
       ket = `Ibu: ${categoryForm.namaIbu}`;
     } else if (categoryForm.namaAyah) {
@@ -547,6 +944,7 @@ export default function DataSasaranPage({
       nama_lengkap: categoryForm.nama.trim(),
       jenis_kelamin: genderBackend,
       tanggal_lahir: tglLahirFormatted,
+<<<<<<< HEAD
       kategori_sasaran: backendCategory,
       alamat: categoryForm.alamat.trim(),
       ...(categoryForm.noHp ? { telepon: categoryForm.noHp } : {}),
@@ -564,18 +962,40 @@ export default function DataSasaranPage({
 
     // KASUS 1: Jika warga sudah ada dan form yang diisi adalah BUMIL atau NIFAS (Peralihan Dewasa -> Bumil)
     if (existingWarga && (katId === "bumil" || katId === "nifas")) {
+=======
+      alamat: categoryForm.alamat || 'Wilayah Posyandu Melati',
+      telepon: categoryForm.noHp || '-',
+      nama_ibu: isDewasaOrLansia ? null : (categoryForm.namaIbu || null),
+      nama_ayah: isDewasaOrLansia ? null : (categoryForm.namaAyah || null),
+      status_perkawinan: statusPernikahanBackend,
+      pekerjaan: isChild ? null : (categoryForm.pekerjaan || null),
+      status_domisili: 'aktif',
+      posyandu_id: 1
+    };
+
+    // Cek apakah NIK ini sudah ada di database / sasaranList
+    const existingWarga = sasaranList.find(s => s.nik === nikValidation.cleanValue);
+
+    // KASUS 1: Jika warga sudah ada dan form yang diisi adalah BUMIL atau NIFAS (Peralihan Dewasa -> Bumil)
+    if (existingWarga && (katId === 'bumil' || katId === 'nifas')) {
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       try {
         // 1. Update data profil warga (nama suami, telepon, alamat, status nikah)
         await wargaService.updateWarga(existingWarga.id, {
           nama_lengkap: categoryForm.nama.trim(),
           telepon: categoryForm.noHp || existingWarga.noHp,
           alamat: categoryForm.alamat || existingWarga.alamat,
+<<<<<<< HEAD
           status_perkawinan: "menikah",
+=======
+          status_perkawinan: 'menikah'
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
         });
 
         // 2. Buat profil kehamilan baru di backend
         const kehamilanPayload = {
           warga_id: parseInt(existingWarga.id, 10),
+<<<<<<< HEAD
           ...(categoryForm.hpht ? { hpht: categoryForm.hpht } : {}),
           ...(categoryForm.hpl ? { hpl: categoryForm.hpl } : {}),
           ...(categoryForm.namaAyah || categoryForm.namaSuami ? { nama_suami: categoryForm.namaAyah || categoryForm.namaSuami } : {}),
@@ -585,6 +1005,15 @@ export default function DataSasaranPage({
           ...(categoryForm.caraPersalinan ? { cara_persalinan: categoryForm.caraPersalinan } : {}),
           status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
           is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
+=======
+          hpht: categoryForm.hpht || new Date().toISOString().split('T')[0],
+          hpl: categoryForm.hpl || null,
+          nama_suami: categoryForm.namaAyah || categoryForm.namaSuami || null,
+          anak_ke: categoryForm.anakKe ? parseInt(categoryForm.anakKe, 10) : 1,
+          jarak_anak_sebelum_bulan: categoryForm.jarakAnak ? parseInt(categoryForm.jarakAnak, 10) : null,
+          status_kehamilan: katId === 'nifas' ? 'nifas' : 'hamil',
+          is_menyusui: katId === 'nifas'
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
         };
         await kehamilanService.createKehamilan(kehamilanPayload);
 
@@ -592,15 +1021,23 @@ export default function DataSasaranPage({
         const updatedItem = {
           ...existingWarga,
           nama: categoryForm.nama.trim(),
+<<<<<<< HEAD
           kategori: katId === "nifas" ? "Nifas/Menyusui" : "Bumil",
           subKategori: katId,
           namaSuami: categoryForm.namaAyah || categoryForm.namaSuami || existingWarga.namaSuami,
           keteranganIbuSuami: categoryForm.namaAyah || categoryForm.namaSuami || existingWarga.namaSuami ? `Suami: ${categoryForm.namaAyah || categoryForm.namaSuami || existingWarga.namaSuami}` : "",
+=======
+          kategori: katId === 'nifas' ? 'Nifas/Menyusui' : 'Bumil',
+          subKategori: katId,
+          namaSuami: categoryForm.namaAyah || categoryForm.namaSuami || existingWarga.namaSuami,
+          keteranganIbuSuami: `Suami: ${categoryForm.namaAyah || categoryForm.namaSuami || existingWarga.namaSuami || '-'}`,
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
           hpht: categoryForm.hpht,
           hpl: categoryForm.hpl,
           anakKe: categoryForm.anakKe,
           jarakAnak: categoryForm.jarakAnak,
           noHp: categoryForm.noHp || existingWarga.noHp,
+<<<<<<< HEAD
           alamat: categoryForm.alamat || existingWarga.alamat,
         };
 
@@ -611,6 +1048,21 @@ export default function DataSasaranPage({
         return;
       } catch (err) {
         console.error("Gagal daftarkan kehamilan warga yang ada:", err);
+=======
+          alamat: categoryForm.alamat || existingWarga.alamat
+        };
+
+        setSasaranList([updatedItem, ...sasaranList.filter(s => s.nik !== existingWarga.nik)]);
+        setShowCategoryFormModal(false);
+        showSuccess(
+          "Peralihan ke Ibu Hamil Berhasil",
+          `Sasaran atas nama "${updatedItem.nama}" yang sebelumnya tercatat sebagai Dewasa berhasil dialihkan statusnya menjadi sasaran Ibu Hamil (Bumil).`
+        );
+        onRefreshData?.();
+        return;
+      } catch (err) {
+        console.error('Gagal daftarkan kehamilan warga yang ada:', err);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
         showWarning("Gagal Mendaftarkan Kehamilan", err.message || "Gagal memperbarui status kehamilan warga.");
         return;
       }
@@ -622,6 +1074,7 @@ export default function DataSasaranPage({
       if (res?.data) {
         createdItem = mapBackendWargaToFrontend(res.data);
       }
+<<<<<<< HEAD
 
       if (!createdItem) {
         throw new Error("Backend tidak mengembalikan data warga yang berhasil dibuat.");
@@ -644,10 +1097,54 @@ export default function DataSasaranPage({
       }
 
       setSasaranList([createdItem, ...sasaranList.filter((s) => s.nik !== createdItem.nik)]);
+=======
+      
+      if (!createdItem) {
+        createdItem = {
+          id: sasaranList.length + 1,
+          nama: categoryForm.nama,
+          keteranganIbuSuami: ket,
+          namaIbu: categoryForm.namaIbu,
+          namaAyah: categoryForm.namaAyah,
+          nik: nikValidation.cleanValue,
+          tglLahir: tglLahirFormatted,
+          kategori: selectedCategory?.kategoriLabel || 'Dewasa',
+          subKategori: katId,
+          gender: genderBackend === 'P' ? 'Perempuan' : 'Laki-laki',
+          status: 'Aktif',
+          posyandu: categoryForm.posyandu || 'Posyandu Melati',
+          noHp: categoryForm.noHp || '',
+          alamat: categoryForm.alamat || '',
+          statusPernikahan: categoryForm.statusPernikahan || 'Menikah',
+          pekerjaan: categoryForm.pekerjaan || ''
+        };
+      }
+
+      // Jika klaster bumil / nifas, buat juga profil kehamilannya
+      if (katId === 'bumil' || katId === 'nifas') {
+        try {
+          await kehamilanService.createKehamilan({
+            warga_id: parseInt(createdItem.id, 10),
+            hpht: categoryForm.hpht || new Date().toISOString().split('T')[0],
+            hpl: categoryForm.hpl || null,
+            nama_suami: categoryForm.namaAyah || categoryForm.namaSuami || null,
+            anak_ke: categoryForm.anakKe ? parseInt(categoryForm.anakKe, 10) : 1,
+            jarak_anak_sebelum_bulan: categoryForm.jarakAnak ? parseInt(categoryForm.jarakAnak, 10) : null,
+            status_kehamilan: katId === 'nifas' ? 'nifas' : 'hamil',
+            is_menyusui: katId === 'nifas'
+          });
+        } catch (e) {
+          console.warn('Profil kehamilan auto-create notice:', e);
+        }
+      }
+
+      setSasaranList([createdItem, ...sasaranList.filter(s => s.nik !== createdItem.nik)]);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       setShowCategoryFormModal(false);
       showSuccess("Data Sasaran Tersimpan", `Berhasil menyimpan data sasaran [${selectedCategory?.title || "Warga"}] atas nama "${createdItem.nama}" ke database.`);
       onRefreshData?.();
     } catch (err) {
+<<<<<<< HEAD
       console.error("Gagal simpan sasaran:", err);
       // Fallback jika NIK ternyata sudah ada di DB dan form adalah Bumil/Nifas
       if ((katId === "bumil" || katId === "nifas") && err.message && err.message.toLowerCase().includes("sudah terdaftar")) {
@@ -680,11 +1177,51 @@ export default function DataSasaranPage({
       }
 
       showWarning("Gagal Menyimpan ke Database", err.message || "Gagal menyimpan data ke database server.");
+=======
+      console.error('Gagal simpan sasaran:', err);
+      // Fallback jika NIK ternyata sudah ada di DB dan form adalah Bumil/Nifas
+      if ((katId === 'bumil' || katId === 'nifas') && err.message && err.message.toLowerCase().includes('sudah terdaftar')) {
+        try {
+          const listRes = await wargaService.getWargaList({ search: nikValidation.cleanValue });
+          const found = (listRes?.data?.items || listRes?.data || []).find(w => w.nik === nikValidation.cleanValue);
+          if (found) {
+            await kehamilanService.createKehamilan({
+              warga_id: parseInt(found.id, 10),
+              hpht: categoryForm.hpht || new Date().toISOString().split('T')[0],
+              hpl: categoryForm.hpl || null,
+              nama_suami: categoryForm.namaAyah || categoryForm.namaSuami || null,
+              anak_ke: categoryForm.anakKe ? parseInt(categoryForm.anakKe, 10) : 1,
+              jarak_anak_sebelum_bulan: categoryForm.jarakAnak ? parseInt(categoryForm.jarakAnak, 10) : null,
+              status_kehamilan: katId === 'nifas' ? 'nifas' : 'hamil',
+              is_menyusui: katId === 'nifas'
+            });
+            setShowCategoryFormModal(false);
+            showSuccess(
+              "Peralihan ke Ibu Hamil Berhasil",
+              `Sasaran atas nama "${found.nama_lengkap}" berhasil dialihkan statusnya menjadi sasaran Ibu Hamil (Bumil).`
+            );
+            onRefreshData?.();
+            return;
+          }
+        } catch (e2) {
+          console.error('Fallback update kehamilan error:', e2);
+        }
+      }
+
+      showWarning(
+        "Gagal Menyimpan ke Database",
+        err.message || "Gagal menyimpan data ke database server."
+      );
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     }
   };
 
   // Handle Mutasi Cek Data Submit (Step 1 -> Step 1.5 Verification)
+<<<<<<< HEAD
   const handleMutasiCheckSubmit = async (e) => {
+=======
+  const handleMutasiCheckSubmit = (e) => {
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     e.preventDefault();
     const nikValidation = validateNik(mutasiCheckForm.nik);
     if (!nikValidation.isValid) {
@@ -692,6 +1229,7 @@ export default function DataSasaranPage({
       return;
     }
 
+<<<<<<< HEAD
     if (!mutasiCheckForm.nama.trim() || !mutasiCheckForm.namaIbu.trim()) {
       showWarning("Validasi Data Mutasi", "Nama lengkap dan nama ibu kandung wajib diisi.");
       return;
@@ -744,11 +1282,34 @@ export default function DataSasaranPage({
       console.error("Gagal verifikasi mutasi:", err);
       showWarning("Data Mutasi Tidak Ditemukan", err.message || "Data warga tidak cocok dengan data pada server.");
     }
+=======
+    // Cari apakah ada data warga yang cocok atau gunakan data default realistis
+    const foundWarga = sasaranList.find(w => w.nik === mutasiCheckForm.nik || w.nama?.toLowerCase() === mutasiCheckForm.nama?.toLowerCase());
+    
+    setMutasiCheckForm({
+      ...mutasiCheckForm,
+      nama: mutasiCheckForm.nama || foundWarga?.nama || 'Salsa Dilla',
+      nik: mutasiCheckForm.nik || foundWarga?.nik || '32010101010999',
+      namaIbu: mutasiCheckForm.namaIbu || foundWarga?.namaIbu || 'Kiya',
+      alamatAsal: foundWarga?.alamat || 'Jl. Melati No. 12, RW 04, Desa Sukamaju',
+      posyanduAsal: foundWarga?.posyandu || 'Posyandu Melati RW 04',
+      tglLahir: foundWarga?.tglLahir || '1998-05-14',
+      gender: foundWarga?.gender || 'Perempuan',
+      statusPernikahan: foundWarga?.statusPernikahan || 'Menikah',
+      pekerjaan: foundWarga?.pekerjaan || 'Ibu Rumah Tangga',
+      noHp: foundWarga?.noHp || '081234567890'
+    });
+
+    // Proceed to Step 1.5: Verification confirmation modal
+    setShowMutasiCheckModal(false);
+    setShowMutasiVerifyModal(true);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   };
 
   // Handle Mutasi Verification Confirmed (Step 1.5 -> Step 2 Mutasi Form)
   const handleConfirmMutasiVerification = () => {
     setShowMutasiVerifyModal(false);
+<<<<<<< HEAD
     setMutasiForm((prev) => ({
       ...prev,
       wargaId: mutasiCheckForm.wargaId || null,
@@ -770,6 +1331,27 @@ export default function DataSasaranPage({
   };
 
   // Handle Mutasi Final Save Submit
+=======
+    setMutasiForm({
+      ...mutasiForm,
+      nama: mutasiCheckForm.nama || '',
+      nik: mutasiCheckForm.nik || '',
+      namaIbu: mutasiCheckForm.namaIbu || '',
+      alamatAsal: mutasiCheckForm.alamatAsal || 'Jl. Melati No. 12, RW 04, Desa Sukamaju',
+      posyanduAsal: mutasiCheckForm.posyanduAsal || 'Posyandu Melati RW 04',
+      tglLahir: mutasiCheckForm.tglLahir || '1998-05-14',
+      gender: mutasiCheckForm.gender || 'Perempuan',
+      statusPernikahan: mutasiCheckForm.statusPernikahan || 'Menikah',
+      pekerjaan: mutasiCheckForm.pekerjaan || 'Ibu Rumah Tangga',
+      noHp: mutasiCheckForm.noHp || '081234567890',
+      alamatDomisiliBaru: '',
+      status: 'Aktif'
+    });
+    setShowMutasiFormModal(true);
+  };
+
+  // Handle Mutasi Final Save Submit (Image 4)
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   const handleMutasiSaveSubmit = async (e) => {
     e.preventDefault();
 
@@ -779,6 +1361,7 @@ export default function DataSasaranPage({
       return;
     }
 
+<<<<<<< HEAD
     if (!mutasiForm.alamatDomisiliBaru.trim()) {
       showWarning("Validasi Alamat", "Alamat domisili baru wajib diisi.");
       return;
@@ -812,6 +1395,54 @@ export default function DataSasaranPage({
     } catch (err) {
       console.error("Gagal menyimpan mutasi:", err);
       showWarning("Gagal Menyimpan Mutasi", err.message || "Gagal memproses mutasi pada database server.");
+=======
+    const genderBackend = (mutasiForm.gender === 'Perempuan' || mutasiForm.gender === 'P') ? 'P' : 'L';
+    const payload = {
+      nik: nikValidation.cleanValue,
+      nama_lengkap: (mutasiForm.nama || 'Sasaran Mutasi').trim(),
+      jenis_kelamin: genderBackend,
+      tanggal_lahir: mutasiForm.tglLahir || '1995-01-01',
+      alamat: mutasiForm.alamatDomisiliBaru || mutasiForm.alamatAsal || 'Wilayah Posyandu Melati',
+      telepon: mutasiForm.noHp || '-',
+      nama_ibu: mutasiForm.namaIbu || null,
+      status_perkawinan: (mutasiForm.statusPernikahan || '').toLowerCase().includes('menikah') ? 'menikah' : 'tidak_menikah',
+      pekerjaan: mutasiForm.pekerjaan || null,
+      status_domisili: 'aktif',
+      posyandu_id: 1
+    };
+
+    try {
+      const res = await wargaService.createWarga(payload);
+      let createdItem = null;
+      if (res?.data) {
+        createdItem = mapBackendWargaToFrontend(res.data);
+      }
+      if (!createdItem) {
+        createdItem = {
+          id: sasaranList.length + 1,
+          nama: mutasiForm.nama,
+          keteranganIbuSuami: 'Sasaran Mutasi Domisili',
+          nik: nikValidation.cleanValue,
+          tglLahir: mutasiForm.tglLahir || '1995-01-01',
+          kategori: 'Dewasa',
+          gender: genderBackend === 'P' ? 'Perempuan' : 'Laki-laki',
+          status: 'Aktif',
+          posyandu: mutasiForm.posyandu || 'Posyandu Melati',
+          noHp: mutasiForm.noHp,
+          alamat: mutasiForm.alamatDomisiliBaru
+        };
+      }
+      setSasaranList([createdItem, ...sasaranList.filter(s => s.nik !== createdItem.nik)]);
+      setShowMutasiFormModal(false);
+      showSuccess("Mutasi Berhasil", `Sasaran mutasi domisili atas nama "${createdItem.nama}" berhasil disimpan ke database.`);
+      onRefreshData?.();
+    } catch (err) {
+      console.error('Gagal simpan sasaran mutasi:', err);
+      showWarning(
+        "Gagal Menyimpan Mutasi",
+        err.message || "Gagal menyimpan data mutasi ke database server."
+      );
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     }
   };
 
@@ -827,6 +1458,7 @@ export default function DataSasaranPage({
     }
 
     if (selectedSasaran?.id) {
+<<<<<<< HEAD
       const isBumil = selectedSasaran.kategori?.toLowerCase().includes("bumil");
       const isNifas = selectedSasaran.kategori?.toLowerCase().includes("nifas");
       if (isBumil && selectedSasaran.tglPersalinan && !selectedSasaran.caraPersalinan) {
@@ -896,11 +1528,66 @@ export default function DataSasaranPage({
         onRefreshData?.();
       } catch (err) {
         console.error("Backend edit warga error:", err);
+=======
+      try {
+        const isMenikah = (selectedSasaran.statusPernikahan || '').toLowerCase().includes('menikah') && !(selectedSasaran.statusPernikahan || '').toLowerCase().includes('belum');
+        const updatePayload = {
+          nik: selectedSasaran.nik,
+          nama_lengkap: selectedSasaran.nama,
+          jenis_kelamin: (selectedSasaran.gender === 'Perempuan' || selectedSasaran.gender === 'P') ? 'P' : 'L',
+          tanggal_lahir: selectedSasaran.tglLahir,
+          alamat: selectedSasaran.alamat,
+          telepon: selectedSasaran.noHp || '-',
+          nama_ibu: selectedSasaran.namaIbu || null,
+          nama_ayah: selectedSasaran.namaAyah || null,
+          status_perkawinan: isMenikah ? 'menikah' : 'tidak_menikah',
+          pekerjaan: selectedSasaran.pekerjaan || null,
+          status_domisili: (selectedSasaran.status || 'aktif').toLowerCase() === 'non-aktif' ? 'pindah' : 'aktif'
+        };
+
+        const res = await wargaService.updateWarga(selectedSasaran.id, updatePayload);
+        
+        let updatedItem = null;
+        if (res?.data) {
+          const mappedFromBackend = mapBackendWargaToFrontend(res.data);
+          updatedItem = {
+            ...mappedFromBackend,
+            ...selectedSasaran,
+            usia: formatUsiaByCategory(selectedSasaran.tglLahir, selectedSasaran.subKategori || selectedSasaran.kategori),
+            status: selectedSasaran.status || 'Aktif',
+            statusPernikahan: selectedSasaran.statusPernikahan || (isMenikah ? 'Menikah' : 'Belum Menikah'),
+            keteranganIbuSuami: selectedSasaran.namaIbu 
+              ? `Ibu: ${selectedSasaran.namaIbu}` 
+              : (selectedSasaran.namaSuami 
+                  ? `Suami: ${selectedSasaran.namaSuami}` 
+                  : (selectedSasaran.namaAyah ? `Ayah: ${selectedSasaran.namaAyah}` : selectedSasaran.keteranganIbuSuami))
+          };
+        } else {
+          updatedItem = {
+            ...selectedSasaran,
+            usia: formatUsiaByCategory(selectedSasaran.tglLahir, selectedSasaran.subKategori || selectedSasaran.kategori),
+            keteranganIbuSuami: selectedSasaran.namaIbu 
+              ? `Ibu: ${selectedSasaran.namaIbu}` 
+              : (selectedSasaran.namaSuami 
+                  ? `Suami: ${selectedSasaran.namaSuami}` 
+                  : (selectedSasaran.namaAyah ? `Ayah: ${selectedSasaran.namaAyah}` : selectedSasaran.keteranganIbuSuami))
+          };
+        }
+
+        setSasaranList(prev => (Array.isArray(prev) ? prev : sasaranList).map(item => String(item.id) === String(selectedSasaran.id) ? { ...item, ...updatedItem } : item));
+        setSelectedSasaran(updatedItem);
+        setShowEditModal(false);
+        showSuccess("Pembaruan Berhasil", `Data sasaran "${selectedSasaran?.nama || "Warga"}" berhasil diperbarui.`);
+        onRefreshData?.();
+      } catch (err) {
+        console.error('Backend edit warga error:', err);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
         showWarning("Gagal Memperbarui Sasaran", err.message || "Gagal memperbarui data di server.");
       }
     }
   };
 
+<<<<<<< HEAD
   const handleOpenSasaranRecord = async (item, modalType) => {
     try {
       const response = await wargaService.getWargaById(item.id);
@@ -913,19 +1600,36 @@ export default function DataSasaranPage({
     }
   };
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   return (
     <div>
       {/* Top Action Bar: 2 Main Buttons (Mutasi & Tambah Sasaran 9 Kategori) */}
       <div className="d-flex flex-column flex-sm-row justify-content-end gap-2 mb-3">
+<<<<<<< HEAD
         <ExportSasaranButton />
         {/* Tombol 1: Sasaran Mutasi */}
         <button className="btn btn-dark-custom btn-top-action shadow-xs" onClick={() => setShowMutasiCheckModal(true)}>
+=======
+        {/* Tombol 1: Sasaran Mutasi */}
+        <button 
+          className="btn btn-dark-custom btn-top-action shadow-xs"
+          onClick={() => setShowMutasiCheckModal(true)}
+        >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
           <UserCheck size={16} />
           <span>Tambah Sasaran Mutasi</span>
         </button>
 
         {/* Tombol 2: Tambah Sasaran (7 Klaster / 9 Kategori) */}
+<<<<<<< HEAD
         <button className="btn btn-dark-custom btn-top-action shadow-xs" onClick={() => setShowCategoryModal(true)}>
+=======
+        <button 
+          className="btn btn-dark-custom btn-top-action shadow-xs"
+          onClick={() => setShowCategoryModal(true)}
+        >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
           <UserPlus size={16} />
           <span>Tambah Sasaran</span>
         </button>
@@ -938,12 +1642,30 @@ export default function DataSasaranPage({
           <div className="col-12 col-md-5">
             <div className="position-relative">
               <Search size={18} className="position-absolute top-50 translate-middle-y ms-3 text-muted" />
+<<<<<<< HEAD
               <input type="text" className="form-control form-control-custom ps-5 bg-light" placeholder="Cari Nama / NIK / No. KK" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+=======
+              <input 
+                type="text" 
+                className="form-control form-control-custom ps-5 bg-light"
+                placeholder="Cari Nama / NIK / No. KK" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             </div>
           </div>
 
           <div className="col-6 col-md-3">
+<<<<<<< HEAD
             <select className="form-select form-select-custom bg-light" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+=======
+            <select 
+              className="form-select form-select-custom bg-light"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               <option value="Semua Status">Semua Status</option>
               <option value="Aktif">Aktif</option>
               <option value="Non-Aktif">Non-Aktif</option>
@@ -951,7 +1673,15 @@ export default function DataSasaranPage({
           </div>
 
           <div className="col-6 col-md-3">
+<<<<<<< HEAD
             <select className="form-select form-select-custom bg-light" value={kategoriFilter} onChange={(e) => setKategoriFilter(e.target.value)}>
+=======
+            <select 
+              className="form-select form-select-custom bg-light"
+              value={kategoriFilter}
+              onChange={(e) => setKategoriFilter(e.target.value)}
+            >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               <option value="Semua Kategori">Semua Kategori</option>
               <option value="Bumil">Bumil</option>
               <option value="Nifas/Menyusui">Nifas/Menyusui</option>
@@ -978,6 +1708,7 @@ export default function DataSasaranPage({
           <table className="table table-custom align-middle">
             <thead>
               <tr className="text-muted small text-uppercase fw-bold border-bottom">
+<<<<<<< HEAD
                 <th style={{ width: "50px" }} className="ps-4 py-3 text-center">
                   NO
                 </th>
@@ -1019,33 +1750,101 @@ export default function DataSasaranPage({
                       </div>
                     </td>
                     <td className="text-center text-secondary small text-nowrap">{formatDateId(item.tglLahir)}</td>
+=======
+                <th style={{ width: '50px' }} className="ps-4 py-3 text-center">NO</th>
+                <th className="py-3" style={{ minWidth: '180px' }}>NAMA LENGKAP / NIK</th>
+                <th className="py-3 text-center" style={{ minWidth: '130px', whiteSpace: 'nowrap' }}>TANGGAL LAHIR</th>
+                <th className="py-3" style={{ minWidth: '140px' }}>KATEGORI</th>
+                <th className="py-3 text-center" style={{ minWidth: '120px' }}>JENIS KELAMIN</th>
+                <th className="py-3 text-center" style={{ minWidth: '100px' }}>STATUS</th>
+                <th className="pe-4 py-3 text-center" style={{ minWidth: '160px' }}>AKSI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedData.length > 0 ? (
+                paginatedData.map((item, index) => (
+                  <tr key={item.id}>
+                    <td className="ps-4 text-center fw-semibold text-secondary">
+                      {(currentPage - 1) * itemsPerPage + index + 1}
+                    </td>
+                    <td>
+                      <div className="fw-bold text-dark mb-0">{item.nama}</div>
+                      <div className="text-muted font-monospace" style={{ fontSize: '0.78rem' }}>{item.nik}</div>
+                    </td>
+                    <td className="text-center text-secondary small text-nowrap">{formatIndoDate(item.tglLahir)}</td>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     <td>
                       <div className="fw-semibold text-dark mb-0">{item.kategori}</div>
                     </td>
                     <td className="text-center text-secondary">{item.gender}</td>
                     <td className="text-center">
+<<<<<<< HEAD
                       {item.status === "Aktif" ? (
                         <span className="badge-status-aktif d-inline-flex align-items-center">Aktif</span>
                       ) : item.status ? (
                         <span className="badge-status-nonaktif d-inline-flex align-items-center">{item.status}</span>
                       ) : (
                         <span className="text-muted">—</span>
+=======
+                      {item.status === 'Aktif' ? (
+                        <span className="badge-status-aktif d-inline-flex align-items-center">
+                          Aktif
+                        </span>
+                      ) : (
+                        <span className="badge-status-nonaktif d-inline-flex align-items-center">
+                          Non-Aktif
+                        </span>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                       )}
                     </td>
                     <td className="text-center text-nowrap">
                       <div className="d-flex align-items-center justify-content-center gap-2">
+<<<<<<< HEAD
                         <button
                           className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none"
                           title="Lihat Detail Sasaran"
                           onClick={() => handleOpenSasaranRecord(item, "detail")}
+=======
+                        <button 
+                          className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none"
+                          title="Lihat Detail Sasaran"
+                          onClick={() => {
+                            setSelectedSasaran(item);
+                            setShowDetailModal(true);
+                          }}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         >
                           <Eye size={14} />
                           <span>Detail</span>
                         </button>
+<<<<<<< HEAD
                         <button
                           className="btn btn-sm btn-outline-pink d-inline-flex align-items-center gap-1.5 shadow-none"
                           title="Edit Data Sasaran"
                           onClick={() => handleOpenSasaranRecord(item, "edit")}
+=======
+                        <button 
+                          className="btn btn-sm btn-outline-pink d-inline-flex align-items-center gap-1.5 shadow-none"
+                          title="Edit Data Sasaran"
+                          onClick={() => {
+                            const normalized = {
+                              ...item,
+                              riwayatKeluarga: Array.isArray(item.riwayatKeluarga) ? item.riwayatKeluarga : (typeof item.riwayatKeluarga === 'string' && item.riwayatKeluarga ? [item.riwayatKeluarga] : []),
+                              riwayatDiriSendiri: Array.isArray(item.riwayatDiriSendiri) ? item.riwayatDiriSendiri : (typeof item.riwayatDiriSendiri === 'string' && item.riwayatDiriSendiri ? [item.riwayatDiriSendiri] : []),
+                              perilakuBerisiko: typeof item.perilakuBerisiko === 'object' && item.perilakuBerisiko !== null && !Array.isArray(item.perilakuBerisiko)
+                                ? item.perilakuBerisiko
+                                : {
+                                    merokok: 'Tidak',
+                                    tinggiGula: 'Tidak',
+                                    tinggiGaram: 'Tidak',
+                                    tinggiLemak: 'Tidak',
+                                    ...(Array.isArray(item.perilakuBerisiko) ? { items: item.perilakuBerisiko } : {})
+                                  }
+                            };
+                            setSelectedSasaran(normalized);
+                            setShowEditModal(true);
+                          }}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         >
                           <Edit size={14} />
                           <span>Edit</span>
@@ -1068,11 +1867,46 @@ export default function DataSasaranPage({
         {/* Pagination Footer */}
         <div className="d-flex flex-column flex-sm-row align-items-center justify-content-between pt-3 border-top mt-3 text-muted small gap-3">
           <div>
+<<<<<<< HEAD
             Menampilkan <span className="fw-semibold text-dark">{filteredData.length}</span> sasaran dari {sasaranList.length}
+=======
+            Menampilkan <span className="fw-semibold text-dark">{filteredData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}</span> s/d <span className="fw-semibold text-dark">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> dari <span className="fw-semibold text-dark">{filteredData.length}</span> sasaran
+          </div>
+          <div className="d-flex align-items-center gap-1">
+            <button 
+              className="btn btn-sm btn-light border p-1 rounded-2" 
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              title="Halaman Sebelumnya"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button 
+                key={page}
+                className={`btn btn-sm px-3 py-1 me-1 ${currentPage === page ? 'btn-primary-custom fw-bold' : 'btn-light border'}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+            <button 
+              className="btn btn-sm btn-light border p-1 rounded-2"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              title="Halaman Berikutnya"
+            >
+              <ChevronRight size={16} />
+            </button>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
           </div>
         </div>
       </div>
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       {/* ========================================================================= */}
       {/* MODAL 1: PILIH KATEGORI SASARAN (7 Klaster Posyandu ILP) - Image 1 */}
       {/* ========================================================================= */}
@@ -1103,8 +1937,18 @@ export default function DataSasaranPage({
           <div className="row g-3 mb-4">
             {klasterList.map((item) => (
               <div key={item.id} className="col-12 col-md-6">
+<<<<<<< HEAD
                 <div className="modal-role-card d-flex align-items-center gap-3 p-3 bg-white border rounded-3" onClick={() => handleSelectKlaster(item)}>
                   <div className="p-3 bg-light rounded-3 d-flex align-items-center justify-content-center">{item.icon}</div>
+=======
+                <div 
+                  className="modal-role-card d-flex align-items-center gap-3 p-3 bg-white border rounded-3"
+                  onClick={() => handleSelectKlaster(item)}
+                >
+                  <div className="p-3 bg-light rounded-3 d-flex align-items-center justify-content-center">
+                    {item.icon}
+                  </div>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   <div>
                     <h6 className="fw-bold mb-0 text-dark">{item.title}</h6>
                     <span className="text-muted small">{item.sub}</span>
@@ -1126,6 +1970,10 @@ export default function DataSasaranPage({
         </div>
       </Modal>
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       {/* ========================================================================= */}
       {/* MODAL 2: FORM TAMBAH SASARAN PER KATEGORI (Image 2, Image 5, & Image 4) */}
       {/* ========================================================================= */}
@@ -1139,17 +1987,26 @@ export default function DataSasaranPage({
                 </div>
                 <div>
                   <h4 className="fw-bold mb-0 text-dark">
+<<<<<<< HEAD
                     {selectedCategory.id === "bumil"
                       ? "Tambah Sasaran Ibu Hamil"
                       : selectedCategory.id === "bayi-0-11" || selectedCategory.id.includes("bayi")
                         ? "Tambah Sasaran Bayi"
                         : `Tambah Sasaran ${selectedCategory.id === "nifas" ? "Nifas/Menyusui" : selectedCategory.title}`}
+=======
+                    {selectedCategory.id === 'bumil'
+                      ? 'Tambah Sasaran Ibu Hamil'
+                      : selectedCategory.id === 'bayi-0-11' || selectedCategory.id.includes('bayi')
+                      ? 'Tambah Sasaran Bayi'
+                      : `Tambah Sasaran ${selectedCategory.id === 'nifas' ? 'Nifas/Menyusui' : selectedCategory.title}`}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   </h4>
                   <p className="text-muted small mb-0">Pencatatan data sasaran baru</p>
                 </div>
               </div>
 
               {/* ========================================== */}
+<<<<<<< HEAD
               {/* VARIASI 1: IBU HAMIL (GAMBAR 2)           */}
               {/* ========================================== */}
               {selectedCategory.id === "bumil" ? (
@@ -1159,11 +2016,85 @@ export default function DataSasaranPage({
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
                       <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={categoryForm.nama} onChange={(e) => setCategoryForm({ ...categoryForm, nama: e.target.value })} required />
+=======
+              {/* VARIASI 1: IBU HAMIL (GAMBAR 2 - ORIGINAL) */}
+              {/* ========================================== */}
+              {selectedCategory.id === 'bumil' ? (
+                <div className="row g-3 mb-4">
+                  {/* Kolom Kiri */}
+                  <div className="col-md-6">
+                    {/* Input Nama Lengkap dengan Smart Autocomplete & Autofill */}
+                    <div className="mb-3 position-relative">
+                      <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        placeholder="Masukkan nama lengkap"
+                        value={categoryForm.nama}
+                        autoComplete="off"
+                        onChange={(e) => handleNamaBumilChange(e.target.value)}
+                        onFocus={() => {
+                          if (categoryForm.nama && categoryForm.nama.trim().length >= 2) {
+                            setShowNamaSuggestions(true);
+                          }
+                        }}
+                        required
+                      />
+
+                      {/* Dropdown Live Suggestions jika nama cocok dengan data backend (Dewasa/Usekrem) */}
+                      {showNamaSuggestions && matchingNamaSuggestions.length > 0 && (
+                        <div 
+                          className="position-absolute w-100 bg-white border rounded-3 shadow-lg p-1.5 z-3 mt-1"
+                          style={{ maxHeight: '220px', overflowY: 'auto', overflowX: 'hidden' }}
+                        >
+                          <div className="px-2 py-1 text-muted small border-bottom mb-1 text-start" style={{ fontSize: '0.72rem' }}>
+                            Warga terdaftar ditemukan (Klik untuk isi data otomatis):
+                          </div>
+                          {matchingNamaSuggestions.map(w => (
+                            <div
+                              key={w.id}
+                              role="button"
+                              className="d-flex flex-column text-start p-2 rounded-2 mb-1 border-0"
+                              style={{ 
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                width: '100%',
+                                whiteSpace: 'normal',
+                                wordBreak: 'break-word',
+                                backgroundColor: '#f8fafc',
+                                transition: 'background-color 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                              onMouseDown={() => handleSelectCitizenForBumil(w)}
+                            >
+                              <div 
+                                className="fw-bold text-dark small text-start" 
+                                style={{ textAlign: 'left', wordBreak: 'break-word', lineHeight: '1.25' }}
+                              >
+                                {w.nama}
+                              </div>
+                              <div 
+                                className="text-muted d-flex align-items-center gap-1.5 mt-0.5 text-start" 
+                                style={{ fontSize: '0.72rem', textAlign: 'left', color: '#64748b' }}
+                              >
+                                <span className="font-monospace text-slate-500">{w.nik}</span>
+                                <span style={{ color: '#cbd5e1' }}>•</span>
+                                <span className="text-secondary fw-normal" style={{ fontSize: '0.72rem' }}>
+                                  {w.kategori || 'Dewasa'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <div className="d-flex justify-content-between align-items-center mb-1">
                         <label className="form-label fw-medium small mb-0">Nomor Induk Kependudukan (NIK)</label>
+<<<<<<< HEAD
                         <span className={`small ${categoryForm.nik?.length === 16 ? "text-success fw-bold" : "text-muted"}`} style={{ fontSize: "0.75rem" }}>
                           {categoryForm.nik?.length || 0}/16 Digit
                         </span>
@@ -1179,6 +2110,23 @@ export default function DataSasaranPage({
                       />
                       {categoryForm.nik && categoryForm.nik.length !== 16 && (
                         <div className="invalid-feedback" style={{ fontSize: "0.74rem" }}>
+=======
+                        <span className={`small ${categoryForm.nik?.length === 16 ? 'text-success fw-bold' : 'text-muted'}`} style={{ fontSize: '0.75rem' }}>
+                          {categoryForm.nik?.length || 0}/16 Digit
+                        </span>
+                      </div>
+                      <input 
+                        type="text" 
+                        maxLength={16}
+                        className={`form-control form-control-custom ${categoryForm.nik && categoryForm.nik.length !== 16 ? 'is-invalid' : ''}`}
+                        placeholder="Masukkan 16 digit NIK"
+                        value={categoryForm.nik}
+                        onChange={(e) => handleNikBumilChange(e.target.value)}
+                        required
+                      />
+                      {categoryForm.nik && categoryForm.nik.length !== 16 && (
+                        <div className="invalid-feedback" style={{ fontSize: '0.74rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           NIK harus 16 digit angka (kurang {16 - categoryForm.nik.length} digit lagi).
                         </div>
                       )}
@@ -1186,9 +2134,15 @@ export default function DataSasaranPage({
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
+<<<<<<< HEAD
                       <input
                         type="date"
                         max={new Date().toISOString().split("T")[0]}
+=======
+                      <input 
+                        type="date" 
+                        max={new Date().toISOString().split('T')[0]}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         className="form-control form-control-custom"
                         value={categoryForm.tglLahir}
                         onChange={(e) => setCategoryForm({ ...categoryForm, tglLahir: e.target.value })}
@@ -1197,8 +2151,13 @@ export default function DataSasaranPage({
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nomor Telepon / WhatsApp</label>
+<<<<<<< HEAD
                       <input
                         type="text"
+=======
+                      <input 
+                        type="text" 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         maxLength={15}
                         className="form-control form-control-custom"
                         placeholder="0812xxxxxxxx"
@@ -1209,31 +2168,111 @@ export default function DataSasaranPage({
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">HPHT (Hari Pertama Haid Terakhir)</label>
+<<<<<<< HEAD
                       <input type="date" className="form-control form-control-custom" value={categoryForm.hpht} onChange={(e) => setCategoryForm({ ...categoryForm, hpht: e.target.value })} />
+=======
+                      <input 
+                        type="date" 
+                        className="form-control form-control-custom"
+                        value={categoryForm.hpht}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, hpht: e.target.value })}
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">HPL</label>
+<<<<<<< HEAD
                       <input type="date" className="form-control form-control-custom" value={categoryForm.hpl} onChange={(e) => setCategoryForm({ ...categoryForm, hpl: e.target.value })} />
                     </div>
 
+=======
+                      <input 
+                        type="date" 
+                        className="form-control form-control-custom"
+                        value={categoryForm.hpl}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, hpl: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="mb-3">
+                      <div className="row g-2">
+                        <div className="col-6">
+                          <label className="form-label fw-medium small mb-1">BB Sebelum Hamil</label>
+                          <div className="input-group">
+                            <input 
+                              type="number" 
+                              step="0.1" 
+                              className="form-control form-control-custom"
+                              placeholder="50.0"
+                              value={categoryForm.bb}
+                              onChange={(e) => setCategoryForm({ ...categoryForm, bb: e.target.value })}
+                            />
+                            <span className="input-group-text bg-white border text-muted small">kg</span>
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <label className="form-label fw-medium small mb-1">Tinggi Badan (TB)</label>
+                          <div className="input-group">
+                            <input 
+                              type="number" 
+                              step="0.1" 
+                              className="form-control form-control-custom"
+                              placeholder="155.0"
+                              value={categoryForm.tb}
+                              onChange={(e) => setCategoryForm({ ...categoryForm, tb: e.target.value })}
+                            />
+                            <span className="input-group-text bg-white border text-muted small">cm</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   </div>
 
                   {/* Kolom Kanan */}
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Suami / Ayah</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama suami/ayah" value={categoryForm.namaAyah} onChange={(e) => setCategoryForm({ ...categoryForm, namaAyah: e.target.value })} />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        placeholder="Masukkan nama suami/ayah"
+                        value={categoryForm.namaAyah}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, namaAyah: e.target.value })}
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Anak ke-</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" placeholder="Contoh: 1" value={categoryForm.anakKe} onChange={(e) => setCategoryForm({ ...categoryForm, anakKe: e.target.value })} />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        placeholder="Contoh: 1"
+                        value={categoryForm.anakKe}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, anakKe: e.target.value })}
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Jarak anak sebelumnya</label>
+<<<<<<< HEAD
                       <select className="form-select form-select-custom" value={categoryForm.jarakAnak} onChange={(e) => setCategoryForm({ ...categoryForm, jarakAnak: e.target.value })}>
+=======
+                      <select 
+                        className="form-select form-select-custom"
+                        value={categoryForm.jarakAnak}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, jarakAnak: e.target.value })}
+                      >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         <option value="Anak Pertama">Anak Pertama</option>
                         <option value="< 2 Thn">&lt; 2 Thn</option>
                         <option value="2 - 5 Thn">2 - 5 Thn</option>
@@ -1242,8 +2281,25 @@ export default function DataSasaranPage({
                     </div>
 
                     <div className="mb-3">
+<<<<<<< HEAD
                       <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
                       <textarea
+=======
+                      <label className="form-label fw-medium small mb-1">Status Sasaran</label>
+                      <select 
+                        className="form-select form-select-custom"
+                        value={categoryForm.status}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, status: e.target.value })}
+                      >
+                        <option value="Aktif">Aktif</option>
+                        <option value="Non-Aktif">Non-Aktif</option>
+                      </select>
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
+                      <textarea 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         className="form-control form-control-custom"
                         rows="2"
                         placeholder="Masukkan alamat domisili"
@@ -1253,7 +2309,11 @@ export default function DataSasaranPage({
                     </div>
                   </div>
                 </div>
+<<<<<<< HEAD
               ) : selectedCategory.id === "bayi-0-11" || selectedCategory.id.includes("bayi") ? (
+=======
+              ) : selectedCategory.id === 'bayi-0-11' || selectedCategory.id.includes('bayi') ? (
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 /* ========================================== */
                 /* VARIASI 2: BAYI 0-11 BULAN (GAMBAR 3)      */
                 /* ========================================== */
@@ -1262,12 +2322,24 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={categoryForm.nama} onChange={(e) => setCategoryForm({ ...categoryForm, nama: e.target.value })} required />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        placeholder="Masukkan nama lengkap"
+                        value={categoryForm.nama}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, nama: e.target.value })}
+                        required
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <div className="d-flex justify-content-between align-items-center mb-1">
                         <label className="form-label fw-medium small mb-0">Nomor Induk Kependudukan (NIK)</label>
+<<<<<<< HEAD
                         <span className={`small ${categoryForm.nik?.length === 16 ? "text-success fw-bold" : "text-muted"}`} style={{ fontSize: "0.75rem" }}>
                           {categoryForm.nik?.length || 0}/16 Digit
                         </span>
@@ -1276,13 +2348,27 @@ export default function DataSasaranPage({
                         type="text"
                         maxLength={16}
                         className={`form-control form-control-custom ${categoryForm.nik && categoryForm.nik.length !== 16 ? "is-invalid" : ""}`}
+=======
+                        <span className={`small ${categoryForm.nik?.length === 16 ? 'text-success fw-bold' : 'text-muted'}`} style={{ fontSize: '0.75rem' }}>
+                          {categoryForm.nik?.length || 0}/16 Digit
+                        </span>
+                      </div>
+                      <input 
+                        type="text" 
+                        maxLength={16}
+                        className={`form-control form-control-custom ${categoryForm.nik && categoryForm.nik.length !== 16 ? 'is-invalid' : ''}`}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         placeholder="Masukkan 16 digit NIK"
                         value={categoryForm.nik}
                         onChange={(e) => setCategoryForm({ ...categoryForm, nik: formatNikInput(e.target.value) })}
                         required
                       />
                       {categoryForm.nik && categoryForm.nik.length !== 16 && (
+<<<<<<< HEAD
                         <div className="invalid-feedback" style={{ fontSize: "0.74rem" }}>
+=======
+                        <div className="invalid-feedback" style={{ fontSize: '0.74rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           NIK harus 16 digit angka (kurang {16 - categoryForm.nik.length} digit lagi).
                         </div>
                       )}
@@ -1290,7 +2376,15 @@ export default function DataSasaranPage({
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Jenis Kelamin</label>
+<<<<<<< HEAD
                       <select className="form-select form-select-custom" value={categoryForm.gender} onChange={(e) => setCategoryForm({ ...categoryForm, gender: e.target.value })}>
+=======
+                      <select 
+                        className="form-select form-select-custom"
+                        value={categoryForm.gender}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, gender: e.target.value })}
+                      >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         <option value="">pilih jenis kelamin</option>
                         <option value="Laki-laki">Laki-laki</option>
                         <option value="Perempuan">Perempuan</option>
@@ -1301,50 +2395,115 @@ export default function DataSasaranPage({
                       <div className="row g-2">
                         <div className="col-6">
                           <label className="form-label fw-medium small mb-1">Berat Lahir (BBL)</label>
+<<<<<<< HEAD
                           <input
                             type="number"
                             step="0.1"
                             className="form-control form-control-custom"
                             placeholder="BBL (kg)"
                             value={categoryForm.bbl !== undefined && categoryForm.bbl !== "" ? categoryForm.bbl : categoryForm.bb}
+=======
+                          <input 
+                            type="number" step="0.1" 
+                            className="form-control form-control-custom"
+                            placeholder="BBL (kg)"
+                            value={categoryForm.bbl !== undefined && categoryForm.bbl !== '' ? categoryForm.bbl : categoryForm.bb}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             onChange={(e) => setCategoryForm({ ...categoryForm, bbl: e.target.value, bb: e.target.value })}
                           />
                         </div>
                         <div className="col-6">
                           <label className="form-label fw-medium small mb-1">Panjang Lahir (PBL)</label>
+<<<<<<< HEAD
                           <input
                             type="number"
                             step="0.1"
                             className="form-control form-control-custom"
                             placeholder="PBL (cm)"
                             value={categoryForm.pbl !== undefined && categoryForm.pbl !== "" ? categoryForm.pbl : categoryForm.tb}
+=======
+                          <input 
+                            type="number" step="0.1" 
+                            className="form-control form-control-custom"
+                            placeholder="PBL (cm)"
+                            value={categoryForm.pbl !== undefined && categoryForm.pbl !== '' ? categoryForm.pbl : categoryForm.tb}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             onChange={(e) => setCategoryForm({ ...categoryForm, pbl: e.target.value, tb: e.target.value })}
                           />
                         </div>
                       </div>
                     </div>
+<<<<<<< HEAD
+=======
+
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">Status Sasaran</label>
+                      <select 
+                        className="form-select form-select-custom"
+                        value={categoryForm.status}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, status: e.target.value })}
+                      >
+                        <option value="Aktif">Aktif</option>
+                        <option value="Non-Aktif">Non-Aktif</option>
+                      </select>
+                    </div>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   </div>
 
                   {/* Kolom Kanan */}
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
+<<<<<<< HEAD
                       <input type="date" className="form-control form-control-custom" value={categoryForm.tglLahir} onChange={(e) => setCategoryForm({ ...categoryForm, tglLahir: e.target.value })} required />
+=======
+                      <input 
+                        type="date" 
+                        className="form-control form-control-custom"
+                        value={categoryForm.tglLahir}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, tglLahir: e.target.value })}
+                        required
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Ibu</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama ibu" value={categoryForm.namaIbu} onChange={(e) => setCategoryForm({ ...categoryForm, namaIbu: e.target.value })} />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        placeholder="Masukkan nama ibu"
+                        value={categoryForm.namaIbu}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, namaIbu: e.target.value })}
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Ayah</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama ayah" value={categoryForm.namaAyah} onChange={(e) => setCategoryForm({ ...categoryForm, namaAyah: e.target.value })} />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        placeholder="Masukkan nama ayah"
+                        value={categoryForm.namaAyah}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, namaAyah: e.target.value })}
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
+<<<<<<< HEAD
                       <textarea
+=======
+                      <textarea 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         className="form-control form-control-custom"
                         rows="3"
                         placeholder="Masukkan alamat domisili"
@@ -1363,12 +2522,24 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={categoryForm.nama} onChange={(e) => setCategoryForm({ ...categoryForm, nama: e.target.value })} required />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        placeholder="Masukkan nama lengkap"
+                        value={categoryForm.nama}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, nama: e.target.value })}
+                        required
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
 
                     <div className="mb-3">
                       <div className="d-flex justify-content-between align-items-center mb-1">
                         <label className="form-label fw-medium small mb-0">Nomor Induk Kependudukan (NIK)</label>
+<<<<<<< HEAD
                         <span className={`small ${categoryForm.nik?.length === 16 ? "text-success fw-bold" : "text-muted"}`} style={{ fontSize: "0.75rem" }}>
                           {categoryForm.nik?.length || 0}/16 Digit
                         </span>
@@ -1377,13 +2548,27 @@ export default function DataSasaranPage({
                         type="text"
                         maxLength={16}
                         className={`form-control form-control-custom ${categoryForm.nik && categoryForm.nik.length !== 16 ? "is-invalid" : ""}`}
+=======
+                        <span className={`small ${categoryForm.nik?.length === 16 ? 'text-success fw-bold' : 'text-muted'}`} style={{ fontSize: '0.75rem' }}>
+                          {categoryForm.nik?.length || 0}/16 Digit
+                        </span>
+                      </div>
+                      <input 
+                        type="text" 
+                        maxLength={16}
+                        className={`form-control form-control-custom ${categoryForm.nik && categoryForm.nik.length !== 16 ? 'is-invalid' : ''}`}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         placeholder="Masukkan 16 digit NIK"
                         value={categoryForm.nik}
                         onChange={(e) => setCategoryForm({ ...categoryForm, nik: formatNikInput(e.target.value) })}
                         required
                       />
                       {categoryForm.nik && categoryForm.nik.length !== 16 && (
+<<<<<<< HEAD
                         <div className="invalid-feedback" style={{ fontSize: "0.74rem" }}>
+=======
+                        <div className="invalid-feedback" style={{ fontSize: '0.74rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           NIK harus 16 digit angka (kurang {16 - categoryForm.nik.length} digit lagi).
                         </div>
                       )}
@@ -1391,7 +2576,15 @@ export default function DataSasaranPage({
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Jenis Kelamin</label>
+<<<<<<< HEAD
                       <select className="form-select form-select-custom" value={categoryForm.gender} onChange={(e) => setCategoryForm({ ...categoryForm, gender: e.target.value })}>
+=======
+                      <select 
+                        className="form-select form-select-custom"
+                        value={categoryForm.gender}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, gender: e.target.value })}
+                      >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         <option value="">pilih jenis kelamin</option>
                         <option value="Laki-laki">Laki-laki</option>
                         <option value="Perempuan">Perempuan</option>
@@ -1399,6 +2592,7 @@ export default function DataSasaranPage({
                     </div>
 
                     {/* Status Pernikahan & Pekerjaan (Dihapus untuk balita, apras, dan usekrem 6-14) */}
+<<<<<<< HEAD
                     {!["balita-12-59", "balita", "apras-60-72", "apras", "usekrem-6-14"].some((k) => selectedCategory.id.includes(k)) && (
                       <>
                         <div className="mb-3">
@@ -1406,12 +2600,35 @@ export default function DataSasaranPage({
                           <select className="form-select form-select-custom" value={categoryForm.statusPernikahan} onChange={(e) => setCategoryForm({ ...categoryForm, statusPernikahan: e.target.value })}>
                             <option value="Tidak Menikah">Tidak Menikah</option>
                             <option value="Menikah">Menikah</option>
+=======
+                    {!['balita-12-59', 'balita', 'apras-60-72', 'apras', 'usekrem-6-14'].some(k => selectedCategory.id.includes(k)) && (
+                      <>
+                        <div className="mb-3">
+                          <label className="form-label fw-medium small mb-1">Status Pernikahan</label>
+                          <select 
+                            className="form-select form-select-custom"
+                            value={categoryForm.statusPernikahan}
+                            onChange={(e) => setCategoryForm({ ...categoryForm, statusPernikahan: e.target.value })}
+                          >
+                            <option value="Belum Menikah">Belum Menikah</option>
+                            <option value="Menikah">Menikah</option>
+                            <option value="Cerai Hidup">Cerai Hidup</option>
+                            <option value="Cerai Mati">Cerai Mati</option>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           </select>
                         </div>
 
                         <div className="mb-3">
                           <label className="form-label fw-medium small mb-1">Pekerjaan</label>
+<<<<<<< HEAD
                           <select className="form-select form-select-custom" value={categoryForm.pekerjaan} onChange={(e) => setCategoryForm({ ...categoryForm, pekerjaan: e.target.value })}>
+=======
+                          <select 
+                            className="form-select form-select-custom"
+                            value={categoryForm.pekerjaan}
+                            onChange={(e) => setCategoryForm({ ...categoryForm, pekerjaan: e.target.value })}
+                          >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             <option value="">Pilih pekerjaan</option>
                             <option value="Tidak Bekerja / Pelajar">Tidak Bekerja / Pelajar</option>
                             <option value="Ibu Rumah Tangga">Ibu Rumah Tangga</option>
@@ -1426,6 +2643,7 @@ export default function DataSasaranPage({
                       </>
                     )}
 
+<<<<<<< HEAD
                     {/* KHUSUS NIFAS / MENYUSUI: TANGGAL PERSALINAN WAJIB UNTUK PROFILE BUSUI */}
                     {selectedCategory.id === "nifas" && (
                       <div className="mb-3">
@@ -1450,20 +2668,52 @@ export default function DataSasaranPage({
                       <div className="mb-3">
                         <label className="form-label fw-bold text-primary small mb-1">Status Menyusui</label>
                         <select className="form-select form-select-custom border-primary" value={categoryForm.statusMenyusui} onChange={(e) => setCategoryForm({ ...categoryForm, statusMenyusui: e.target.value })}>
+=======
+                    {/* KHUSUS NIFAS / MENYUSUI: DITAMBAHKAN SATU FIELD STATUS MENYUSUI */}
+                    {selectedCategory.id === 'nifas' && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold text-primary small mb-1">Status Menyusui</label>
+                        <select 
+                          className="form-select form-select-custom border-primary"
+                          value={categoryForm.statusMenyusui}
+                          onChange={(e) => setCategoryForm({ ...categoryForm, statusMenyusui: e.target.value })}
+                        >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           <option value="Masih Menyusui">Masih Menyusui</option>
                           <option value="Sudah Tidak Menyusui">Sudah Tidak Menyusui</option>
                         </select>
                       </div>
                     )}
+<<<<<<< HEAD
+=======
+
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">Status Sasaran</label>
+                      <select 
+                        className="form-select form-select-custom"
+                        value={categoryForm.status}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, status: e.target.value })}
+                      >
+                        <option value="Aktif">Aktif</option>
+                        <option value="Non-Aktif">Non-Aktif</option>
+                      </select>
+                    </div>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   </div>
 
                   {/* Kolom Kanan */}
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
+<<<<<<< HEAD
                       <input
                         type="date"
                         max={new Date().toISOString().split("T")[0]}
+=======
+                      <input 
+                        type="date" 
+                        max={new Date().toISOString().split('T')[0]}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         className="form-control form-control-custom"
                         value={categoryForm.tglLahir}
                         onChange={(e) => setCategoryForm({ ...categoryForm, tglLahir: e.target.value })}
@@ -1471,17 +2721,37 @@ export default function DataSasaranPage({
                       />
                     </div>
 
+<<<<<<< HEAD
                     {!["dewasa", "lansia"].includes(selectedCategory.id) && (
                       <div className="mb-3">
                         <label className="form-label fw-medium small mb-1">Nama Ibu</label>
                         <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama ibu" value={categoryForm.namaIbu} onChange={(e) => setCategoryForm({ ...categoryForm, namaIbu: e.target.value })} />
+=======
+                    {!['dewasa', 'lansia'].includes(selectedCategory.id) && (
+                      <div className="mb-3">
+                        <label className="form-label fw-medium small mb-1">
+                          Nama Ibu
+                        </label>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-custom"
+                          placeholder="Masukkan nama ibu"
+                          value={categoryForm.namaIbu}
+                          onChange={(e) => setCategoryForm({ ...categoryForm, namaIbu: e.target.value })}
+                        />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                       </div>
                     )}
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nomor Telepon / WhatsApp</label>
+<<<<<<< HEAD
                       <input
                         type="text"
+=======
+                      <input 
+                        type="text" 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         maxLength={15}
                         className="form-control form-control-custom"
                         placeholder="0812xxxxxxxx"
@@ -1492,7 +2762,11 @@ export default function DataSasaranPage({
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
+<<<<<<< HEAD
                       <textarea
+=======
+                      <textarea 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         className="form-control form-control-custom"
                         rows="3"
                         placeholder="Masukkan alamat domisili"
@@ -1503,15 +2777,26 @@ export default function DataSasaranPage({
                   </div>
 
                   {/* KHUSUS USEKREM 6-14 & USEKREM 15-18: RIWAYAT KELUARGA & PERILAKU BERISIKO DIRI */}
+<<<<<<< HEAD
                   {["usekrem-6-14", "usekrem-15-18"].includes(selectedCategory.id) && (
+=======
+                  {['usekrem-6-14', 'usekrem-15-18'].includes(selectedCategory.id) && (
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     <div className="col-12 mt-3">
                       <div className="card border shadow-sm rounded-4 overflow-hidden bg-white mb-2">
                         <div className="card-header bg-light bg-opacity-75 border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
                           <div className="d-flex align-items-center gap-2">
+<<<<<<< HEAD
                             <Activity size={18} style={{ color: "#be123c" }} />
                             <span className="fw-bold text-dark fs-6">Skrining Riwayat Penyakit &amp; Perilaku Berisiko</span>
                           </div>
                           <span className="badge bg-white border text-secondary fw-medium px-2.5 py-1 rounded-pill" style={{ fontSize: "0.72rem" }}>
+=======
+                            <Activity size={18} style={{ color: '#be123c' }} />
+                            <span className="fw-bold text-dark fs-6">Skrining Riwayat Penyakit &amp; Perilaku Berisiko</span>
+                          </div>
+                          <span className="badge bg-white border text-secondary fw-medium px-2.5 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             Kemenkes RI
                           </span>
                         </div>
@@ -1522,6 +2807,7 @@ export default function DataSasaranPage({
                             <div className="d-flex align-items-center justify-content-between mb-3">
                               <div>
                                 <span className="fw-bold text-dark fs-6 d-block mb-1">Riwayat Penyakit Keluarga</span>
+<<<<<<< HEAD
                                 <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                   Pilih jika ada anggota keluarga kandung yang memiliki riwayat penyakit
                                 </span>
@@ -1542,15 +2828,43 @@ export default function DataSasaranPage({
                                 }
                               >
                                 {categoryForm.riwayatKeluarga?.includes("Tidak Ada") ? "✓ Tidak Ada Riwayat" : "Tidak Ada Riwayat"}
+=======
+                                <span className="text-muted" style={{ fontSize: '0.78rem' }}>Pilih jika ada anggota keluarga kandung yang memiliki riwayat penyakit</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                className="btn btn-sm py-1.5 px-3 rounded-pill border transition-all"
+                                style={
+                                  categoryForm.riwayatKeluarga?.includes('Tidak Ada')
+                                    ? { backgroundColor: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 600, fontSize: '0.75rem' }
+                                    : { backgroundColor: '#ffffff', color: '#64748b', borderColor: '#cbd5e1', fontSize: '0.75rem' }
+                                }
+                                onClick={() => setCategoryForm({ 
+                                  ...categoryForm, 
+                                  riwayatKeluarga: categoryForm.riwayatKeluarga?.includes('Tidak Ada') ? [] : ['Tidak Ada'] 
+                                })}
+                              >
+                                {categoryForm.riwayatKeluarga?.includes('Tidak Ada') ? '✓ Tidak Ada Riwayat' : 'Tidak Ada Riwayat'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               </button>
                             </div>
                             <div className="d-flex flex-wrap gap-2 pt-1">
                               {[
+<<<<<<< HEAD
                                 { key: "Hipertensi", label: "a. Hipertensi" },
                                 { key: "DM", label: "b. DM" },
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
+=======
+                                { key: 'Hipertensi', label: 'a. Hipertensi' },
+                                { key: 'DM', label: 'b. DM' },
+                                { key: 'Stroke', label: 'c. Stroke' },
+                                { key: 'Jantung', label: 'd. Jantung' },
+                                { key: 'Asma', label: 'e. Asma' },
+                                { key: 'Kanker', label: 'f. Kanker' },
+                                { key: 'Kolesterol Tinggi', label: 'g. Kolesterol Tinggi' }
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               ].map(({ key, label }) => {
                                 const isSelected = categoryForm.riwayatKeluarga?.includes(key);
                                 return (
@@ -1560,6 +2874,7 @@ export default function DataSasaranPage({
                                     className="btn btn-sm rounded-pill px-3.5 py-1.5 border transition-all"
                                     style={
                                       isSelected
+<<<<<<< HEAD
                                         ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5", fontWeight: 600, fontSize: "0.8rem" }
                                         : { backgroundColor: "#ffffff", color: "#334155", borderColor: "#e2e8f0", fontSize: "0.8rem" }
                                     }
@@ -1571,6 +2886,18 @@ export default function DataSasaranPage({
                                   >
                                     {isSelected ? "✓ " : ""}
                                     {label}
+=======
+                                        ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5', fontWeight: 600, fontSize: '0.8rem' }
+                                        : { backgroundColor: '#ffffff', color: '#334155', borderColor: '#e2e8f0', fontSize: '0.8rem' }
+                                    }
+                                    onClick={() => {
+                                      const cur = (categoryForm.riwayatKeluarga || []).filter(x => x !== 'Tidak Ada');
+                                      const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+                                      setCategoryForm({ ...categoryForm, riwayatKeluarga: next });
+                                    }}
+                                  >
+                                    {isSelected ? '✓ ' : ''}{label}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                   </button>
                                 );
                               })}
@@ -1582,6 +2909,7 @@ export default function DataSasaranPage({
                             <div className="d-flex align-items-center justify-content-between mb-3">
                               <div>
                                 <span className="fw-bold text-dark fs-6 d-block mb-1">Perilaku Berisiko Diri</span>
+<<<<<<< HEAD
                                 <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                   Pilih jika sasaran memiliki riwayat penyakit atau faktor risiko
                                 </span>
@@ -1602,15 +2930,43 @@ export default function DataSasaranPage({
                                 }
                               >
                                 {categoryForm.perilakuBerisikoUsekrem?.includes("Tidak Ada") ? "✓ Tidak Ada" : "Tidak Ada"}
+=======
+                                <span className="text-muted" style={{ fontSize: '0.78rem' }}>Pilih jika sasaran memiliki riwayat penyakit atau faktor risiko</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                className="btn btn-sm py-1.5 px-3 rounded-pill border transition-all"
+                                style={
+                                  categoryForm.perilakuBerisikoUsekrem?.includes('Tidak Ada')
+                                    ? { backgroundColor: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 600, fontSize: '0.75rem' }
+                                    : { backgroundColor: '#ffffff', color: '#64748b', borderColor: '#cbd5e1', fontSize: '0.75rem' }
+                                }
+                                onClick={() => setCategoryForm({ 
+                                  ...categoryForm, 
+                                  perilakuBerisikoUsekrem: categoryForm.perilakuBerisikoUsekrem?.includes('Tidak Ada') ? [] : ['Tidak Ada'] 
+                                })}
+                              >
+                                {categoryForm.perilakuBerisikoUsekrem?.includes('Tidak Ada') ? '✓ Tidak Ada' : 'Tidak Ada'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               </button>
                             </div>
                             <div className="d-flex flex-wrap gap-2 pt-1">
                               {[
+<<<<<<< HEAD
                                 { key: "Hipertensi", label: "a. Hipertensi" },
                                 { key: "DM", label: "b. DM" },
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
+=======
+                                { key: 'Hipertensi', label: 'a. Hipertensi' },
+                                { key: 'DM', label: 'b. DM' },
+                                { key: 'Stroke', label: 'c. Stroke' },
+                                { key: 'Jantung', label: 'd. Jantung' },
+                                { key: 'Asma', label: 'e. Asma' },
+                                { key: 'Kanker', label: 'f. Kanker' },
+                                { key: 'Kolesterol Tinggi', label: 'g. Kolesterol Tinggi' }
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               ].map(({ key, label }) => {
                                 const isSelected = categoryForm.perilakuBerisikoUsekrem?.includes(key);
                                 return (
@@ -1620,6 +2976,7 @@ export default function DataSasaranPage({
                                     className="btn btn-sm rounded-pill px-3.5 py-1.5 border transition-all"
                                     style={
                                       isSelected
+<<<<<<< HEAD
                                         ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5", fontWeight: 600, fontSize: "0.8rem" }
                                         : { backgroundColor: "#ffffff", color: "#334155", borderColor: "#e2e8f0", fontSize: "0.8rem" }
                                     }
@@ -1631,6 +2988,18 @@ export default function DataSasaranPage({
                                   >
                                     {isSelected ? "✓ " : ""}
                                     {label}
+=======
+                                        ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5', fontWeight: 600, fontSize: '0.8rem' }
+                                        : { backgroundColor: '#ffffff', color: '#334155', borderColor: '#e2e8f0', fontSize: '0.8rem' }
+                                    }
+                                    onClick={() => {
+                                      const cur = (categoryForm.perilakuBerisikoUsekrem || []).filter(x => x !== 'Tidak Ada');
+                                      const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+                                      setCategoryForm({ ...categoryForm, perilakuBerisikoUsekrem: next });
+                                    }}
+                                  >
+                                    {isSelected ? '✓ ' : ''}{label}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                   </button>
                                 );
                               })}
@@ -1642,15 +3011,26 @@ export default function DataSasaranPage({
                   )}
 
                   {/* KHUSUS DEWASA & LANSIA: RIWAYAT KELUARGA, RIWAYAT DIRI SENDIRI & PERILAKU BERISIKO DIRI SENDIRI */}
+<<<<<<< HEAD
                   {["dewasa", "lansia"].includes(selectedCategory.id) && (
+=======
+                  {['dewasa', 'lansia'].includes(selectedCategory.id) && (
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     <div className="col-12 mt-3">
                       <div className="card border shadow-sm rounded-4 overflow-hidden bg-white mb-2">
                         <div className="card-header bg-light bg-opacity-75 border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
                           <div className="d-flex align-items-center gap-2">
+<<<<<<< HEAD
                             <Activity size={18} style={{ color: "#be123c" }} />
                             <span className="fw-bold text-dark fs-6">Skrining Riwayat Penyakit &amp; Perilaku Berisiko</span>
                           </div>
                           <span className="badge bg-white border text-secondary fw-medium px-2.5 py-1 rounded-pill" style={{ fontSize: "0.72rem" }}>
+=======
+                            <Activity size={18} style={{ color: '#be123c' }} />
+                            <span className="fw-bold text-dark fs-6">Skrining Riwayat Penyakit &amp; Perilaku Berisiko</span>
+                          </div>
+                          <span className="badge bg-white border text-secondary fw-medium px-2.5 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             Kemenkes RI
                           </span>
                         </div>
@@ -1661,6 +3041,7 @@ export default function DataSasaranPage({
                             <div className="d-flex align-items-center justify-content-between mb-3">
                               <div>
                                 <span className="fw-bold text-dark fs-6 d-block mb-1">Riwayat Penyakit Keluarga</span>
+<<<<<<< HEAD
                                 <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                   Pilih jika ada anggota keluarga kandung yang memiliki riwayat penyakit
                                 </span>
@@ -1681,15 +3062,41 @@ export default function DataSasaranPage({
                                 }
                               >
                                 {categoryForm.riwayatKeluarga?.includes("Tidak Ada") ? "✓ Tidak Ada Riwayat" : "Tidak Ada Riwayat"}
+=======
+                                <span className="text-muted" style={{ fontSize: '0.78rem' }}>Pilih jika ada anggota keluarga kandung yang memiliki riwayat penyakit</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                className="btn btn-sm py-1.5 px-3 rounded-pill border transition-all"
+                                style={
+                                  categoryForm.riwayatKeluarga?.includes('Tidak Ada')
+                                    ? { backgroundColor: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 600, fontSize: '0.75rem' }
+                                    : { backgroundColor: '#ffffff', color: '#64748b', borderColor: '#cbd5e1', fontSize: '0.75rem' }
+                                }
+                                onClick={() => setCategoryForm({ 
+                                  ...categoryForm, 
+                                  riwayatKeluarga: categoryForm.riwayatKeluarga?.includes('Tidak Ada') ? [] : ['Tidak Ada'] 
+                                })}
+                              >
+                                {categoryForm.riwayatKeluarga?.includes('Tidak Ada') ? '✓ Tidak Ada Riwayat' : 'Tidak Ada Riwayat'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               </button>
                             </div>
                             <div className="d-flex flex-wrap gap-2 pt-1">
                               {[
+<<<<<<< HEAD
                                 { key: "Hipertensi", label: "a. Hipertensi" },
                                 { key: "DM", label: "b. DM" },
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
+=======
+                                { key: 'Hipertensi', label: 'a. Hipertensi' },
+                                { key: 'DM', label: 'b. DM' },
+                                { key: 'Stroke', label: 'c. Stroke' },
+                                { key: 'Jantung', label: 'd. Jantung' },
+                                { key: 'Asma', label: 'e. Asma' }
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               ].map(({ key, label }) => {
                                 const isSelected = categoryForm.riwayatKeluarga?.includes(key);
                                 return (
@@ -1699,6 +3106,7 @@ export default function DataSasaranPage({
                                     className="btn btn-sm rounded-pill px-3.5 py-1.5 border transition-all"
                                     style={
                                       isSelected
+<<<<<<< HEAD
                                         ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5", fontWeight: 600, fontSize: "0.8rem" }
                                         : { backgroundColor: "#ffffff", color: "#334155", borderColor: "#e2e8f0", fontSize: "0.8rem" }
                                     }
@@ -1710,6 +3118,18 @@ export default function DataSasaranPage({
                                   >
                                     {isSelected ? "✓ " : ""}
                                     {label}
+=======
+                                        ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5', fontWeight: 600, fontSize: '0.8rem' }
+                                        : { backgroundColor: '#ffffff', color: '#334155', borderColor: '#e2e8f0', fontSize: '0.8rem' }
+                                    }
+                                    onClick={() => {
+                                      const cur = (categoryForm.riwayatKeluarga || []).filter(x => x !== 'Tidak Ada');
+                                      const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+                                      setCategoryForm({ ...categoryForm, riwayatKeluarga: next });
+                                    }}
+                                  >
+                                    {isSelected ? '✓ ' : ''}{label}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                   </button>
                                 );
                               })}
@@ -1721,6 +3141,7 @@ export default function DataSasaranPage({
                             <div className="d-flex align-items-center justify-content-between mb-3">
                               <div>
                                 <span className="fw-bold text-dark fs-6 d-block mb-1">Riwayat Penyakit Diri Sendiri</span>
+<<<<<<< HEAD
                                 <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                   Pilih jika sasaran pernah/sedang didiagnosis riwayat penyakit
                                 </span>
@@ -1741,15 +3162,41 @@ export default function DataSasaranPage({
                                 }
                               >
                                 {categoryForm.riwayatDiriSendiri?.includes("Tidak Ada") ? "✓ Tidak Ada Riwayat" : "Tidak Ada Riwayat"}
+=======
+                                <span className="text-muted" style={{ fontSize: '0.78rem' }}>Pilih jika sasaran pernah/sedang didiagnosis riwayat penyakit</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                className="btn btn-sm py-1.5 px-3 rounded-pill border transition-all"
+                                style={
+                                  categoryForm.riwayatDiriSendiri?.includes('Tidak Ada')
+                                    ? { backgroundColor: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 600, fontSize: '0.75rem' }
+                                    : { backgroundColor: '#ffffff', color: '#64748b', borderColor: '#cbd5e1', fontSize: '0.75rem' }
+                                }
+                                onClick={() => setCategoryForm({ 
+                                  ...categoryForm, 
+                                  riwayatDiriSendiri: categoryForm.riwayatDiriSendiri?.includes('Tidak Ada') ? [] : ['Tidak Ada'] 
+                                })}
+                              >
+                                {categoryForm.riwayatDiriSendiri?.includes('Tidak Ada') ? '✓ Tidak Ada Riwayat' : 'Tidak Ada Riwayat'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               </button>
                             </div>
                             <div className="d-flex flex-wrap gap-2 pt-1">
                               {[
+<<<<<<< HEAD
                                 { key: "Hipertensi", label: "a. Hipertensi" },
                                 { key: "DM", label: "b. DM" },
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
+=======
+                                { key: 'Hipertensi', label: 'a. Hipertensi' },
+                                { key: 'DM', label: 'b. DM' },
+                                { key: 'Stroke', label: 'c. Stroke' },
+                                { key: 'Jantung', label: 'd. Jantung' },
+                                { key: 'Asma', label: 'e. Asma' }
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               ].map(({ key, label }) => {
                                 const isSelected = categoryForm.riwayatDiriSendiri?.includes(key);
                                 return (
@@ -1759,6 +3206,7 @@ export default function DataSasaranPage({
                                     className="btn btn-sm rounded-pill px-3.5 py-1.5 border transition-all"
                                     style={
                                       isSelected
+<<<<<<< HEAD
                                         ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5", fontWeight: 600, fontSize: "0.8rem" }
                                         : { backgroundColor: "#ffffff", color: "#334155", borderColor: "#e2e8f0", fontSize: "0.8rem" }
                                     }
@@ -1770,6 +3218,18 @@ export default function DataSasaranPage({
                                   >
                                     {isSelected ? "✓ " : ""}
                                     {label}
+=======
+                                        ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5', fontWeight: 600, fontSize: '0.8rem' }
+                                        : { backgroundColor: '#ffffff', color: '#334155', borderColor: '#e2e8f0', fontSize: '0.8rem' }
+                                    }
+                                    onClick={() => {
+                                      const cur = (categoryForm.riwayatDiriSendiri || []).filter(x => x !== 'Tidak Ada');
+                                      const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+                                      setCategoryForm({ ...categoryForm, riwayatDiriSendiri: next });
+                                    }}
+                                  >
+                                    {isSelected ? '✓ ' : ''}{label}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                   </button>
                                 );
                               })}
@@ -1780,6 +3240,7 @@ export default function DataSasaranPage({
                           <div className="pt-1">
                             <div className="mb-3">
                               <span className="fw-bold text-dark fs-6 d-block mb-1">Perilaku Berisiko Diri Sendiri</span>
+<<<<<<< HEAD
                               <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                 Evaluasi faktor risiko pola konsumsi &amp; kebiasaan harian
                               </span>
@@ -1804,11 +3265,34 @@ export default function DataSasaranPage({
                                       <span className="text-dark fw-medium pe-2" style={{ fontSize: "0.85rem" }}>
                                         {label}
                                       </span>
+=======
+                              <span className="text-muted" style={{ fontSize: '0.78rem' }}>Evaluasi faktor risiko pola konsumsi &amp; kebiasaan harian</span>
+                            </div>
+                            <div className="row g-3">
+                              {[
+                                { key: 'merokok', label: 'a. Merokok' },
+                                { key: 'tinggiGula', label: 'b. Konsumsi Tinggi Gula' },
+                                { key: 'tinggiGaram', label: 'c. Konsumsi Tinggi Garam' },
+                                { key: 'tinggiLemak', label: 'd. Konsumsi Tinggi Lemak' }
+                              ].map(({ key, label }) => {
+                                const val = categoryForm.perilakuBerisikoDewasa?.[key] || 'Tidak';
+                                return (
+                                  <div className="col-12 col-md-6" key={key}>
+                                    <div 
+                                      className="p-3 px-3.5 rounded-3 d-flex align-items-center justify-content-between h-100 transition-all"
+                                      style={{
+                                        backgroundColor: val === 'Ya' ? '#fff1f2' : '#f8fafc',
+                                        border: val === 'Ya' ? '1px solid #fecdd3' : '1px solid #e2e8f0'
+                                      }}
+                                    >
+                                      <span className="text-dark fw-medium pe-2" style={{ fontSize: '0.85rem' }}>{label}</span>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                       <div className="btn-group btn-group-sm rounded-pill p-0.5 bg-white border flex-shrink-0" role="group">
                                         <button
                                           type="button"
                                           className="btn btn-sm px-3 py-1 rounded-pill border-0 transition-all"
                                           style={
+<<<<<<< HEAD
                                             val === "Ya"
                                               ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600, fontSize: "0.75rem", minWidth: "46px" }
                                               : { backgroundColor: "transparent", color: "#64748b", fontSize: "0.75rem", minWidth: "46px" }
@@ -1822,6 +3306,19 @@ export default function DataSasaranPage({
                                               },
                                             })
                                           }
+=======
+                                            val === 'Ya'
+                                              ? { backgroundColor: '#fee2e2', color: '#991b1b', fontWeight: 600, fontSize: '0.75rem', minWidth: '46px' }
+                                              : { backgroundColor: 'transparent', color: '#64748b', fontSize: '0.75rem', minWidth: '46px' }
+                                          }
+                                          onClick={() => setCategoryForm({
+                                            ...categoryForm,
+                                            perilakuBerisikoDewasa: {
+                                              ...(categoryForm.perilakuBerisikoDewasa || {}),
+                                              [key]: 'Ya'
+                                            }
+                                          })}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                         >
                                           Ya
                                         </button>
@@ -1829,6 +3326,7 @@ export default function DataSasaranPage({
                                           type="button"
                                           className="btn btn-sm px-3 py-1 rounded-pill border-0 transition-all"
                                           style={
+<<<<<<< HEAD
                                             val === "Tidak"
                                               ? { backgroundColor: "#e2e8f0", color: "#334155", fontWeight: 600, fontSize: "0.75rem", minWidth: "46px" }
                                               : { backgroundColor: "transparent", color: "#64748b", fontSize: "0.75rem", minWidth: "46px" }
@@ -1842,6 +3340,19 @@ export default function DataSasaranPage({
                                               },
                                             })
                                           }
+=======
+                                            val === 'Tidak'
+                                              ? { backgroundColor: '#e2e8f0', color: '#334155', fontWeight: 600, fontSize: '0.75rem', minWidth: '46px' }
+                                              : { backgroundColor: 'transparent', color: '#64748b', fontSize: '0.75rem', minWidth: '46px' }
+                                          }
+                                          onClick={() => setCategoryForm({
+                                            ...categoryForm,
+                                            perilakuBerisikoDewasa: {
+                                              ...(categoryForm.perilakuBerisikoDewasa || {}),
+                                              [key]: 'Tidak'
+                                            }
+                                          })}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                         >
                                           Tidak
                                         </button>
@@ -1872,6 +3383,10 @@ export default function DataSasaranPage({
         </Modal>
       )}
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       {/* ========================================================================= */}
       {/* MODAL 3: STEP 1 - SASARAN MUTASI (CEK DATA) */}
       {/* ========================================================================= */}
@@ -1895,12 +3410,24 @@ export default function DataSasaranPage({
 
             <div className="mb-3">
               <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
+<<<<<<< HEAD
               <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={mutasiCheckForm.nama} onChange={(e) => setMutasiCheckForm({ ...mutasiCheckForm, nama: e.target.value })} required />
+=======
+              <input 
+                type="text" 
+                className="form-control form-control-custom"
+                placeholder="Masukkan nama lengkap"
+                value={mutasiCheckForm.nama}
+                onChange={(e) => setMutasiCheckForm({ ...mutasiCheckForm, nama: e.target.value })}
+                required
+              />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             </div>
 
             <div className="mb-3">
               <div className="d-flex justify-content-between align-items-center mb-1">
                 <label className="form-label fw-medium small mb-0">Nomor Induk Kependudukan (NIK)</label>
+<<<<<<< HEAD
                 <span className={`small ${mutasiCheckForm.nik?.length === 16 ? "text-success fw-bold" : "text-muted"}`} style={{ fontSize: "0.75rem" }}>
                   {mutasiCheckForm.nik?.length || 0}/16 Digit
                 </span>
@@ -1909,13 +3436,27 @@ export default function DataSasaranPage({
                 type="text"
                 maxLength={16}
                 className={`form-control form-control-custom ${mutasiCheckForm.nik && mutasiCheckForm.nik.length !== 16 ? "is-invalid" : ""}`}
+=======
+                <span className={`small ${mutasiCheckForm.nik?.length === 16 ? 'text-success fw-bold' : 'text-muted'}`} style={{ fontSize: '0.75rem' }}>
+                  {mutasiCheckForm.nik?.length || 0}/16 Digit
+                </span>
+              </div>
+              <input 
+                type="text" 
+                maxLength={16}
+                className={`form-control form-control-custom ${mutasiCheckForm.nik && mutasiCheckForm.nik.length !== 16 ? 'is-invalid' : ''}`}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 placeholder="Masukkan 16 digit NIK"
                 value={mutasiCheckForm.nik}
                 onChange={(e) => setMutasiCheckForm({ ...mutasiCheckForm, nik: formatNikInput(e.target.value) })}
                 required
               />
               {mutasiCheckForm.nik && mutasiCheckForm.nik.length !== 16 && (
+<<<<<<< HEAD
                 <div className="invalid-feedback" style={{ fontSize: "0.74rem" }}>
+=======
+                <div className="invalid-feedback" style={{ fontSize: '0.74rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   NIK harus 16 digit angka (kurang {16 - mutasiCheckForm.nik.length} digit lagi).
                 </div>
               )}
@@ -1923,8 +3464,13 @@ export default function DataSasaranPage({
 
             <div className="mb-4">
               <label className="form-label fw-medium small mb-1">Nama Ibu</label>
+<<<<<<< HEAD
               <input
                 type="text"
+=======
+              <input 
+                type="text" 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 className="form-control form-control-custom"
                 placeholder="Masukkan nama ibu kandung"
                 value={mutasiCheckForm.namaIbu}
@@ -1945,6 +3491,10 @@ export default function DataSasaranPage({
         </form>
       </Modal>
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       {/* ========================================================================= */}
       {/* MODAL 3.5: STEP 1.5 - VERIFIKASI DATA SEBELUM MUTASI */}
       {/* ========================================================================= */}
@@ -1968,6 +3518,7 @@ export default function DataSasaranPage({
           <div className="p-3 bg-light rounded-3 border mb-4">
             <div className="row g-2.5 small">
               <div className="col-12 pb-2 border-bottom">
+<<<<<<< HEAD
                 <span className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
                   Nama Lengkap
                 </span>
@@ -1996,14 +3547,40 @@ export default function DataSasaranPage({
                   Posyandu Sebelum Mutasi
                 </span>
                 <span className="fw-semibold text-dark">{mutasiCheckForm.posyanduAsal || "-"}</span>
+=======
+                <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>Nama Lengkap</span>
+                <span className="fw-bold text-dark fs-6">{mutasiCheckForm.nama || '-'}</span>
+              </div>
+              <div className="col-6 pt-1">
+                <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>NIK</span>
+                <span className="fw-bold font-monospace text-dark">{mutasiCheckForm.nik || '-'}</span>
+              </div>
+              <div className="col-6 pt-1">
+                <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>Nama Ibu Kandung</span>
+                <span className="fw-bold text-dark">{mutasiCheckForm.namaIbu || '-'}</span>
+              </div>
+              <div className="col-12 pt-2 border-top">
+                <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>Alamat</span>
+                <span className="fw-semibold text-dark">{mutasiCheckForm.alamat || mutasiCheckForm.alamatAsal || 'Jl. Melati No. 12, RW 04, Desa Sukamaju'}</span>
+              </div>
+              <div className="col-12 pt-2 border-top">
+                <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>Posyandu Sebelum Mutasi</span>
+                <span className="fw-semibold text-dark">{mutasiCheckForm.posyanduAsal || 'Posyandu Melati RW 04'}</span>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               </div>
             </div>
           </div>
 
           <div className="d-flex justify-content-end gap-2 pt-2 border-top">
+<<<<<<< HEAD
             <button
               type="button"
               className="btn btn-outline-secondary px-3 py-2"
+=======
+            <button 
+              type="button" 
+              className="btn btn-outline-secondary px-3 py-2" 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               onClick={() => {
                 setShowMutasiVerifyModal(false);
                 setShowMutasiCheckModal(true);
@@ -2011,7 +3588,16 @@ export default function DataSasaranPage({
             >
               Cek Ulang
             </button>
+<<<<<<< HEAD
             <button type="button" className="btn btn-dark-custom px-4 py-2 fw-semibold text-white" style={{ backgroundColor: "#2b2e4a", borderColor: "#2b2e4a" }} onClick={handleConfirmMutasiVerification}>
+=======
+            <button 
+              type="button" 
+              className="btn btn-dark-custom px-4 py-2 fw-semibold text-white"
+              style={{ backgroundColor: '#2b2e4a', borderColor: '#2b2e4a' }}
+              onClick={handleConfirmMutasiVerification}
+            >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               Lanjutkan
             </button>
           </div>
@@ -2044,22 +3630,55 @@ export default function DataSasaranPage({
               <div className="col-md-6">
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
+<<<<<<< HEAD
                   <input type="text" className="form-control form-control-custom" value={mutasiForm.nama} onChange={(e) => setMutasiForm({ ...mutasiForm, nama: e.target.value })} required />
+=======
+                  <input 
+                    type="text" 
+                    className="form-control form-control-custom"
+                    value={mutasiForm.nama}
+                    onChange={(e) => setMutasiForm({ ...mutasiForm, nama: e.target.value })}
+                    required
+                  />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 </div>
 
                 <div className="mb-3">
                   <div className="d-flex justify-content-between align-items-center mb-1">
                     <label className="form-label fw-medium small mb-0">Nomor Induk Kependudukan (NIK)</label>
+<<<<<<< HEAD
                     <span className={`small ${mutasiForm.nik?.length === 16 ? "text-success fw-bold" : "text-muted"}`} style={{ fontSize: "0.75rem" }}>
                       {mutasiForm.nik?.length || 0}/16 Digit
                     </span>
                   </div>
                   <input type="text" maxLength={16} className="form-control form-control-custom font-monospace" value={mutasiForm.nik} onChange={(e) => setMutasiForm({ ...mutasiForm, nik: formatNikInput(e.target.value) })} required />
+=======
+                    <span className={`small ${mutasiForm.nik?.length === 16 ? 'text-success fw-bold' : 'text-muted'}`} style={{ fontSize: '0.75rem' }}>
+                      {mutasiForm.nik?.length || 0}/16 Digit
+                    </span>
+                  </div>
+                  <input 
+                    type="text" 
+                    maxLength={16}
+                    className="form-control form-control-custom font-monospace"
+                    value={mutasiForm.nik}
+                    onChange={(e) => setMutasiForm({ ...mutasiForm, nik: formatNikInput(e.target.value) })}
+                    required
+                  />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 </div>
 
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Jenis Kelamin</label>
+<<<<<<< HEAD
                   <select className="form-select form-select-custom" value={mutasiForm.gender} onChange={(e) => setMutasiForm({ ...mutasiForm, gender: e.target.value })}>
+=======
+                  <select 
+                    className="form-select form-select-custom"
+                    value={mutasiForm.gender}
+                    onChange={(e) => setMutasiForm({ ...mutasiForm, gender: e.target.value })}
+                  >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     <option value="Laki-laki">Laki-laki</option>
                     <option value="Perempuan">Perempuan</option>
                   </select>
@@ -2067,12 +3686,42 @@ export default function DataSasaranPage({
 
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Status Pernikahan</label>
+<<<<<<< HEAD
                   <input type="text" className="form-control form-control-custom" value={mutasiForm.statusPernikahan} onChange={(e) => setMutasiForm({ ...mutasiForm, statusPernikahan: e.target.value })} />
+=======
+                  <input 
+                    type="text" 
+                    className="form-control form-control-custom"
+                    value={mutasiForm.statusPernikahan}
+                    onChange={(e) => setMutasiForm({ ...mutasiForm, statusPernikahan: e.target.value })}
+                  />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 </div>
 
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Pekerjaan</label>
+<<<<<<< HEAD
                   <input type="text" className="form-control form-control-custom" value={mutasiForm.pekerjaan} onChange={(e) => setMutasiForm({ ...mutasiForm, pekerjaan: e.target.value })} />
+=======
+                  <input 
+                    type="text" 
+                    className="form-control form-control-custom"
+                    value={mutasiForm.pekerjaan}
+                    onChange={(e) => setMutasiForm({ ...mutasiForm, pekerjaan: e.target.value })}
+                  />
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-medium small mb-1">Status Sasaran</label>
+                  <select 
+                    className="form-select form-select-custom"
+                    value={mutasiForm.status}
+                    onChange={(e) => setMutasiForm({ ...mutasiForm, status: e.target.value })}
+                  >
+                    <option value="Aktif">Aktif</option>
+                    <option value="Non-Aktif">Non-Aktif</option>
+                  </select>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 </div>
               </div>
 
@@ -2080,9 +3729,15 @@ export default function DataSasaranPage({
               <div className="col-md-6">
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
+<<<<<<< HEAD
                   <input
                     type="date"
                     max={new Date().toISOString().split("T")[0]}
+=======
+                  <input 
+                    type="date" 
+                    max={new Date().toISOString().split('T')[0]}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     className="form-control form-control-custom"
                     value={mutasiForm.tglLahir}
                     onChange={(e) => setMutasiForm({ ...mutasiForm, tglLahir: e.target.value })}
@@ -2092,13 +3747,28 @@ export default function DataSasaranPage({
 
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Nama Ibu</label>
+<<<<<<< HEAD
                   <input type="text" className="form-control form-control-custom" value={mutasiForm.namaIbu} onChange={(e) => setMutasiForm({ ...mutasiForm, namaIbu: e.target.value })} required />
+=======
+                  <input 
+                    type="text" 
+                    className="form-control form-control-custom"
+                    value={mutasiForm.namaIbu}
+                    onChange={(e) => setMutasiForm({ ...mutasiForm, namaIbu: e.target.value })}
+                    required
+                  />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 </div>
 
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Nomor Telepon / WhatsApp</label>
+<<<<<<< HEAD
                   <input
                     type="text"
+=======
+                  <input 
+                    type="text" 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     maxLength={15}
                     className="form-control form-control-custom"
                     placeholder="0812xxxxxxxx"
@@ -2109,8 +3779,15 @@ export default function DataSasaranPage({
 
                 {/* Alamat Domisili Baru (Sesuai gambar, tanpa teks pink dan tanpa teks dukcapil) */}
                 <div className="mb-3">
+<<<<<<< HEAD
                   <label className="form-label fw-medium small mb-1">Alamat Domisili Baru</label>
                   <textarea
+=======
+                  <label className="form-label fw-medium small mb-1">
+                    Alamat Domisili Baru
+                  </label>
+                  <textarea 
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     className="form-control form-control-custom"
                     rows="6"
                     placeholder="Masukkan alamat domisili baru..."
@@ -2134,9 +3811,23 @@ export default function DataSasaranPage({
         </form>
       </Modal>
 
+<<<<<<< HEAD
       {/* Harmonized Detail Modal */}
       {showDetailModal && selectedSasaran && (
         <DetailSasaranModal show={showDetailModal} onClose={() => setShowDetailModal(false)} onHide={() => setShowDetailModal(false)} selectedSasaran={selectedSasaran} theme="kader" themeColor="#2b2e4a" />
+=======
+
+      {/* Harmonized Detail Modal */}
+      {showDetailModal && selectedSasaran && (
+        <DetailSasaranModal 
+          show={showDetailModal} 
+          onClose={() => setShowDetailModal(false)} 
+          onHide={() => setShowDetailModal(false)} 
+          selectedSasaran={selectedSasaran} 
+          theme="kader"
+          themeColor="#2b2e4a" 
+        />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       )}
 
       {/* Edit Modal */}
@@ -2162,17 +3853,32 @@ export default function DataSasaranPage({
               {/* PERCABANGAN 3 VARIASI FORM EDIT SESUAI GAMBAR 1, 2, 3 */}
 
               {/* 1. EDIT IBU HAMIL (GAMBAR 2) */}
+<<<<<<< HEAD
               {selectedSasaran.kategori?.toLowerCase().includes("bumil") ? (
+=======
+              {selectedSasaran.kategori?.toLowerCase().includes('bumil') ? (
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 <div className="row g-3 mb-4">
                   {/* Kolom Kiri */}
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" value={selectedSasaran.nama || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nama: e.target.value })} required />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.nama || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nama: e.target.value })}
+                        required
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
                     <div className="mb-3">
                       <div className="d-flex justify-content-between align-items-center mb-1">
                         <label className="form-label fw-medium small mb-0">Nomor Induk Kependudukan (NIK)</label>
+<<<<<<< HEAD
                         <span className={`small ${selectedSasaran.nik?.length === 16 ? "text-success fw-bold" : "text-muted"}`} style={{ fontSize: "0.75rem" }}>
                           {selectedSasaran.nik?.length || 0}/16 Digit
                         </span>
@@ -2187,38 +3893,121 @@ export default function DataSasaranPage({
                       />
                       {selectedSasaran.nik && selectedSasaran.nik.length !== 16 && (
                         <div className="invalid-feedback" style={{ fontSize: "0.74rem" }}>
+=======
+                        <span className={`small ${selectedSasaran.nik?.length === 16 ? 'text-success fw-bold' : 'text-muted'}`} style={{ fontSize: '0.75rem' }}>
+                          {selectedSasaran.nik?.length || 0}/16 Digit
+                        </span>
+                      </div>
+                      <input 
+                        type="text" 
+                        maxLength={16}
+                        className={`form-control form-control-custom ${selectedSasaran.nik && selectedSasaran.nik.length !== 16 ? 'is-invalid' : ''}`}
+                        placeholder="Masukkan 16 digit NIK"
+                        value={selectedSasaran.nik || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nik: formatNikInput(e.target.value) })}
+                      />
+                      {selectedSasaran.nik && selectedSasaran.nik.length !== 16 && (
+                        <div className="invalid-feedback" style={{ fontSize: '0.74rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           NIK harus 16 digit angka (kurang {16 - selectedSasaran.nik.length} digit lagi).
                         </div>
                       )}
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
+<<<<<<< HEAD
                       <input
                         type="date"
                         max={new Date().toISOString().split("T")[0]}
                         className="form-control form-control-custom"
                         value={selectedSasaran.tglLahir || ""}
+=======
+                      <input 
+                        type="date" 
+                        max={new Date().toISOString().split('T')[0]}
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.tglLahir || ''}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglLahir: e.target.value })}
                       />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nomor Telepon / WhatsApp</label>
+<<<<<<< HEAD
                       <input
                         type="text"
                         maxLength={15}
                         className="form-control form-control-custom"
                         placeholder="0812xxxxxxxx"
                         value={selectedSasaran.noHp || ""}
+=======
+                      <input 
+                        type="text" 
+                        maxLength={15}
+                        className="form-control form-control-custom"
+                        placeholder="0812xxxxxxxx"
+                        value={selectedSasaran.noHp || ''}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         onChange={(e) => setSelectedSasaran({ ...selectedSasaran, noHp: formatPhoneInput(e.target.value) })}
                       />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">HPHT (Hari Pertama Haid Terakhir)</label>
+<<<<<<< HEAD
                       <input type="date" className="form-control form-control-custom" value={selectedSasaran.hpht || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpht: e.target.value })} />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">HPL</label>
                       <input type="date" className="form-control form-control-custom" value={selectedSasaran.hpl || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpl: e.target.value })} />
+=======
+                      <input 
+                        type="date" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.hpht || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpht: e.target.value })}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">HPL</label>
+                      <input 
+                        type="date" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.hpl || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpl: e.target.value })}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <div className="row g-2">
+                        <div className="col-6">
+                          <label className="form-label fw-medium small mb-1">BB Sblm Hamil</label>
+                          <div className="input-group">
+                            <input 
+                              type="number" 
+                              step="0.1" 
+                              className="form-control form-control-custom"
+                              placeholder="50.0"
+                              value={selectedSasaran.bb ? String(selectedSasaran.bb).replace(/[^0-9.]/g, '') : ''}
+                              onChange={(e) => setSelectedSasaran({ ...selectedSasaran, bb: e.target.value })}
+                            />
+                            <span className="input-group-text bg-white border text-muted small">kg</span>
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <label className="form-label fw-medium small mb-1">Tinggi Badan (TB)</label>
+                          <div className="input-group">
+                            <input 
+                              type="number" 
+                              step="0.1" 
+                              className="form-control form-control-custom"
+                              placeholder="155.0"
+                              value={selectedSasaran.tb ? String(selectedSasaran.tb).replace(/[^0-9.]/g, '') : ''}
+                              onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tb: e.target.value })}
+                            />
+                            <span className="input-group-text bg-white border text-muted small">cm</span>
+                          </div>
+                        </div>
+                      </div>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
                   </div>
 
@@ -2226,15 +4015,23 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Ayah / Suami</label>
+<<<<<<< HEAD
                       <input
                         type="text"
                         className="form-control form-control-custom"
                         value={selectedSasaran.namaAyah || selectedSasaran.namaSuami || ""}
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.namaAyah || selectedSasaran.namaSuami || ''}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         onChange={(e) => setSelectedSasaran({ ...selectedSasaran, namaAyah: e.target.value, namaSuami: e.target.value })}
                       />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Anak ke-</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" value={selectedSasaran.anakKe || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, anakKe: e.target.value })} />
                     </div>
                     <div className="mb-3">
@@ -2242,6 +4039,20 @@ export default function DataSasaranPage({
                       <select
                         className="form-select form-select-custom"
                         value={selectedSasaran.jarakAnak || selectedSasaran.ibuHamilDetail?.obstetri?.jarakKehamilan || ""}
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.anakKe || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, anakKe: e.target.value })}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">Jarak anak sebelumnya</label>
+                      <select 
+                        className="form-select form-select-custom"
+                        value={selectedSasaran.jarakAnak || 'Anak Pertama'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         onChange={(e) => setSelectedSasaran({ ...selectedSasaran, jarakAnak: e.target.value })}
                       >
                         <option value="Anak Pertama">Anak Pertama</option>
@@ -2252,6 +4063,7 @@ export default function DataSasaranPage({
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Persalinan</label>
+<<<<<<< HEAD
                       <input type="date" className="form-control form-control-custom" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} />
                     </div>
                     <div className="mb-3">
@@ -2275,28 +4087,68 @@ export default function DataSasaranPage({
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Status Sasaran</label>
                       <select className="form-select form-select-custom" value={selectedSasaran.status || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, status: e.target.value })}>
+=======
+                      <input 
+                        type="date" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.tglPersalinan || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">Status Sasaran</label>
+                      <select 
+                        className="form-select form-select-custom"
+                        value={selectedSasaran.status || 'Aktif'}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, status: e.target.value })}
+                      >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         <option value="Aktif">Aktif</option>
                         <option value="Non-Aktif">Non-Aktif</option>
                       </select>
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
+<<<<<<< HEAD
                       <textarea className="form-control form-control-custom" rows="2" value={selectedSasaran.alamat || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, alamat: e.target.value })}></textarea>
                     </div>
                   </div>
                 </div>
               ) : selectedSasaran.kategori?.toLowerCase().includes("bayi") ? (
+=======
+                      <textarea 
+                        className="form-control form-control-custom"
+                        rows="2"
+                        value={selectedSasaran.alamat || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, alamat: e.target.value })}
+                      ></textarea>
+                    </div>
+                  </div>
+                </div>
+              ) : selectedSasaran.kategori?.toLowerCase().includes('bayi') ? (
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 /* 2. EDIT BAYI 0-11 BULAN (GAMBAR 3) */
                 <div className="row g-3 mb-4">
                   {/* Kolom Kiri */}
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" value={selectedSasaran.nama || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nama: e.target.value })} required />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.nama || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nama: e.target.value })}
+                        required
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
                     <div className="mb-3">
                       <div className="d-flex justify-content-between align-items-center mb-1">
                         <label className="form-label fw-medium small mb-0">Nomor Induk Kependudukan (NIK)</label>
+<<<<<<< HEAD
                         <span className={`small ${selectedSasaran.nik?.length === 16 ? "text-success fw-bold" : "text-muted"}`} style={{ fontSize: "0.75rem" }}>
                           {selectedSasaran.nik?.length || 0}/16 Digit
                         </span>
@@ -2311,13 +4163,37 @@ export default function DataSasaranPage({
                       />
                       {selectedSasaran.nik && selectedSasaran.nik.length !== 16 && (
                         <div className="invalid-feedback" style={{ fontSize: "0.74rem" }}>
+=======
+                        <span className={`small ${selectedSasaran.nik?.length === 16 ? 'text-success fw-bold' : 'text-muted'}`} style={{ fontSize: '0.75rem' }}>
+                          {selectedSasaran.nik?.length || 0}/16 Digit
+                        </span>
+                      </div>
+                      <input 
+                        type="text" 
+                        maxLength={16}
+                        className={`form-control form-control-custom ${selectedSasaran.nik && selectedSasaran.nik.length !== 16 ? 'is-invalid' : ''}`}
+                        placeholder="Masukkan 16 digit NIK"
+                        value={selectedSasaran.nik || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nik: formatNikInput(e.target.value) })}
+                      />
+                      {selectedSasaran.nik && selectedSasaran.nik.length !== 16 && (
+                        <div className="invalid-feedback" style={{ fontSize: '0.74rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           NIK harus 16 digit angka (kurang {16 - selectedSasaran.nik.length} digit lagi).
                         </div>
                       )}
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Jenis Kelamin</label>
+<<<<<<< HEAD
                       <select className="form-select form-select-custom" value={selectedSasaran.gender || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, gender: e.target.value })}>
+=======
+                      <select 
+                        className="form-select form-select-custom"
+                        value={selectedSasaran.gender || 'Perempuan'}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, gender: e.target.value })}
+                      >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         <option value="Laki-laki">Laki-laki</option>
                         <option value="Perempuan">Perempuan</option>
                       </select>
@@ -2326,23 +4202,39 @@ export default function DataSasaranPage({
                       <div className="row g-2">
                         <div className="col-6">
                           <label className="form-label fw-medium small mb-1">Berat Lahir (BBL)</label>
+<<<<<<< HEAD
                           <input
                             type="number"
                             step="0.1"
                             className="form-control form-control-custom"
                             placeholder="BBL (kg)"
                             value={selectedSasaran.bbl ? selectedSasaran.bbl.toString().replace(/[^0-9.]/g, "") : selectedSasaran.bb || ""}
+=======
+                          <input 
+                            type="number" step="0.1" 
+                            className="form-control form-control-custom"
+                            placeholder="BBL (kg)"
+                            value={selectedSasaran.bbl ? selectedSasaran.bbl.toString().replace(/[^0-9.]/g, '') : (selectedSasaran.bb || '')}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             onChange={(e) => setSelectedSasaran({ ...selectedSasaran, bbl: e.target.value, bb: e.target.value })}
                           />
                         </div>
                         <div className="col-6">
                           <label className="form-label fw-medium small mb-1">Panjang Lahir (PBL)</label>
+<<<<<<< HEAD
                           <input
                             type="number"
                             step="0.1"
                             className="form-control form-control-custom"
                             placeholder="PBL (cm)"
                             value={selectedSasaran.pbl ? selectedSasaran.pbl.toString().replace(/[^0-9.]/g, "") : selectedSasaran.tb || ""}
+=======
+                          <input 
+                            type="number" step="0.1" 
+                            className="form-control form-control-custom"
+                            placeholder="PBL (cm)"
+                            value={selectedSasaran.pbl ? selectedSasaran.pbl.toString().replace(/[^0-9.]/g, '') : (selectedSasaran.tb || '')}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             onChange={(e) => setSelectedSasaran({ ...selectedSasaran, pbl: e.target.value, tb: e.target.value })}
                           />
                         </div>
@@ -2350,7 +4242,15 @@ export default function DataSasaranPage({
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Status Sasaran</label>
+<<<<<<< HEAD
                       <select className="form-select form-select-custom" value={selectedSasaran.status || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, status: e.target.value })}>
+=======
+                      <select 
+                        className="form-select form-select-custom"
+                        value={selectedSasaran.status || 'Aktif'}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, status: e.target.value })}
+                      >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         <option value="Aktif">Aktif</option>
                         <option value="Non-Aktif">Non-Aktif</option>
                       </select>
@@ -2361,17 +4261,26 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
+<<<<<<< HEAD
                       <input
                         type="date"
                         max={new Date().toISOString().split("T")[0]}
                         className="form-control form-control-custom"
                         value={selectedSasaran.tglLahir || ""}
+=======
+                      <input 
+                        type="date" 
+                        max={new Date().toISOString().split('T')[0]}
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.tglLahir || ''}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglLahir: e.target.value })}
                         required
                       />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Ibu</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" value={selectedSasaran.namaIbu || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, namaIbu: e.target.value })} />
                     </div>
                     <div className="mb-3">
@@ -2381,6 +4290,32 @@ export default function DataSasaranPage({
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
                       <textarea className="form-control form-control-custom" rows="3" value={selectedSasaran.alamat || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, alamat: e.target.value })}></textarea>
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.namaIbu || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, namaIbu: e.target.value })}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">Nama Ayah</label>
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.namaAyah || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, namaAyah: e.target.value })}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
+                      <textarea 
+                        className="form-control form-control-custom"
+                        rows="3"
+                        value={selectedSasaran.alamat || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, alamat: e.target.value })}
+                      ></textarea>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
                   </div>
                 </div>
@@ -2391,11 +4326,22 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
+<<<<<<< HEAD
                       <input type="text" className="form-control form-control-custom" value={selectedSasaran.nama || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nama: e.target.value })} required />
+=======
+                      <input 
+                        type="text" 
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.nama || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nama: e.target.value })}
+                        required
+                      />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
                     <div className="mb-3">
                       <div className="d-flex justify-content-between align-items-center mb-1">
                         <label className="form-label fw-medium small mb-0">Nomor Induk Kependudukan (NIK)</label>
+<<<<<<< HEAD
                         <span className={`small ${selectedSasaran.nik?.length === 16 ? "text-success fw-bold" : "text-muted"}`} style={{ fontSize: "0.75rem" }}>
                           {selectedSasaran.nik?.length || 0}/16 Digit
                         </span>
@@ -2410,23 +4356,59 @@ export default function DataSasaranPage({
                       />
                       {selectedSasaran.nik && selectedSasaran.nik.length !== 16 && (
                         <div className="invalid-feedback" style={{ fontSize: "0.74rem" }}>
+=======
+                        <span className={`small ${selectedSasaran.nik?.length === 16 ? 'text-success fw-bold' : 'text-muted'}`} style={{ fontSize: '0.75rem' }}>
+                          {selectedSasaran.nik?.length || 0}/16 Digit
+                        </span>
+                      </div>
+                      <input 
+                        type="text" 
+                        maxLength={16}
+                        className={`form-control form-control-custom ${selectedSasaran.nik && selectedSasaran.nik.length !== 16 ? 'is-invalid' : ''}`}
+                        placeholder="Masukkan 16 digit NIK"
+                        value={selectedSasaran.nik || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, nik: formatNikInput(e.target.value) })}
+                      />
+                      {selectedSasaran.nik && selectedSasaran.nik.length !== 16 && (
+                        <div className="invalid-feedback" style={{ fontSize: '0.74rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           NIK harus 16 digit angka (kurang {16 - selectedSasaran.nik.length} digit lagi).
                         </div>
                       )}
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Jenis Kelamin</label>
+<<<<<<< HEAD
                       <select className="form-select form-select-custom" value={selectedSasaran.gender || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, gender: e.target.value })}>
+=======
+                      <select 
+                        className="form-select form-select-custom"
+                        value={selectedSasaran.gender || 'Perempuan'}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, gender: e.target.value })}
+                      >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         <option value="Laki-laki">Laki-laki</option>
                         <option value="Perempuan">Perempuan</option>
                       </select>
                     </div>
                     {/* Status Pernikahan & Pekerjaan (Dihapus untuk balita, apras, dan usekrem 6-14) */}
+<<<<<<< HEAD
                     {!["balita-12-59", "balita", "apras", "apras-60-72", "usekrem-6-14"].some((k) => (selectedSasaran.kategori || "").toLowerCase().includes(k) || (selectedSasaran.subKategori || "").toLowerCase().includes(k)) && (
                       <>
                         <div className="mb-3">
                           <label className="form-label fw-medium small mb-1">Status Pernikahan</label>
                           <select className="form-select form-select-custom" value={selectedSasaran.statusPernikahan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, statusPernikahan: e.target.value })}>
+=======
+                    {!['balita-12-59', 'balita', 'apras', 'apras-60-72', 'usekrem-6-14'].some(k => (selectedSasaran.kategori || '').toLowerCase().includes(k) || (selectedSasaran.subKategori || '').toLowerCase().includes(k)) && (
+                      <>
+                        <div className="mb-3">
+                          <label className="form-label fw-medium small mb-1">Status Pernikahan</label>
+                          <select 
+                            className="form-select form-select-custom"
+                            value={selectedSasaran.statusPernikahan || 'Belum Menikah'}
+                            onChange={(e) => setSelectedSasaran({ ...selectedSasaran, statusPernikahan: e.target.value })}
+                          >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             <option value="Belum Menikah">Belum Menikah</option>
                             <option value="Menikah">Menikah</option>
                             <option value="Cerai Hidup">Cerai Hidup</option>
@@ -2435,7 +4417,15 @@ export default function DataSasaranPage({
                         </div>
                         <div className="mb-3">
                           <label className="form-label fw-medium small mb-1">Pekerjaan</label>
+<<<<<<< HEAD
                           <select className="form-select form-select-custom" value={selectedSasaran.pekerjaan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, pekerjaan: e.target.value })}>
+=======
+                          <select 
+                            className="form-select form-select-custom"
+                            value={selectedSasaran.pekerjaan || ''}
+                            onChange={(e) => setSelectedSasaran({ ...selectedSasaran, pekerjaan: e.target.value })}
+                          >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             <option value="">Pilih pekerjaan</option>
                             <option value="Tidak Bekerja / Pelajar">Tidak Bekerja / Pelajar</option>
                             <option value="Ibu Rumah Tangga">Ibu Rumah Tangga</option>
@@ -2451,6 +4441,7 @@ export default function DataSasaranPage({
                     )}
 
                     {/* KHUSUS NIFAS / MENYUSUI: DITAMBAHKAN SATU FIELD STATUS MENYUSUI */}
+<<<<<<< HEAD
                     {selectedSasaran.kategori?.toLowerCase().includes("nifas") && (
                       <>
                         <div className="mb-3">
@@ -2473,11 +4464,33 @@ export default function DataSasaranPage({
                           </select>
                         </div>
                       </>
+=======
+                    {selectedSasaran.kategori?.toLowerCase().includes('nifas') && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold text-primary small mb-1">Status Menyusui</label>
+                        <select 
+                          className="form-select form-select-custom border-primary"
+                          value={selectedSasaran.statusMenyusui || 'Masih Menyusui'}
+                          onChange={(e) => setSelectedSasaran({ ...selectedSasaran, statusMenyusui: e.target.value })}
+                        >
+                          <option value="Masih Menyusui">Masih Menyusui</option>
+                          <option value="Sudah Tidak Menyusui">Sudah Tidak Menyusui</option>
+                        </select>
+                      </div>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     )}
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Status Sasaran</label>
+<<<<<<< HEAD
                       <select className="form-select form-select-custom" value={selectedSasaran.status || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, status: e.target.value })}>
+=======
+                      <select 
+                        className="form-select form-select-custom"
+                        value={selectedSasaran.status || 'Aktif'}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, status: e.target.value })}
+                      >
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         <option value="Aktif">Aktif</option>
                         <option value="Non-Aktif">Non-Aktif</option>
                       </select>
@@ -2488,48 +4501,97 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
+<<<<<<< HEAD
                       <input
                         type="date"
                         max={new Date().toISOString().split("T")[0]}
                         className="form-control form-control-custom"
                         value={selectedSasaran.tglLahir || ""}
+=======
+                      <input 
+                        type="date" 
+                        max={new Date().toISOString().split('T')[0]}
+                        className="form-control form-control-custom"
+                        value={selectedSasaran.tglLahir || ''}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglLahir: e.target.value })}
                         required
                       />
                     </div>
+<<<<<<< HEAD
                     {!["dewasa", "lansia"].some((k) => (selectedSasaran.kategori || "").toLowerCase().includes(k) || (selectedSasaran.subKategori || "").toLowerCase().includes(k)) && (
                       <div className="mb-3">
                         <label className="form-label fw-medium small mb-1">Nama Ibu</label>
                         <input type="text" className="form-control form-control-custom" value={selectedSasaran.namaIbu || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, namaIbu: e.target.value })} />
+=======
+                    {!['dewasa', 'lansia'].some(k => (selectedSasaran.kategori || '').toLowerCase().includes(k) || (selectedSasaran.subKategori || '').toLowerCase().includes(k)) && (
+                      <div className="mb-3">
+                        <label className="form-label fw-medium small mb-1">Nama Ibu</label>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-custom"
+                          value={selectedSasaran.namaIbu || ''}
+                          onChange={(e) => setSelectedSasaran({ ...selectedSasaran, namaIbu: e.target.value })}
+                        />
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                       </div>
                     )}
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nomor Telepon / WhatsApp</label>
+<<<<<<< HEAD
                       <input
                         type="text"
                         maxLength={15}
                         className="form-control form-control-custom"
                         placeholder="0812xxxxxxxx"
                         value={selectedSasaran.noHp || ""}
+=======
+                      <input 
+                        type="text" 
+                        maxLength={15}
+                        className="form-control form-control-custom"
+                        placeholder="0812xxxxxxxx"
+                        value={selectedSasaran.noHp || ''}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                         onChange={(e) => setSelectedSasaran({ ...selectedSasaran, noHp: formatPhoneInput(e.target.value) })}
                       />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
+<<<<<<< HEAD
                       <textarea className="form-control form-control-custom" rows="3" value={selectedSasaran.alamat || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, alamat: e.target.value })}></textarea>
+=======
+                      <textarea 
+                        className="form-control form-control-custom"
+                        rows="3"
+                        value={selectedSasaran.alamat || ''}
+                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, alamat: e.target.value })}
+                      ></textarea>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     </div>
                   </div>
 
                   {/* KHUSUS USEKREM 6-14 & USEKREM 15-18: EDIT RIWAYAT KELUARGA & PERILAKU BERISIKO */}
+<<<<<<< HEAD
                   {["usekrem-6-14", "usekrem-15-18", "usekrem", "remaja"].some((k) => (selectedSasaran.kategori || "").toLowerCase().includes(k) || (selectedSasaran.subKategori || "").toLowerCase().includes(k)) && (
+=======
+                  {['usekrem-6-14', 'usekrem-15-18', 'usekrem', 'remaja'].some(k => (selectedSasaran.kategori || '').toLowerCase().includes(k) || (selectedSasaran.subKategori || '').toLowerCase().includes(k)) && (
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     <div className="col-12 mt-3">
                       <div className="card border shadow-sm rounded-4 overflow-hidden bg-white mb-2">
                         <div className="card-header bg-light bg-opacity-75 border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
                           <div className="d-flex align-items-center gap-2">
+<<<<<<< HEAD
                             <Activity size={18} style={{ color: "#be123c" }} />
                             <span className="fw-bold text-dark fs-6">Skrining Riwayat Penyakit &amp; Perilaku Berisiko</span>
                           </div>
                           <span className="badge bg-white border text-secondary fw-medium px-2.5 py-1 rounded-pill" style={{ fontSize: "0.72rem" }}>
+=======
+                            <Activity size={18} style={{ color: '#be123c' }} />
+                            <span className="fw-bold text-dark fs-6">Skrining Riwayat Penyakit &amp; Perilaku Berisiko</span>
+                          </div>
+                          <span className="badge bg-white border text-secondary fw-medium px-2.5 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             Kemenkes RI
                           </span>
                         </div>
@@ -2540,6 +4602,7 @@ export default function DataSasaranPage({
                             <div className="d-flex align-items-center justify-content-between mb-3">
                               <div>
                                 <span className="fw-bold text-dark fs-6 d-block mb-1">Riwayat Penyakit Keluarga</span>
+<<<<<<< HEAD
                                 <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                   Pilih jika ada anggota keluarga kandung yang memiliki riwayat penyakit
                                 </span>
@@ -2560,10 +4623,29 @@ export default function DataSasaranPage({
                                 }
                               >
                                 {(selectedSasaran.riwayatKeluarga || []).includes("Tidak Ada") ? "✓ Tidak Ada Riwayat" : "Tidak Ada Riwayat"}
+=======
+                                <span className="text-muted" style={{ fontSize: '0.78rem' }}>Pilih jika ada anggota keluarga kandung yang memiliki riwayat penyakit</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                className="btn btn-sm py-1.5 px-3 rounded-pill border transition-all"
+                                style={
+                                  (Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).includes('Tidak Ada')
+                                    ? { backgroundColor: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 600, fontSize: '0.75rem' }
+                                    : { backgroundColor: '#ffffff', color: '#64748b', borderColor: '#cbd5e1', fontSize: '0.75rem' }
+                                }
+                                onClick={() => setSelectedSasaran({ 
+                                  ...selectedSasaran, 
+                                  riwayatKeluarga: (Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).includes('Tidak Ada') ? [] : ['Tidak Ada'] 
+                                })}
+                              >
+                                {(Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).includes('Tidak Ada') ? '✓ Tidak Ada Riwayat' : 'Tidak Ada Riwayat'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               </button>
                             </div>
                             <div className="d-flex flex-wrap gap-2 pt-1">
                               {[
+<<<<<<< HEAD
                                 { key: "Hipertensi", label: "a. Hipertensi" },
                                 { key: "DM", label: "b. DM" },
                                 { key: "Stroke", label: "c. Stroke" },
@@ -2571,6 +4653,17 @@ export default function DataSasaranPage({
                                 { key: "Asma", label: "e. Asma" },
                               ].map(({ key, label }) => {
                                 const isSelected = (selectedSasaran.riwayatKeluarga || []).includes(key);
+=======
+                                { key: 'Hipertensi', label: 'a. Hipertensi' },
+                                { key: 'DM', label: 'b. DM' },
+                                { key: 'Stroke', label: 'c. Stroke' },
+                                { key: 'Jantung', label: 'd. Jantung' },
+                                { key: 'Asma', label: 'e. Asma' },
+                                { key: 'Kanker', label: 'f. Kanker' },
+                                { key: 'Kolesterol Tinggi', label: 'g. Kolesterol Tinggi' }
+                              ].map(({ key, label }) => {
+                                const isSelected = (Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).includes(key);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                 return (
                                   <button
                                     type="button"
@@ -2578,6 +4671,7 @@ export default function DataSasaranPage({
                                     className="btn btn-sm rounded-pill px-3.5 py-1.5 border transition-all"
                                     style={
                                       isSelected
+<<<<<<< HEAD
                                         ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5", fontWeight: 600, fontSize: "0.8rem" }
                                         : { backgroundColor: "#ffffff", color: "#334155", borderColor: "#e2e8f0", fontSize: "0.8rem" }
                                     }
@@ -2589,6 +4683,18 @@ export default function DataSasaranPage({
                                   >
                                     {isSelected ? "✓ " : ""}
                                     {label}
+=======
+                                        ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5', fontWeight: 600, fontSize: '0.8rem' }
+                                        : { backgroundColor: '#ffffff', color: '#334155', borderColor: '#e2e8f0', fontSize: '0.8rem' }
+                                    }
+                                    onClick={() => {
+                                      const cur = (Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).filter(x => x !== 'Tidak Ada');
+                                      const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+                                      setSelectedSasaran({ ...selectedSasaran, riwayatKeluarga: next });
+                                    }}
+                                  >
+                                    {isSelected ? '✓ ' : ''}{label}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                   </button>
                                 );
                               })}
@@ -2600,6 +4706,7 @@ export default function DataSasaranPage({
                             <div className="d-flex align-items-center justify-content-between mb-3">
                               <div>
                                 <span className="fw-bold text-dark fs-6 d-block mb-1">Perilaku Berisiko Diri</span>
+<<<<<<< HEAD
                                 <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                   Pilih jika sasaran memiliki riwayat penyakit atau faktor risiko
                                 </span>
@@ -2620,15 +4727,43 @@ export default function DataSasaranPage({
                                 }
                               >
                                 {(selectedSasaran.perilakuBerisiko || []).includes("Tidak Ada") ? "✓ Tidak Ada" : "Tidak Ada"}
+=======
+                                <span className="text-muted" style={{ fontSize: '0.78rem' }}>Pilih jika sasaran memiliki riwayat penyakit atau faktor risiko</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                className="btn btn-sm py-1.5 px-3 rounded-pill border transition-all"
+                                style={
+                                  (Array.isArray(selectedSasaran.perilakuBerisiko) ? selectedSasaran.perilakuBerisiko : []).includes('Tidak Ada')
+                                    ? { backgroundColor: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 600, fontSize: '0.75rem' }
+                                    : { backgroundColor: '#ffffff', color: '#64748b', borderColor: '#cbd5e1', fontSize: '0.75rem' }
+                                }
+                                onClick={() => setSelectedSasaran({ 
+                                  ...selectedSasaran, 
+                                  perilakuBerisiko: (Array.isArray(selectedSasaran.perilakuBerisiko) ? selectedSasaran.perilakuBerisiko : []).includes('Tidak Ada') ? [] : ['Tidak Ada'] 
+                                })}
+                              >
+                                {(Array.isArray(selectedSasaran.perilakuBerisiko) ? selectedSasaran.perilakuBerisiko : []).includes('Tidak Ada') ? '✓ Tidak Ada' : 'Tidak Ada'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               </button>
                             </div>
                             <div className="d-flex flex-wrap gap-2 pt-1">
                               {[
+<<<<<<< HEAD
                                 { key: "Hipertensi", label: "a. Hipertensi" },
                                 { key: "DM", label: "b. DM" },
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
+=======
+                                { key: 'Hipertensi', label: 'a. Hipertensi' },
+                                { key: 'DM', label: 'b. DM' },
+                                { key: 'Stroke', label: 'c. Stroke' },
+                                { key: 'Jantung', label: 'd. Jantung' },
+                                { key: 'Asma', label: 'e. Asma' },
+                                { key: 'Kanker', label: 'f. Kanker' },
+                                { key: 'Kolesterol Tinggi', label: 'g. Kolesterol Tinggi' }
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               ].map(({ key, label }) => {
                                 const isSelected = (Array.isArray(selectedSasaran.perilakuBerisiko) ? selectedSasaran.perilakuBerisiko : []).includes(key);
                                 return (
@@ -2638,6 +4773,7 @@ export default function DataSasaranPage({
                                     className="btn btn-sm rounded-pill px-3.5 py-1.5 border transition-all"
                                     style={
                                       isSelected
+<<<<<<< HEAD
                                         ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5", fontWeight: 600, fontSize: "0.8rem" }
                                         : { backgroundColor: "#ffffff", color: "#334155", borderColor: "#e2e8f0", fontSize: "0.8rem" }
                                     }
@@ -2649,6 +4785,18 @@ export default function DataSasaranPage({
                                   >
                                     {isSelected ? "✓ " : ""}
                                     {label}
+=======
+                                        ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5', fontWeight: 600, fontSize: '0.8rem' }
+                                        : { backgroundColor: '#ffffff', color: '#334155', borderColor: '#e2e8f0', fontSize: '0.8rem' }
+                                    }
+                                    onClick={() => {
+                                      const cur = (Array.isArray(selectedSasaran.perilakuBerisiko) ? selectedSasaran.perilakuBerisiko : []).filter(x => x !== 'Tidak Ada');
+                                      const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+                                      setSelectedSasaran({ ...selectedSasaran, perilakuBerisiko: next });
+                                    }}
+                                  >
+                                    {isSelected ? '✓ ' : ''}{label}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                   </button>
                                 );
                               })}
@@ -2660,15 +4808,26 @@ export default function DataSasaranPage({
                   )}
 
                   {/* KHUSUS DEWASA & LANSIA: EDIT RIWAYAT KELUARGA, DIRI SENDIRI & PERILAKU BERISIKO */}
+<<<<<<< HEAD
                   {["dewasa", "lansia"].some((k) => (selectedSasaran.kategori || "").toLowerCase().includes(k) || (selectedSasaran.subKategori || "").toLowerCase().includes(k)) && (
+=======
+                  {['dewasa', 'lansia'].some(k => (selectedSasaran.kategori || '').toLowerCase().includes(k) || (selectedSasaran.subKategori || '').toLowerCase().includes(k)) && (
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     <div className="col-12 mt-3">
                       <div className="card border shadow-sm rounded-4 overflow-hidden bg-white mb-2">
                         <div className="card-header bg-light bg-opacity-75 border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
                           <div className="d-flex align-items-center gap-2">
+<<<<<<< HEAD
                             <Activity size={18} style={{ color: "#be123c" }} />
                             <span className="fw-bold text-dark fs-6">Skrining Riwayat Penyakit &amp; Perilaku Berisiko</span>
                           </div>
                           <span className="badge bg-white border text-secondary fw-medium px-2.5 py-1 rounded-pill" style={{ fontSize: "0.72rem" }}>
+=======
+                            <Activity size={18} style={{ color: '#be123c' }} />
+                            <span className="fw-bold text-dark fs-6">Skrining Riwayat Penyakit &amp; Perilaku Berisiko</span>
+                          </div>
+                          <span className="badge bg-white border text-secondary fw-medium px-2.5 py-1 rounded-pill" style={{ fontSize: '0.72rem' }}>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                             Kemenkes RI
                           </span>
                         </div>
@@ -2679,6 +4838,7 @@ export default function DataSasaranPage({
                             <div className="d-flex align-items-center justify-content-between mb-3">
                               <div>
                                 <span className="fw-bold text-dark fs-6 d-block mb-1">Riwayat Penyakit Keluarga</span>
+<<<<<<< HEAD
                                 <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                   Pilih jika ada anggota keluarga kandung yang memiliki riwayat penyakit
                                 </span>
@@ -2699,10 +4859,29 @@ export default function DataSasaranPage({
                                 }
                               >
                                 {(selectedSasaran.riwayatKeluarga || []).includes("Tidak Ada") ? "✓ Tidak Ada Riwayat" : "Tidak Ada Riwayat"}
+=======
+                                <span className="text-muted" style={{ fontSize: '0.78rem' }}>Pilih jika ada anggota keluarga kandung yang memiliki riwayat penyakit</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                className="btn btn-sm py-1.5 px-3 rounded-pill border transition-all"
+                                style={
+                                  (Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).includes('Tidak Ada')
+                                    ? { backgroundColor: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 600, fontSize: '0.75rem' }
+                                    : { backgroundColor: '#ffffff', color: '#64748b', borderColor: '#cbd5e1', fontSize: '0.75rem' }
+                                }
+                                onClick={() => setSelectedSasaran({ 
+                                  ...selectedSasaran, 
+                                  riwayatKeluarga: (Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).includes('Tidak Ada') ? [] : ['Tidak Ada'] 
+                                })}
+                              >
+                                {(Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).includes('Tidak Ada') ? '✓ Tidak Ada Riwayat' : 'Tidak Ada Riwayat'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               </button>
                             </div>
                             <div className="d-flex flex-wrap gap-2 pt-1">
                               {[
+<<<<<<< HEAD
                                 { key: "Hipertensi", label: "a. Hipertensi" },
                                 { key: "DM", label: "b. DM" },
                                 { key: "Stroke", label: "c. Stroke" },
@@ -2710,6 +4889,15 @@ export default function DataSasaranPage({
                                 { key: "Asma", label: "e. Asma" },
                               ].map(({ key, label }) => {
                                 const isSelected = (selectedSasaran.riwayatKeluarga || []).includes(key);
+=======
+                                { key: 'Hipertensi', label: 'a. Hipertensi' },
+                                { key: 'DM', label: 'b. DM' },
+                                { key: 'Stroke', label: 'c. Stroke' },
+                                { key: 'Jantung', label: 'd. Jantung' },
+                                { key: 'Asma', label: 'e. Asma' }
+                              ].map(({ key, label }) => {
+                                const isSelected = (Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).includes(key);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                 return (
                                   <button
                                     type="button"
@@ -2717,6 +4905,7 @@ export default function DataSasaranPage({
                                     className="btn btn-sm rounded-pill px-3.5 py-1.5 border transition-all"
                                     style={
                                       isSelected
+<<<<<<< HEAD
                                         ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5", fontWeight: 600, fontSize: "0.8rem" }
                                         : { backgroundColor: "#ffffff", color: "#334155", borderColor: "#e2e8f0", fontSize: "0.8rem" }
                                     }
@@ -2728,6 +4917,18 @@ export default function DataSasaranPage({
                                   >
                                     {isSelected ? "✓ " : ""}
                                     {label}
+=======
+                                        ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5', fontWeight: 600, fontSize: '0.8rem' }
+                                        : { backgroundColor: '#ffffff', color: '#334155', borderColor: '#e2e8f0', fontSize: '0.8rem' }
+                                    }
+                                    onClick={() => {
+                                      const cur = (Array.isArray(selectedSasaran.riwayatKeluarga) ? selectedSasaran.riwayatKeluarga : []).filter(x => x !== 'Tidak Ada');
+                                      const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+                                      setSelectedSasaran({ ...selectedSasaran, riwayatKeluarga: next });
+                                    }}
+                                  >
+                                    {isSelected ? '✓ ' : ''}{label}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                   </button>
                                 );
                               })}
@@ -2739,6 +4940,7 @@ export default function DataSasaranPage({
                             <div className="d-flex align-items-center justify-content-between mb-3">
                               <div>
                                 <span className="fw-bold text-dark fs-6 d-block mb-1">Riwayat Penyakit Diri Sendiri</span>
+<<<<<<< HEAD
                                 <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                   Pilih jika sasaran pernah/sedang didiagnosis riwayat penyakit
                                 </span>
@@ -2759,10 +4961,29 @@ export default function DataSasaranPage({
                                 }
                               >
                                 {(selectedSasaran.riwayatDiriSendiri || []).includes("Tidak Ada") ? "✓ Tidak Ada Riwayat" : "Tidak Ada Riwayat"}
+=======
+                                <span className="text-muted" style={{ fontSize: '0.78rem' }}>Pilih jika sasaran pernah/sedang didiagnosis riwayat penyakit</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                className="btn btn-sm py-1.5 px-3 rounded-pill border transition-all"
+                                style={
+                                  (Array.isArray(selectedSasaran.riwayatDiriSendiri) ? selectedSasaran.riwayatDiriSendiri : []).includes('Tidak Ada')
+                                    ? { backgroundColor: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 600, fontSize: '0.75rem' }
+                                    : { backgroundColor: '#ffffff', color: '#64748b', borderColor: '#cbd5e1', fontSize: '0.75rem' }
+                                }
+                                onClick={() => setSelectedSasaran({ 
+                                  ...selectedSasaran, 
+                                  riwayatDiriSendiri: (Array.isArray(selectedSasaran.riwayatDiriSendiri) ? selectedSasaran.riwayatDiriSendiri : []).includes('Tidak Ada') ? [] : ['Tidak Ada'] 
+                                })}
+                              >
+                                {(Array.isArray(selectedSasaran.riwayatDiriSendiri) ? selectedSasaran.riwayatDiriSendiri : []).includes('Tidak Ada') ? '✓ Tidak Ada Riwayat' : 'Tidak Ada Riwayat'}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               </button>
                             </div>
                             <div className="d-flex flex-wrap gap-2 pt-1">
                               {[
+<<<<<<< HEAD
                                 { key: "Hipertensi", label: "a. Hipertensi" },
                                 { key: "DM", label: "b. DM" },
                                 { key: "Stroke", label: "c. Stroke" },
@@ -2770,6 +4991,15 @@ export default function DataSasaranPage({
                                 { key: "Asma", label: "e. Asma" },
                               ].map(({ key, label }) => {
                                 const isSelected = (selectedSasaran.riwayatDiriSendiri || []).includes(key);
+=======
+                                { key: 'Hipertensi', label: 'a. Hipertensi' },
+                                { key: 'DM', label: 'b. DM' },
+                                { key: 'Stroke', label: 'c. Stroke' },
+                                { key: 'Jantung', label: 'd. Jantung' },
+                                { key: 'Asma', label: 'e. Asma' }
+                              ].map(({ key, label }) => {
+                                const isSelected = (Array.isArray(selectedSasaran.riwayatDiriSendiri) ? selectedSasaran.riwayatDiriSendiri : []).includes(key);
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                 return (
                                   <button
                                     type="button"
@@ -2777,6 +5007,7 @@ export default function DataSasaranPage({
                                     className="btn btn-sm rounded-pill px-3.5 py-1.5 border transition-all"
                                     style={
                                       isSelected
+<<<<<<< HEAD
                                         ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5", fontWeight: 600, fontSize: "0.8rem" }
                                         : { backgroundColor: "#ffffff", color: "#334155", borderColor: "#e2e8f0", fontSize: "0.8rem" }
                                     }
@@ -2788,6 +5019,18 @@ export default function DataSasaranPage({
                                   >
                                     {isSelected ? "✓ " : ""}
                                     {label}
+=======
+                                        ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5', fontWeight: 600, fontSize: '0.8rem' }
+                                        : { backgroundColor: '#ffffff', color: '#334155', borderColor: '#e2e8f0', fontSize: '0.8rem' }
+                                    }
+                                    onClick={() => {
+                                      const cur = (Array.isArray(selectedSasaran.riwayatDiriSendiri) ? selectedSasaran.riwayatDiriSendiri : []).filter(x => x !== 'Tidak Ada');
+                                      const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+                                      setSelectedSasaran({ ...selectedSasaran, riwayatDiriSendiri: next });
+                                    }}
+                                  >
+                                    {isSelected ? '✓ ' : ''}{label}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                   </button>
                                 );
                               })}
@@ -2798,6 +5041,7 @@ export default function DataSasaranPage({
                           <div className="pt-1">
                             <div className="mb-3">
                               <span className="fw-bold text-dark fs-6 d-block mb-1">Perilaku Berisiko Diri Sendiri</span>
+<<<<<<< HEAD
                               <span className="text-muted" style={{ fontSize: "0.78rem" }}>
                                 Evaluasi faktor risiko pola konsumsi &amp; kebiasaan harian
                               </span>
@@ -2822,11 +5066,34 @@ export default function DataSasaranPage({
                                       <span className="text-dark fw-medium pe-2" style={{ fontSize: "0.85rem" }}>
                                         {label}
                                       </span>
+=======
+                              <span className="text-muted" style={{ fontSize: '0.78rem' }}>Evaluasi faktor risiko pola konsumsi &amp; kebiasaan harian</span>
+                            </div>
+                            <div className="row g-3">
+                              {[
+                                { key: 'merokok', label: 'a. Merokok' },
+                                { key: 'tinggiGula', label: 'b. Konsumsi Tinggi Gula' },
+                                { key: 'tinggiGaram', label: 'c. Konsumsi Tinggi Garam' },
+                                { key: 'tinggiLemak', label: 'd. Konsumsi Tinggi Lemak' }
+                              ].map(({ key, label }) => {
+                                const val = typeof selectedSasaran.perilakuBerisiko === 'object' && selectedSasaran.perilakuBerisiko?.[key] ? selectedSasaran.perilakuBerisiko[key] : 'Tidak';
+                                return (
+                                  <div className="col-12 col-md-6" key={key}>
+                                    <div 
+                                      className="p-3 px-3.5 rounded-3 d-flex align-items-center justify-content-between h-100 transition-all"
+                                      style={{
+                                        backgroundColor: val === 'Ya' ? '#fff1f2' : '#f8fafc',
+                                        border: val === 'Ya' ? '1px solid #fecdd3' : '1px solid #e2e8f0'
+                                      }}
+                                    >
+                                      <span className="text-dark fw-medium pe-2" style={{ fontSize: '0.85rem' }}>{label}</span>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                       <div className="btn-group btn-group-sm rounded-pill p-0.5 bg-white border flex-shrink-0" role="group">
                                         <button
                                           type="button"
                                           className="btn btn-sm px-3 py-1 rounded-pill border-0 transition-all"
                                           style={
+<<<<<<< HEAD
                                             val === "Ya"
                                               ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600, fontSize: "0.75rem", minWidth: "46px" }
                                               : { backgroundColor: "transparent", color: "#64748b", fontSize: "0.75rem", minWidth: "46px" }
@@ -2840,6 +5107,19 @@ export default function DataSasaranPage({
                                               },
                                             })
                                           }
+=======
+                                            val === 'Ya'
+                                              ? { backgroundColor: '#fee2e2', color: '#991b1b', fontWeight: 600, fontSize: '0.75rem', minWidth: '46px' }
+                                              : { backgroundColor: 'transparent', color: '#64748b', fontSize: '0.75rem', minWidth: '46px' }
+                                          }
+                                          onClick={() => setSelectedSasaran({
+                                            ...selectedSasaran,
+                                            perilakuBerisiko: {
+                                              ...(typeof selectedSasaran.perilakuBerisiko === 'object' ? selectedSasaran.perilakuBerisiko : {}),
+                                              [key]: 'Ya'
+                                            }
+                                          })}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                         >
                                           Ya
                                         </button>
@@ -2847,6 +5127,7 @@ export default function DataSasaranPage({
                                           type="button"
                                           className="btn btn-sm px-3 py-1 rounded-pill border-0 transition-all"
                                           style={
+<<<<<<< HEAD
                                             val === "Tidak"
                                               ? { backgroundColor: "#e2e8f0", color: "#334155", fontWeight: 600, fontSize: "0.75rem", minWidth: "46px" }
                                               : { backgroundColor: "transparent", color: "#64748b", fontSize: "0.75rem", minWidth: "46px" }
@@ -2860,6 +5141,19 @@ export default function DataSasaranPage({
                                               },
                                             })
                                           }
+=======
+                                            val === 'Tidak'
+                                              ? { backgroundColor: '#e2e8f0', color: '#334155', fontWeight: 600, fontSize: '0.75rem', minWidth: '46px' }
+                                              : { backgroundColor: 'transparent', color: '#64748b', fontSize: '0.75rem', minWidth: '46px' }
+                                          }
+                                          onClick={() => setSelectedSasaran({
+                                            ...selectedSasaran,
+                                            perilakuBerisiko: {
+                                              ...(typeof selectedSasaran.perilakuBerisiko === 'object' ? selectedSasaran.perilakuBerisiko : {}),
+                                              [key]: 'Tidak'
+                                            }
+                                          })}
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                                         >
                                           Tidak
                                         </button>
@@ -2878,12 +5172,17 @@ export default function DataSasaranPage({
               )}
 
               <div className="d-flex justify-content-end gap-2 pt-3 border-top">
+<<<<<<< HEAD
                 <Button variant="light" className="border px-4 py-2 fw-semibold" onClick={() => setShowEditModal(false)}>
                   Batal
                 </Button>
                 <Button type="submit" className="btn btn-dark-custom text-white px-4 py-2 fw-semibold">
                   Simpan Perubahan
                 </Button>
+=======
+                <Button variant="light" className="border px-4 py-2 fw-semibold" onClick={() => setShowEditModal(false)}>Batal</Button>
+                <Button type="submit" className="btn btn-dark-custom text-white px-4 py-2 fw-semibold">Simpan Perubahan</Button>
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               </div>
             </div>
           </form>

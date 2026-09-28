@@ -12,7 +12,10 @@ const userValidators = require("./validators/userValidators");
 const wargaValidators = require("./validators/wargaValidators");
 const imunisasiValidators = require("./validators/imunisasiValidators");
 const rujukanValidators = require("./validators/rujukanValidators");
+<<<<<<< HEAD
 const screeningConfigValidators = require("./validators/screeningConfigValidator");
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
 const validator = {
   auth: authValidators,
@@ -26,7 +29,10 @@ const validator = {
   warga: wargaValidators,
   imunisasi: imunisasiValidators,
   rujukan: rujukanValidators,
+<<<<<<< HEAD
   screeningConfig: screeningConfigValidators,
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 };
 
 const validateResult = (req, res, next) => {

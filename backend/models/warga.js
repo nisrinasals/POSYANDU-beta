@@ -98,10 +98,13 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: "warga_id",
       as: "rujukan",
     });
+<<<<<<< HEAD
     Warga.hasOne(models.ProfilKesehatanWarga, {
       foreignKey: "warga_id",
       as: "profilKesehatan",
     });
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   };
 
   return Warga;

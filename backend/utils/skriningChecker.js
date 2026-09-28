@@ -42,6 +42,7 @@ const checkSudahSkriningTahunan = async (wargaId, targetYear = new Date().getFul
   return Boolean(pemeriksaanTahunan);
 };
 
+<<<<<<< HEAD
 const checkSudahSkrining6Bulanan = async (wargaId, targetDate = new Date().toISOString().slice(0, 10), excludePemeriksaanId = null) => {
   const endDate = new Date(`${targetDate}T00:00:00.000Z`);
   const startDate = new Date(endDate);
@@ -66,6 +67,8 @@ const checkSudahSkrining6Bulanan = async (wargaId, targetDate = new Date().toISO
   return Boolean(screening);
 };
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const getPreviousAnnualScreening = async (wargaId, targetYear = new Date().getFullYear(), excludePemeriksaanId = null) => {
   const startOfYear = new Date(`${targetYear}-01-01T00:00:00.000Z`);
   const endOfYear = new Date(`${targetYear}-12-31T23:59:59.999Z`);
@@ -101,6 +104,9 @@ const getPreviousAnnualScreening = async (wargaId, targetYear = new Date().getFu
 
 module.exports = {
   checkSudahSkriningTahunan,
+<<<<<<< HEAD
   checkSudahSkrining6Bulanan,
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   getPreviousAnnualScreening,
 };

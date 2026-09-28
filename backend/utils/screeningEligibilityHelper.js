@@ -10,6 +10,7 @@ const getAgeMonths = (tanggalLahir, tanggalPemeriksaan = new Date()) => {
   return months;
 };
 
+<<<<<<< HEAD
 const getExaminationMonth = (tanggalPemeriksaan = new Date()) => {
   const reference = new Date(tanggalPemeriksaan instanceof Date ? tanggalPemeriksaan : `${String(tanggalPemeriksaan).slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(reference.getTime())) return null;
@@ -39,6 +40,16 @@ const getScreeningEligibility = (tanggalLahir, tanggalPemeriksaan = new Date(), 
     is_mpasi_active: ageMonths >= config.mpasi_min_age_months && ageMonths <= config.mpasi_max_age_months,
     is_vitamin_a_active: config.vitamin_a_months.includes(month),
     is_obat_cacing_active: config.obat_cacing_months.includes(month),
+=======
+const getScreeningEligibility = (tanggalLahir, tanggalPemeriksaan = new Date()) => {
+  const ageMonths = getAgeMonths(tanggalLahir, tanggalPemeriksaan);
+  const month = new Date(tanggalPemeriksaan instanceof Date ? tanggalPemeriksaan : `${String(tanggalPemeriksaan).slice(0, 10)}T00:00:00Z`).getUTCMonth() + 1;
+  return {
+    age_months: ageMonths,
+    is_asi_eksklusif_active: ageMonths !== null && ageMonths >= 0 && ageMonths <= 6,
+    is_mpasi_active: ageMonths !== null && ageMonths >= 6 && ageMonths <= 11,
+    is_vitamin_a_active: month === 2 || month === 8,
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   };
 };
 
@@ -47,4 +58,8 @@ const validateIrreversibleAsi = (existingValue, incomingValue) => {
   return null;
 };
 
+<<<<<<< HEAD
 module.exports = { getAgeMonths, getExaminationMonth, getScreeningEligibility, validateIrreversibleAsi };
+=======
+module.exports = { getAgeMonths, getScreeningEligibility, validateIrreversibleAsi };
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

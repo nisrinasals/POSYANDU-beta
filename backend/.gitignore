@@ -1,4 +1,8 @@
 node_modules/
+<<<<<<< HEAD
 .env
 
 uploads/profile
+=======
+.env
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

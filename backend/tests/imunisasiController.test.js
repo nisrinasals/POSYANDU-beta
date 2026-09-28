@@ -49,12 +49,18 @@ test("model associations include Warga hasMany and Imunisasi belongsTo", () => {
   assert.strictEqual(Object.prototype.hasOwnProperty.call(Imunisasi.rawAttributes, "kunjungan_id"), false);
 });
 
+<<<<<<< HEAD
 test("validators require valid warga, master jenis, and date fields", async () => {
   const invalid = await validate(validators.create, request({ warga_id: 0, jenis_imunisasi: "", is_diberikan: true, tanggal_imunisasi: "not-a-date", tempat: "puskesmas" }));
+=======
+test("validators require valid warga, jenis, and date fields", async () => {
+  const invalid = await validate(validators.create, request({ warga_id: 0, jenis_imunisasi: "", tanggal_imunisasi: "not-a-date" }));
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   assert.strictEqual(invalid.isEmpty(), false);
   assert.ok(invalid.array().some((error) => error.path === "warga_id"));
   assert.ok(invalid.array().some((error) => error.path === "tanggal_imunisasi"));
 
+<<<<<<< HEAD
   const valid = await validate(validators.create, request({ warga_id: 10, jenis_imunisasi: "BCG", is_diberikan: true, tanggal_imunisasi: "2026-09-16", tempat: "puskesmas" }));
   assert.strictEqual(valid.isEmpty(), true);
 });
@@ -69,6 +75,12 @@ test("bulk validator requires exactly one row for every master immunization", as
   assert.strictEqual(invalid.isEmpty(), false);
 });
 
+=======
+  const valid = await validate(validators.create, request({ warga_id: 10, jenis_imunisasi: "Imunisasi umum", tanggal_imunisasi: "2026-09-16" }));
+  assert.strictEqual(valid.isEmpty(), true);
+});
+
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 test("create and list Imunisasi use scoped Warga", async () => {
   const originalFindOne = Warga.findOne;
   const originalCreate = Imunisasi.create;
@@ -82,10 +94,17 @@ test("create and list Imunisasi use scoped Warga", async () => {
     Imunisasi.create = async (values) => ({ id: 1, ...values });
     Imunisasi.findAll = async (options) => {
       assert.deepStrictEqual(options.where, { warga_id: 10 });
+<<<<<<< HEAD
       return [{ id: 1, warga_id: 10, jenis_imunisasi: "BCG", is_diberikan: true, tanggal_imunisasi: "2026-09-16", tempat: "puskesmas" }];
     };
 
     const created = await invoke(controller.createImunisasi, request({ warga_id: 10, jenis_imunisasi: "BCG", is_diberikan: true, tanggal_imunisasi: "2026-09-16", tempat: "puskesmas" }));
+=======
+      return [{ id: 1, warga_id: 10, jenis_imunisasi: "Imunisasi umum", tanggal_imunisasi: "2026-09-16" }];
+    };
+
+    const created = await invoke(controller.createImunisasi, request({ warga_id: 10, jenis_imunisasi: "Imunisasi umum", tanggal_imunisasi: "2026-09-16" }));
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     assert.strictEqual(created.statusCode, 201);
     assert.strictEqual(created.body.data.warga_id, 10);
 
@@ -103,7 +122,11 @@ test("nonexistent or cross-scope Warga is rejected", async () => {
   const originalFindOne = Warga.findOne;
   try {
     Warga.findOne = async () => null;
+<<<<<<< HEAD
     const created = await invoke(controller.createImunisasi, request({ warga_id: 99, jenis_imunisasi: "BCG", is_diberikan: true, tanggal_imunisasi: "2026-09-16", tempat: "puskesmas" }));
+=======
+    const created = await invoke(controller.createImunisasi, request({ warga_id: 99, jenis_imunisasi: "Imunisasi umum", tanggal_imunisasi: "2026-09-16" }));
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     assert.strictEqual(created.statusCode, 404);
     const listed = await invoke(controller.getImunisasiByWarga, request({}, 1, 99));
     assert.strictEqual(listed.statusCode, 404);
@@ -118,10 +141,15 @@ test("get and update Imunisasi remain scoped through Warga Posyandu", async () =
     const data = {
       id: 1,
       warga_id: 10,
+<<<<<<< HEAD
       jenis_imunisasi: "BCG",
       is_diberikan: true,
       tanggal_imunisasi: "2026-01-01",
       tempat: "puskesmas",
+=======
+      jenis_imunisasi: "Lama",
+      tanggal_imunisasi: "2026-01-01",
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       warga,
       async update(values) {
         Object.assign(this, values);
@@ -134,9 +162,15 @@ test("get and update Imunisasi remain scoped through Warga Posyandu", async () =
     };
     const detail = await invoke(controller.getImunisasiById, request({}, 1));
     assert.strictEqual(detail.statusCode, 200);
+<<<<<<< HEAD
     const updated = await invoke(controller.updateImunisasi, request({ jenis_imunisasi: "BCG", is_diberikan: true, tanggal_imunisasi: "2026-09-16", tempat: "klinik" }, 1));
     assert.strictEqual(updated.statusCode, 200);
     assert.strictEqual(data.jenis_imunisasi, "BCG");
+=======
+    const updated = await invoke(controller.updateImunisasi, request({ jenis_imunisasi: "Baru", tanggal_imunisasi: "2026-09-16" }, 1));
+    assert.strictEqual(updated.statusCode, 200);
+    assert.strictEqual(data.jenis_imunisasi, "Baru");
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     assert.strictEqual(data.tanggal_imunisasi, "2026-09-16");
   } finally {
     Imunisasi.findByPk = originalFindByPk;

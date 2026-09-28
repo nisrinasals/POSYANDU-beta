@@ -4,7 +4,11 @@ const assert = require("assert");
 const test = require("node:test");
 const { Op } = require("sequelize");
 const { SKEMA_SKRINING, formatDetailSkrining, validateDetailSkrining } = require("../utils/detailSkriningHelper");
+<<<<<<< HEAD
 const { checkSudahSkriningTahunan, checkSudahSkrining6Bulanan } = require("../utils/skriningChecker");
+=======
+const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const { Pemeriksaan } = require("../models");
 const { tentukanKategoriUmur } = require("../utils/kategoriHelper");
 
@@ -113,6 +117,7 @@ test("annual screening checker omits id filter when no pemeriksaan id is exclude
   }
 });
 
+<<<<<<< HEAD
 test("six-month screening checker uses a clamped six-calendar-month range and excludes the current record", async () => {
   const originalFindOne = Pemeriksaan.findOne;
   const calls = [];
@@ -132,6 +137,8 @@ test("six-month screening checker uses a clamped six-calendar-month range and ex
   }
 });
 
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 test("scoring fields remain numeric schema fields until authoritative rules are supplied", () => {
   const puma = formatDetailSkrining("dewasa", { skrining_ppok_puma: { jenis_kelamin_skor: 1, usia_skor: 2, total_skor_puma: 999 } });
   const jiwa = formatDetailSkrining("dewasa", { skrining_kesehatan_jiwa: { jawaban_skor: { kurang_bersemangat: 3 }, total_skor_jiwa: 999 } });

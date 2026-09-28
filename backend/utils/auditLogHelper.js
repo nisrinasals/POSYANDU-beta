@@ -42,8 +42,11 @@ const AUDIT_ACTIONS = {
   RUJUKAN_CREATE: "RUJUKAN_CREATE",
   RUJUKAN_UPDATE: "RUJUKAN_UPDATE",
   RUJUKAN_DELETE: "RUJUKAN_DELETE",
+<<<<<<< HEAD
 
   SCREENING_CONFIG_UPDATE: "SCREENING_CONFIG_UPDATE",
+=======
+>>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 };
 
 // Kata kunci field yang tidak boleh pernah tersimpan di audit log
