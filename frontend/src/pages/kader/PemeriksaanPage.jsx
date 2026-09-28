@@ -1,0 +1,5683 @@
+import React, { useState, useEffect, useMemo } from "react";
+import { Stethoscope, ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, Info, RefreshCw, User, Users, Search, UserCheck, UserX, Plus, ChevronRight, Clock, Calendar } from "lucide-react";
+import { kategoriPemeriksaan } from "../../data/kategoriPemeriksaan";
+import { useNotification } from "../../context/NotificationContext";
+import { validateNik, formatNikInput, validateMeasurements } from "../../utils/validators";
+import GrowthChartPlotter from "../../components/pemeriksaan/GrowthChartPlotter";
+import ImunisasiTableHistory from "../../components/pemeriksaan/ImunisasiTableHistory";
+import { mapFlatScreeningToBackend } from "../../utils/screeningPayload";
+import { pemeriksaanService, kunjunganService, wargaService, sesiService, imunisasiService } from "../../services";
+import { emptyImunisasiRows, mergeImunisasiRows } from "../../data/imunisasi";
+
+// Hitung umur dalam bulan untuk menentukan apakah layanan ASI eksklusif (0-6 bulan) ditampilkan.
+const getAgeInMonths = (warga, referenceDate = new Date()) => {
+  if (!warga) return null;
+
+  const rawBirthDate = warga.tglLahir || warga.tanggal_lahir || warga._raw?.tanggal_lahir || warga._raw?.tglLahir;
+
+  if (!rawBirthDate) return null;
+
+  let birth;
+
+  const birthString = String(rawBirthDate).trim();
+
+  // Format YYYY-MM-DD / ISO
+  if (/^\d{4}-\d{2}-\d{2}/.test(birthString)) {
+    const datePart = birthString.slice(0, 10);
+    birth = new Date(`${datePart}T00:00:00Z`);
+  }
+  // Format DD/MM/YYYY
+  else if (/^\d{2}\/\d{2}\/\d{4}$/.test(birthString)) {
+    const [day, month, year] = birthString.split("/");
+    birth = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  } else {
+    birth = new Date(birthString);
+  }
+
+  if (Number.isNaN(birth.getTime())) return null;
+
+  const reference = new Date(referenceDate);
+
+  if (Number.isNaN(reference.getTime())) return null;
+
+  let months = (reference.getUTCFullYear() - birth.getUTCFullYear()) * 12 + (reference.getUTCMonth() - birth.getUTCMonth());
+
+  if (reference.getUTCDate() < birth.getUTCDate()) {
+    months -= 1;
+  }
+
+  return Math.max(0, months);
+};
+
+// Opsi Langkah 1: Pemeriksaan Sesuai Umur Kehamilan (Ibu Hamil) - Format Buku KIA
+const OPSI_UMUR_KEHAMILAN_BUMIL = ["<4 minggu", "4-8 minggu", "8-12 minggu", "12-16 minggu", "16-20 minggu", "20-24 minggu", "24-28 minggu", "28-32 minggu", "32-36 minggu", "36-40 minggu"];
+
+// Opsi Langkah 1: Waktu ke Posyandu (Ibu Nifas & Menyusui) - Format Buku KIA
+const OPSI_WAKTU_NIFAS_MENYUSUI = [
+  "< 7 hari",
+  "7-28 hari",
+  "28-42 hari",
+  "Bln 2",
+  "Bln 3",
+  "Bln 4",
+  "Bln 5",
+  "Bln 6",
+  "Bln 7",
+  "Bln 8",
+  "Bln 9",
+  "Bln 10",
+  "Bln 11",
+  "Bln 12",
+  "Bln 13",
+  "Bln 14",
+  "Bln 15",
+  "Bln 16",
+  "Bln 17",
+  "Bln 18",
+  "Bln 19",
+  "Bln 20",
+  "Bln 21",
+  "Bln 22",
+  "Bln 23",
+  "Bln 24",
+];
+
+// Opsi Langkah 1: Pemeriksaan Sesuai Umur Sasaran Bayi 0–11 Bln
+const OPSI_UMUR_BAYI_0_11 = Array.from({ length: 12 }, (_, i) => `${i} Bln`);
+
+// Opsi Langkah 1: Pemeriksaan Sesuai Umur Sasaran Balita 12–59 Bln
+const OPSI_UMUR_BALITA_12_59 = Array.from({ length: 48 }, (_, i) => `${i + 12} Bln`);
+
+// Opsi Langkah 1: Pemeriksaan Sesuai Umur Sasaran Apras 60–72 Bln
+const OPSI_UMUR_APRAS_60_72 = Array.from({ length: 13 }, (_, i) => `${i + 60} Bln`);
+
+// Helper: Kalkulasi Tingkat Ketergantungan AKS (Barthel Index)
+const calculateAks = (form = {}) => {
+  const fields = [form.aksBab, form.aksBak, form.aksCuciMuka, form.aksWc, form.aksMakan, form.aksPindah, form.aksJalan, form.aksPakaian, form.aksTangga, form.aksMandi];
+  const isAnyAnswered = fields.some((f) => f !== "" && f !== undefined && f !== null);
+  if (!isAnyAnswered) {
+    return { total: 0, kategori: "Belum Diisi", shortCode: "-", perluRujuk: false, isAnswered: false };
+  }
+  const bab = form.aksBab !== "" && form.aksBab !== undefined && form.aksBab !== null ? Number(form.aksBab) : 0;
+  const bak = form.aksBak !== "" && form.aksBak !== undefined && form.aksBak !== null ? Number(form.aksBak) : 0;
+  const cuciMuka = form.aksCuciMuka !== "" && form.aksCuciMuka !== undefined && form.aksCuciMuka !== null ? Number(form.aksCuciMuka) : 0;
+  const wc = form.aksWc !== "" && form.aksWc !== undefined && form.aksWc !== null ? Number(form.aksWc) : 0;
+  const makan = form.aksMakan !== "" && form.aksMakan !== undefined && form.aksMakan !== null ? Number(form.aksMakan) : 0;
+  const pindah = form.aksPindah !== "" && form.aksPindah !== undefined && form.aksPindah !== null ? Number(form.aksPindah) : 0;
+  const jalan = form.aksJalan !== "" && form.aksJalan !== undefined && form.aksJalan !== null ? Number(form.aksJalan) : 0;
+  const pakaian = form.aksPakaian !== "" && form.aksPakaian !== undefined && form.aksPakaian !== null ? Number(form.aksPakaian) : 0;
+  const tangga = form.aksTangga !== "" && form.aksTangga !== undefined && form.aksTangga !== null ? Number(form.aksTangga) : 0;
+  const mandi = form.aksMandi !== "" && form.aksMandi !== undefined && form.aksMandi !== null ? Number(form.aksMandi) : 0;
+  const total = bab + bak + cuciMuka + wc + makan + pindah + jalan + pakaian + tangga + mandi;
+
+  let kategori = "Mandiri (M = 20)";
+  let shortCode = "M";
+  let perluRujuk = false;
+
+  if (total === 20) {
+    kategori = "Mandiri (M = 20)";
+    shortCode = "M";
+    perluRujuk = false;
+  } else if (total >= 12 && total <= 19) {
+    kategori = "Ketergantungan Ringan (R = 12-19)";
+    shortCode = "R";
+    perluRujuk = true;
+  } else if (total >= 9 && total <= 11) {
+    kategori = "Ketergantungan Sedang (S = 9-11)";
+    shortCode = "S";
+    perluRujuk = true;
+  } else if (total >= 5 && total <= 8) {
+    kategori = "Ketergantungan Berat (B = 5-8)";
+    shortCode = "B";
+    perluRujuk = true;
+  } else {
+    kategori = "Ketergantungan Total (T = 0-4)";
+    shortCode = "T";
+    perluRujuk = true;
+  }
+
+  return { total, kategori, shortCode, perluRujuk, isAnswered: true };
+};
+
+// Helper: Evaluasi 6 Domain Instrumen SKILAS
+export const evaluateSkilas = (form = {}) => {
+  const skilasFields = [
+    form.skilasOrientasi,
+    form.skilasUlangKata,
+    form.skilasTesKursi,
+    form.skilasBbTurun,
+    form.skilasNafsuMakan,
+    form.skilasLilaKurang,
+    form.skilasMasalahMata,
+    form.skilasTesLihat,
+    form.skilasTesBisik,
+    form.skilasPerasaanSedih,
+    form.skilasHilangMinat,
+  ];
+  const isAnyAnswered = skilasFields.some((f) => f !== "" && f !== undefined && f !== null);
+  if (!isAnyAnswered) {
+    return { adaRisiko: false, statusText: "Belum Diisi", issues: [], isAnswered: false };
+  }
+  const issues = [];
+  if (form.skilasOrientasi === "Tidak") issues.push("Orientasi waktu & tempat");
+  if (form.skilasUlangKata === "Tidak") issues.push("Mengulang 3 kata");
+  if (form.skilasTesKursi === "Tidak") issues.push("Tes berdiri dari kursi");
+  if (form.skilasBbTurun === "Ya") issues.push("BB turun >3kg / baju longgar");
+  if (form.skilasNafsuMakan === "Ya") issues.push("Hilang nafsu makan");
+  if (form.skilasLilaKurang === "Ya") issues.push("LiLA < 21 cm");
+  if (form.skilasMasalahMata === "Ya") issues.push("Masalah mata / penglihatan");
+  if (form.skilasTesLihat === "Tidak") issues.push("Tes melihat");
+  if (form.skilasTesBisik === "Tidak") issues.push("Tes berbisik (pendengaran)");
+  if (form.skilasPerasaanSedih === "Ya") issues.push("Perasaan sedih / putus asa");
+  if (form.skilasHilangMinat === "Ya") issues.push("Kehilangan minat aktivitas");
+
+  const adaRisiko = issues.length > 0;
+  return {
+    adaRisiko,
+    statusText: adaRisiko ? `Ada Risiko (${issues.length} Domain)` : "Semua Domain Normal",
+    issues,
+    isAnswered: true,
+  };
+};
+
+// Helper: Kalkulasi Skrining Kesehatan Jiwa Dewasa (PHQ-4/SRQ Ringkas)
+export const calculateJiwa = (form = {}) => {
+  const fields = [form.jiwaQ1, form.jiwaQ2, form.jiwaQ3, form.jiwaQ4];
+  const isAnyAnswered = fields.some((f) => f !== "" && f !== undefined && f !== null);
+  if (!isAnyAnswered) {
+    return { total: 0, kategori: "Belum Diisi", isRisiko: false, isAnswered: false, bulan: form.jiwaBulan || "" };
+  }
+  const q1 = form.jiwaQ1 !== "" && form.jiwaQ1 !== undefined && form.jiwaQ1 !== null ? Number(form.jiwaQ1) : 0;
+  const q2 = form.jiwaQ2 !== "" && form.jiwaQ2 !== undefined && form.jiwaQ2 !== null ? Number(form.jiwaQ2) : 0;
+  const q3 = form.jiwaQ3 !== "" && form.jiwaQ3 !== undefined && form.jiwaQ3 !== null ? Number(form.jiwaQ3) : 0;
+  const q4 = form.jiwaQ4 !== "" && form.jiwaQ4 !== undefined && form.jiwaQ4 !== null ? Number(form.jiwaQ4) : 0;
+  const total = q1 + q2 + q3 + q4;
+
+  const isRisiko = total >= 6;
+  const kategori = isRisiko ? "Risiko Masalah Kesehatan Jiwa (≥ 6: Perlu Konseling/Rujukan)" : "Normal / Sehat Jiwa (< 6)";
+
+  return {
+    total,
+    kategori,
+    isRisiko,
+    isAnswered: true,
+    bulan: form.jiwaBulan || "",
+  };
+};
+
+// Komponen Radio Button Interaktif untuk opsi Ya / Tidak (atau Sudah / Belum)
+export function YesNoRadio({ name, value, onChange, className = "", yesLabel = "Ya", noLabel = "Tidak", yesValue = "Ya", noValue = "Tidak" }) {
+  const hasValue = value !== "" && value !== null && value !== undefined;
+  const isYes = hasValue && (String(value) === String(yesValue) || (yesValue === "Ya" && (value === 1 || value === true)));
+  const isNo = hasValue && (String(value) === String(noValue) || (noValue === "Tidak" && (value === 0 || value === false)));
+  const isNumeric = typeof value === "number" || (hasValue && !isNaN(Number(value)) && (yesValue === 1 || noValue === 0));
+
+  const yaId = `${name}_ya`;
+  const tidakId = `${name}_tidak`;
+
+  return (
+    <div className={`d-flex align-items-center gap-3 ${className}`}>
+      <div className="form-check form-check-inline m-0 d-flex align-items-center gap-1.5">
+        <input className="form-check-input m-0 cursor-pointer" type="radio" id={yaId} name={name} checked={isYes} onChange={() => onChange(isNumeric ? 1 : yesValue)} style={{ width: "1.1rem", height: "1.1rem", cursor: "pointer" }} />
+        <label className="form-check-label cursor-pointer text-dark small fw-medium mb-0" htmlFor={yaId} style={{ cursor: "pointer", userSelect: "none" }}>
+          {yesLabel}
+        </label>
+      </div>
+
+      <div className="form-check form-check-inline m-0 d-flex align-items-center gap-1.5">
+        <input className="form-check-input m-0 cursor-pointer" type="radio" id={tidakId} name={name} checked={isNo} onChange={() => onChange(isNumeric ? 0 : noValue)} style={{ width: "1.1rem", height: "1.1rem", cursor: "pointer" }} />
+        <label className="form-check-label cursor-pointer text-dark small fw-medium mb-0" htmlFor={tidakId} style={{ cursor: "pointer", userSelect: "none" }}>
+          {noLabel}
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// Komponen Kotak Pertanyaan Bergaris (Bordered Question Card) untuk opsi Ya / Tidak (atau Sudah / Belum)
+export function YesNoCard({ label, name, value, onChange, className = "", yesLabel = "Ya", noLabel = "Tidak", yesValue = "Ya", noValue = "Tidak" }) {
+  return (
+    <div className={`p-3 rounded-3 border bg-white h-100 d-flex flex-column flex-sm-row align-items-start align-items-sm-center justify-content-between gap-2.5 ${className}`} style={{ borderColor: "#cbd5e1", backgroundColor: "#ffffff" }}>
+      <span className="fw-medium text-dark small mb-0">{label}</span>
+      <YesNoRadio name={name} value={value} onChange={onChange} className="flex-shrink-0" yesLabel={yesLabel} noLabel={noLabel} yesValue={yesValue} noValue={noValue} />
+    </div>
+  );
+}
+
+export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData, activePemeriksaanWargaId, onRefreshData }) {
+  const getLocalDateOnly = () => {
+    const now = new Date();
+    const localMs = now.getTime() - now.getTimezoneOffset() * 60 * 1000;
+    return new Date(localMs).toISOString().slice(0, 10);
+  };
+
+  const getTodaySessionForWarga = async (warga) => {
+    const posyanduId = warga?._raw?.posyandu_id || warga?.posyandu_id;
+    if (!posyanduId) {
+      throw new Error("Warga belum memiliki Posyandu pada backend.");
+    }
+
+    const today = getLocalDateOnly();
+    const sesiRes = await sesiService.getSesiList({
+      page: 1,
+      limit: 100,
+      posyandu_id: Number(posyanduId),
+      tanggal: today,
+    });
+    const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : Array.isArray(sesiRes?.data?.items) ? sesiRes.data.items : [];
+
+    const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === today);
+    if (!session?.id) {
+      throw new Error("Tidak ada sesi Posyandu untuk hari ini. Buat atau buka sesi Posyandu terlebih dahulu.");
+    }
+
+    return session;
+  };
+
+  const ensureKunjunganId = async (warga) => {
+    if (!warga?.id) throw new Error("Warga pemeriksaan tidak valid.");
+
+    // Selalu cari kunjungan pada SESI HARI INI terlebih dahulu.
+    // Jangan memakai /antrean-hari-ini karena endpoint tersebut hanya
+    // mengembalikan antrean pemeriksaan yang belum selesai.
+    const session = await getTodaySessionForWarga(warga);
+
+    const visitRes = await kunjunganService.getKunjunganList({
+      page: 1,
+      limit: 100,
+      sesi_posyandu_id: Number(session.id),
+      warga_id: Number(warga.id),
+    });
+    const visits = Array.isArray(visitRes?.data) ? visitRes.data : Array.isArray(visitRes?.data?.items) ? visitRes.data.items : [];
+
+    const existing = visits.find((item) => Number(item.warga_id || item.warga?.id) === Number(warga.id));
+    if (existing?.id) return existing.id;
+
+    const createdRes = await kunjunganService.createKunjungan({
+      warga_id: Number(warga.id),
+      sesi_posyandu_id: Number(session.id),
+    });
+
+    if (!createdRes?.data?.id) {
+      throw new Error("Backend tidak mengembalikan ID kunjungan.");
+    }
+
+    return createdRes.data.id;
+  };
+
+  const { showSuccess, showWarning } = useNotification();
+  const currentCategory = kategoriPemeriksaan.find((c) => c.id === activeSubmenu) || kategoriPemeriksaan[0];
+
+  // 1. Mode State: 'per-step' (Pilih Langkah) vs 'sequential' (Bertahap)
+  const [examinationMode, setExaminationMode] = useState("per-step");
+
+  // 2. Active Step State (1, 2, 3, 4, 5)
+  const [activeStep, setActiveStep] = useState(1);
+
+  // 3. Preview Modal State for Mode Bertahap
+  const [showSequentialPreviewModal, setShowSequentialPreviewModal] = useState(false);
+
+  const currentMonthNum = new Date().getMonth() + 1;
+  const isBulanVitA = currentMonthNum === 2 || currentMonthNum === 8;
+
+  // Active citizens in this category
+  const activeWargaList = useMemo(() => {
+    return (globalSasaranList || []).filter((s) => {
+      if (!s) return false;
+      if (s.subKategori === activeSubmenu || s.kategori_sasaran === activeSubmenu) return true;
+      const katLower = String(s.kategori || "").toLowerCase();
+      if (activeSubmenu === "bumil" && katLower.includes("bumil")) return true;
+      if (activeSubmenu === "nifas" && (katLower.includes("nifas") || katLower.includes("menyusui") || katLower.includes("busui"))) return true;
+      if (activeSubmenu === "bayi-0-11" && katLower.includes("bayi")) return true;
+      if (activeSubmenu === "balita-12-59" && katLower.includes("balita")) return true;
+      if (activeSubmenu === "apras" && katLower.includes("apras")) return true;
+      if (activeSubmenu === "usekrem-6-14" && (katLower.includes("6-14") || katLower.includes("6 - 14") || katLower.includes("sekolah"))) return true;
+      if (activeSubmenu === "usekrem-15-18" && (katLower.includes("15-18") || katLower.includes("15 - 18") || katLower.includes("remaja"))) return true;
+      if (activeSubmenu === "dewasa" && katLower === "dewasa") return true;
+      if (activeSubmenu === "lansia" && katLower === "lansia") return true;
+      return false;
+    });
+  }, [globalSasaranList, activeSubmenu]);
+
+  // Selected Warga ID for Sequential Mode
+  const [selectedWargaId, setSelectedWargaId] = useState("");
+
+  // Tracking step completion and data per citizen
+  // Format: { [wargaId]: { step1: true, step2: bool, step3: bool, step4: bool, step5: bool } }
+  const [completedSteps, setCompletedSteps] = useState({});
+  const [stepDataByWarga, setStepDataByWarga] = useState({});
+  const [kunjunganIdByWarga, setKunjunganIdByWarga] = useState({});
+  const [pemeriksaanByWarga, setPemeriksaanByWarga] = useState({});
+  const [backendPlottingByWarga, setBackendPlottingByWarga] = useState({});
+
+  // Status penyelesaian step yang sudah tersimpan di backend untuk kunjungan hari ini.
+  // Dipakai agar sasaran tidak muncul lagi di antrean step terkait setelah halaman direfresh.
+  const [backendStep2CompletedWarga, setBackendStep2CompletedWarga] = useState({});
+  const [backendStep4CompletedWarga, setBackendStep4CompletedWarga] = useState({});
+  const [backendStep5CompletedWarga, setBackendStep5CompletedWarga] = useState({});
+
+  // Presensi Kehadiran Langkah 1 (Status Kehadiran Hari Ini: { [wargaId]: true/false })
+  const [kehadiranWarga, setKehadiranWarga] = useState({});
+  const [backendRegisteredWarga, setBackendRegisteredWarga] = useState({});
+
+  // Keterangan Waktu Kunjungan Langkah 1 (Presensi): Minggu (Bumil) / Bulan (Nifas, Bayi, Balita, Apras)
+  // Format: { [wargaId]: string }
+  const [waktuKunjunganPresensi, setWaktuKunjunganPresensi] = useState({});
+
+  // State pencarian warga di Langkah 1 Presensi
+  const [searchWargaQuery, setSearchWargaQuery] = useState("");
+
+  // Step 1: tampilkan semua sasaran kategori secara default.
+  // Search hanya digunakan untuk memfilter daftar yang sudah ada.
+  const filteredSasaranLangkah1 = useMemo(() => {
+    const q = searchWargaQuery.trim().toLowerCase();
+    if (!q) return activeWargaList;
+
+    return activeWargaList.filter((w) => (w.nama && w.nama.toLowerCase().includes(q)) || (w.nik && String(w.nik).includes(q)) || (w.alamat && w.alamat.toLowerCase().includes(q)));
+  }, [activeWargaList, searchWargaQuery]);
+
+  // Daftar sasaran yang SUDAH HADIR di Langkah 1 untuk kategori ini
+  const hadirWargaList = useMemo(() => {
+    return activeWargaList.filter((w) => kehadiranWarga[String(w.id)] === true);
+  }, [activeWargaList, kehadiranWarga]);
+
+  // Di Langkah 2: hanya tampilkan sasaran yang sudah hadir DAN belum selesai Step 2.
+  // Status completion dibaca dari state lokal + status kunjungan backend hari ini.
+  const availableWargaStep2 = useMemo(() => {
+    return hadirWargaList.filter((w) => {
+      const wargaId = String(w.id);
+      const localCompleted = completedSteps[wargaId]?.step2 === true;
+      const backendCompleted = backendStep2CompletedWarga[wargaId] === true;
+      return !localCompleted && !backendCompleted;
+    });
+  }, [hadirWargaList, completedSteps, backendStep2CompletedWarga]);
+
+  // Langkah 3 tetap menampilkan SEMUA sasaran yang sudah terdaftar sebagai DATANG
+  // pada Step 1. Step 3 read-only, jadi warga yang sudah pernah diplot tetap bisa dipilih.
+  const availableWargaStep3 = useMemo(() => {
+    return hadirWargaList;
+  }, [hadirWargaList]);
+
+  // Di Langkah 4: hanya tampilkan sasaran yang hadir DAN belum selesai Step 4.
+  // Completion dicek dari state lokal + status kunjungan backend hari ini.
+  const availableWargaStep4 = useMemo(() => {
+    return hadirWargaList.filter((w) => {
+      const wargaId = String(w.id);
+      const localCompleted = completedSteps[wargaId]?.step4 === true;
+      const backendCompleted = backendStep4CompletedWarga[wargaId] === true;
+      return !localCompleted && !backendCompleted;
+    });
+  }, [hadirWargaList, completedSteps, backendStep4CompletedWarga]);
+
+  // Di Langkah 5: hanya tampilkan sasaran yang hadir DAN belum selesai Step 5.
+  const availableWargaStep5 = useMemo(() => {
+    return hadirWargaList.filter((w) => {
+      const wargaId = String(w.id);
+      const localCompleted = completedSteps[wargaId]?.step5 === true;
+      const backendCompleted = backendStep5CompletedWarga[wargaId] === true;
+      return !localCompleted && !backendCompleted;
+    });
+  }, [hadirWargaList, completedSteps, backendStep5CompletedWarga]);
+
+  // Selected citizen for each step (Step 2 to 5)
+  const [selectedWargaStep2, setSelectedWargaStep2] = useState("");
+  const [selectedWargaStep3, setSelectedWargaStep3] = useState("");
+  const [selectedWargaStep4, setSelectedWargaStep4] = useState("");
+  const [selectedWargaStep5, setSelectedWargaStep5] = useState("");
+
+  // Automatically keep selected citizen in sync with available list
+  // Sinkronkan status Step 2 dengan kunjungan backend pada hari berjalan.
+  // Backend mengubah status_langkah menjadi langkah_2 setelah Step 2 berhasil disimpan,
+  // dan tetap langkah_3/4/5 ketika proses sudah berlanjut.
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBackendTodayStatus = async () => {
+      try {
+        if (!activeWargaList.length) {
+          if (!cancelled) {
+            setBackendStep2CompletedWarga({});
+            setBackendStep4CompletedWarga({});
+            setBackendStep5CompletedWarga({});
+            setBackendRegisteredWarga({});
+          }
+          return;
+        }
+
+        const posyanduIds = Array.from(
+          new Set(
+            activeWargaList
+              .map((w) => w?._raw?.posyandu_id || w?.posyandu_id)
+              .filter(Boolean)
+              .map(Number),
+          ),
+        );
+
+        const visitGroups = await Promise.all(
+          posyanduIds.map(async (posyanduId) => {
+            try {
+              const today = getLocalDateOnly();
+              const sesiRes = await sesiService.getSesiList({
+                page: 1,
+                limit: 100,
+                posyandu_id: posyanduId,
+                tanggal: today,
+              });
+
+              const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : Array.isArray(sesiRes?.data?.items) ? sesiRes.data.items : [];
+              const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === today);
+
+              if (!session?.id) return [];
+
+              const visitRes = await kunjunganService.getKunjunganList({
+                page: 1,
+                limit: 100,
+                sesi_posyandu_id: Number(session.id),
+              });
+
+              return Array.isArray(visitRes?.data) ? visitRes.data : Array.isArray(visitRes?.data?.items) ? visitRes.data.items : [];
+            } catch (error) {
+              console.error(`Gagal mengambil kunjungan sesi Posyandu ${posyanduId}:`, error);
+              return [];
+            }
+          }),
+        );
+
+        const visits = visitGroups.flat();
+        const completedStep2 = {};
+        const completedStep4 = {};
+        const completedStep5 = {};
+        const registeredWarga = {};
+        const kunjunganIds = {};
+
+        visits.forEach((visit) => {
+          const wargaId = visit?.warga_id || visit?.warga?.id;
+          if (!wargaId) return;
+
+          const id = String(wargaId);
+          registeredWarga[id] = true;
+          if (visit?.id) kunjunganIds[id] = Number(visit.id);
+
+          const status = String(visit?.status_langkah || "")
+            .trim()
+            .toLowerCase();
+
+          // Step 2 selesai saat status kunjungan sudah melewati langkah 1.
+          if (["langkah_2", "langkah_3", "langkah_4", "langkah_5"].includes(status)) {
+            completedStep2[id] = true;
+          }
+
+          // Step 4 selesai saat status kunjungan sudah langkah 4 atau langkah 5.
+          if (["langkah_4", "langkah_5"].includes(status)) {
+            completedStep4[id] = true;
+          }
+
+          // Step 5 selesai saat status kunjungan sudah langkah 5.
+          if (status === "langkah_5") {
+            completedStep5[id] = true;
+          }
+        });
+
+        if (!cancelled) {
+          setBackendStep2CompletedWarga(completedStep2);
+          setBackendStep4CompletedWarga(completedStep4);
+          setBackendStep5CompletedWarga(completedStep5);
+          setBackendRegisteredWarga(registeredWarga);
+          setKunjunganIdByWarga((prev) => ({ ...prev, ...kunjunganIds }));
+
+          setKehadiranWarga((prev) => {
+            const next = { ...prev };
+            Object.keys(registeredWarga).forEach((id) => {
+              next[id] = true;
+            });
+            return next;
+          });
+        }
+      } catch (error) {
+        console.error("Gagal mengambil status presensi hari ini:", error);
+      }
+    };
+
+    loadBackendTodayStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSubmenu, activeWargaList]);
+
+  useEffect(() => {
+    if (availableWargaStep2.length > 0) {
+      if (!availableWargaStep2.some((w) => String(w.id) === String(selectedWargaStep2))) {
+        setSelectedWargaStep2(String(availableWargaStep2[0].id));
+      }
+    } else {
+      setSelectedWargaStep2("");
+    }
+  }, [availableWargaStep2, selectedWargaStep2]);
+
+  useEffect(() => {
+    if (availableWargaStep3.length > 0) {
+      if (!availableWargaStep3.some((w) => String(w.id) === String(selectedWargaStep3))) {
+        setSelectedWargaStep3(String(availableWargaStep3[0].id));
+      }
+    } else {
+      setSelectedWargaStep3("");
+    }
+  }, [availableWargaStep3, selectedWargaStep3]);
+
+  useEffect(() => {
+    if (availableWargaStep4.length > 0) {
+      if (!availableWargaStep4.some((w) => String(w.id) === String(selectedWargaStep4))) {
+        setSelectedWargaStep4(String(availableWargaStep4[0].id));
+      }
+    } else {
+      setSelectedWargaStep4("");
+    }
+  }, [availableWargaStep4, selectedWargaStep4]);
+
+  useEffect(() => {
+    if (availableWargaStep5.length > 0) {
+      if (!availableWargaStep5.some((w) => String(w.id) === String(selectedWargaStep5))) {
+        setSelectedWargaStep5(String(availableWargaStep5[0].id));
+      }
+    } else {
+      setSelectedWargaStep5("");
+    }
+  }, [availableWargaStep5, selectedWargaStep5]);
+
+  // Keep selected citizen in sync when changing active category
+  useEffect(() => {
+    setActiveStep(1);
+    setSearchWargaQuery("");
+    if (hadirWargaList.length > 0) {
+      setSelectedWargaId(String(hadirWargaList[0].id));
+    } else {
+      setSelectedWargaId("");
+    }
+  }, [activeSubmenu]);
+
+  // Find active selected citizen record
+  const currentSelectedWarga = useMemo(() => {
+    return activeWargaList.find((w) => String(w.id) === String(selectedWargaId)) || activeWargaList[0] || null;
+  }, [activeWargaList, selectedWargaId]);
+
+  // Find the examination record listed by the backend. Detailed measurements are fetched from Step 3.
+  const currentExamListRecord = useMemo(() => {
+    if (!currentSelectedWarga) return null;
+    return (globalPemeriksaanData && (globalPemeriksaanData[currentSelectedWarga.id] || globalPemeriksaanData[String(currentSelectedWarga.id)])) || null;
+  }, [globalPemeriksaanData, currentSelectedWarga]);
+
+  const currentBackendPlotting = currentSelectedWarga ? backendPlottingByWarga[String(currentSelectedWarga.id)] || null : null;
+
+  useEffect(() => {
+    if (examinationMode !== "per-step" || !selectedWargaStep2) return;
+
+    const targetId = String(selectedWargaStep2);
+    const warga = getWargaForId(targetId);
+
+    if (!warga) return;
+
+    const exam = globalPemeriksaanData?.[targetId] || globalPemeriksaanData?.[warga.id] || null;
+
+    const existingPlot = backendPlottingByWarga[targetId];
+
+    const applyStep2Data = (plotData = null) => {
+      const measurements = plotData?.pengukuran_step_2 || plotData?.pengukuran || {};
+
+      setLangkah2Form({
+        bb: measurements.bb_kg ?? exam?.bb_kg ?? warga?.bb ?? "",
+        tb: measurements.tb_cm ?? exam?.tb_cm ?? warga?.tb ?? "",
+        lila: measurements.lila_cm ?? exam?.lila_cm ?? "",
+        lk: measurements.lingkar_kepala_cm ?? exam?.lingkar_kepala_cm ?? "",
+        lp: measurements.lingkar_perut_cm ?? exam?.lingkar_perut_cm ?? "",
+        tensiSistol: measurements.td_sistole ?? exam?.td_sistole ?? "",
+        tensiDiastol: measurements.td_diastole ?? exam?.td_diastole ?? "",
+        gulaDarah: measurements.kadar_gula ?? exam?.kadar_gula ?? "",
+      });
+    };
+
+    // Kalau plotting untuk warga ini sudah ada, langsung pakai.
+    if (existingPlot) {
+      applyStep2Data(existingPlot);
+      return;
+    }
+
+    // Kalau belum ada plotting, ambil dari pemeriksaan backend.
+    const examId = exam?.id;
+    if (!examId) {
+      applyStep2Data();
+      return;
+    }
+
+    let cancelled = false;
+
+    pemeriksaanService
+      .getStep3Plotting(examId)
+      .then((res) => {
+        if (cancelled) return;
+
+        const data = res?.data || null;
+
+        if (data) {
+          setBackendPlottingByWarga((prev) => ({
+            ...prev,
+            [targetId]: data,
+          }));
+        }
+
+        applyStep2Data(data);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          applyStep2Data();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [examinationMode, selectedWargaStep2, globalPemeriksaanData, backendPlottingByWarga, activeSubmenu]);
+
+  useEffect(() => {
+    const warga = currentSelectedWarga;
+    const listedExamId = currentExamListRecord?.id;
+    if (!warga?.id || !listedExamId) return;
+
+    const existing = backendPlottingByWarga[String(warga.id)];
+    if (existing?.pemeriksaan_id === listedExamId) return;
+
+    let cancelled = false;
+    pemeriksaanService
+      .getStep3Plotting(listedExamId)
+      .then((res) => {
+        if (cancelled || !res?.data) return;
+        setPemeriksaanByWarga((prev) => ({ ...prev, [String(warga.id)]: listedExamId }));
+        setBackendPlottingByWarga((prev) => ({ ...prev, [String(warga.id)]: res.data }));
+      })
+      .catch(() => {
+        // An incomplete examination may not yet have Step 3 data. Keep the form empty.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSelectedWarga, currentExamListRecord, backendPlottingByWarga]);
+
+  // Keep legacy list metadata only; detailed clinical values come from backend Step 3.
+  const currentExamData = useMemo(() => currentExamListRecord || null, [currentExamListRecord]);
+
+  // Helper evaluasi riwayat skrining tahunan warga
+  const getRiwayatSkriningTahunanInfo = (warga, exam) => {
+    if (!warga) {
+      return {
+        hasHistory: false,
+        statusLabel: "Belum Ada Riwayat",
+        badgeClass: "bg-secondary-subtle text-secondary",
+        detailText: "Belum ada data skrining tahunan tercatat.",
+        isCurrentYear: false,
+        tglFormatted: "-",
+      };
+    }
+
+    const examL4 = exam?.langkah4 || {};
+    const backendDetail = exam?.detail_skrining || {};
+    const backendRemajaAnnual = backendDetail?.pemeriksaan_tahunan_remaja_putri || {};
+    const hasExamAnnual = Boolean(
+      exam?.is_skrining_tahunan ||
+      backendDetail?.is_skrining_tahunan ||
+      backendRemajaAnnual?.is_skrining_jiwa ||
+      backendRemajaAnnual?.is_periksa_hb ||
+      examL4.isSkriningTahunan ||
+      examL4.is_skrining_tahunan ||
+      (examL4.jiwaQ1 !== undefined && examL4.jiwaQ1 !== "") ||
+      (examL4.aksBab !== undefined && examL4.aksBab !== "") ||
+      (examL4.skilasOrientasi !== undefined && examL4.skilasOrientasi !== "") ||
+      (examL4.pumaJk !== undefined && examL4.pumaJk !== "") ||
+      (examL4.skriningJiwa && examL4.skriningJiwa !== ""),
+    );
+
+    let rawDate = null;
+    if (hasExamAnnual) {
+      rawDate = examL4.tglSkriningTahunan || exam?.tglPemeriksaan || exam?.tanggal || warga.tglSkriningTahunanTerakhir || warga.tglPeriksa;
+    } else if (warga.tglSkriningTahunanTerakhir) {
+      rawDate = warga.tglSkriningTahunanTerakhir;
+    } else if (warga.tglPeriksa && warga.statusPemeriksaan === "Sudah") {
+      rawDate = warga.tglPeriksa;
+    }
+
+    if (!rawDate) {
+      return {
+        hasHistory: false,
+        statusLabel: "Belum Pernah Skrining",
+        badgeClass: "bg-secondary-subtle text-secondary",
+        detailText: "Warga ini belum memiliki riwayat skrining tahunan.",
+        isCurrentYear: false,
+        tglFormatted: "-",
+      };
+    }
+
+    let parsedYear = null;
+    let formattedDisplay = String(rawDate);
+
+    if (String(rawDate).includes("-")) {
+      const parts = String(rawDate).split("-");
+      if (parts[0].length === 4) {
+        parsedYear = parseInt(parts[0], 10);
+        formattedDisplay = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      } else if (parts[2].length === 4) {
+        parsedYear = parseInt(parts[2], 10);
+      }
+    }
+
+    const currentYear = new Date().getFullYear();
+    const isCurrentYear = parsedYear === currentYear;
+
+    if (isCurrentYear) {
+      return {
+        hasHistory: true,
+        statusLabel: `Sudah Skrining Tahun Ini (${currentYear})`,
+        badgeClass: "bg-success-subtle text-success border border-success-subtle",
+        detailText: `Terakhir diisi pada ${formattedDisplay} (Tahun ${parsedYear}). Lengkap untuk tahun ini.`,
+        isCurrentYear: true,
+        tglFormatted: formattedDisplay,
+      };
+    } else if (parsedYear) {
+      const yearDiff = currentYear - parsedYear;
+      return {
+        hasHistory: true,
+        statusLabel: `Perlu Skrining Tahun Ini (Jadwal ${currentYear})`,
+        badgeClass: "bg-warning-subtle text-warning-emphasis border border-warning-subtle",
+        detailText: `Terakhir diisi pada ${formattedDisplay} (${yearDiff} tahun lalu - ${parsedYear}). Disarankan untuk dijadwalkan skrining ulang.`,
+        isCurrentYear: false,
+        tglFormatted: formattedDisplay,
+      };
+    }
+
+    return {
+      hasHistory: true,
+      statusLabel: "Riwayat Skrining Tercatat",
+      badgeClass: "bg-info-subtle text-primary border border-info-subtle",
+      detailText: `Terakhir diisi pada ${formattedDisplay}.`,
+      isCurrentYear: false,
+      tglFormatted: formattedDisplay,
+    };
+  };
+
+  // Active citizen for Step 4 (Pelayanan & Skrining) in both modes
+  const activeCitizenStep4 = useMemo(() => {
+    const targetId = examinationMode === "per-step" ? selectedWargaStep4 : selectedWargaId;
+    return activeWargaList.find((w) => String(w.id) === String(targetId)) || currentSelectedWarga || null;
+  }, [examinationMode, selectedWargaStep4, selectedWargaId, activeWargaList, currentSelectedWarga]);
+
+  const activeExamDataStep4 = useMemo(() => {
+    if (!activeCitizenStep4) return null;
+    return (globalPemeriksaanData && (globalPemeriksaanData[activeCitizenStep4.id] || globalPemeriksaanData[String(activeCitizenStep4.id)])) || currentExamData || null;
+  }, [activeCitizenStep4, globalPemeriksaanData, currentExamData]);
+
+  const annualScreeningInfo = useMemo(() => {
+    return getRiwayatSkriningTahunanInfo(activeCitizenStep4, activeExamDataStep4);
+  }, [activeCitizenStep4, activeExamDataStep4]);
+
+  // Helper render riwayat pemeriksaan sebelumnya (ditiadakan sesuai masukan kader)
+  const renderRiwayatPemeriksaanTerakhir = () => null;
+
+  // Standard forms state
+  const [langkah1Form, setLangkah1Form] = useState({
+    nik: "",
+    nama: "",
+    tglLahir: "",
+    gender: "",
+    usiaKehamilan: "",
+    waktuKunjunganNifas: "",
+    usiaBayi: "",
+    usiaBalita: "",
+    usiaApras: "",
+    checklistKia: "",
+  });
+
+  const [langkah2Form, setLangkah2Form] = useState({
+    bb: "",
+    tb: "",
+    lila: "",
+    lk: "",
+    lp: "",
+    tensiSistol: "",
+    tensiDiastol: "",
+    gulaDarah: "",
+  });
+
+  const [langkah4Form, setLangkah4Form] = useState({
+    isSkriningTahunan: false,
+    batukTbc: "",
+    demamTbc: "",
+    bbTurunTbc: "",
+    kontakTbc: "",
+    lesuTbc: "",
+    jumlahTtd: "",
+    pemberianTtd: "",
+    rutinTtd: "",
+    komposisiMtBumil: "",
+    rutinMtBumil: "",
+    jumlahVitA: "",
+    rutinVitA: "",
+    menyusui: "",
+    kbPascaPersalinan: "",
+    asiEksklusif: "",
+    mpAsi: "",
+    pmtPemulihan: "",
+    pmtHabis: "",
+    vitA: "",
+    obatCacing: "",
+    ikutKelasBalita: "",
+    perkembanganSdidtk: "",
+    imunisasi: "",
+    skriningPtm: "",
+    mataKanan: "",
+    mataKiri: "",
+    telingaKanan: "",
+    telingaKiri: "",
+    skriningJiwa: "",
+    periksaHb: "",
+    batukBesarTbc: "",
+    nafsuMakanTbc: "",
+    bbMenurunTbc: "",
+    lemahLesuTbc: "",
+    berkeringatMalamTbc: "",
+    batukDarahTbc: "",
+    sesakNafasTbc: "",
+    kolesterol: "",
+    alatKontrasepsi: "",
+    pumaJk: "",
+    pumaUsia: "",
+    pumaMerokok: "",
+    pumaNapasPendek: "",
+    pumaDahak: "",
+    pumaBatukFlu: "",
+    // Skrining Kesehatan Jiwa - Dewasa & Lansia
+    jiwaBulan: "",
+    jiwaQ1: "",
+    jiwaQ2: "",
+    jiwaQ3: "",
+    jiwaQ4: "",
+    // C2. Pemeriksaan Tahunan AKS (Barthel) - Lansia
+    aksBab: "",
+    aksBak: "",
+    aksCuciMuka: "",
+    aksWc: "",
+    aksMakan: "",
+    aksPindah: "",
+    aksJalan: "",
+    aksPakaian: "",
+    aksTangga: "",
+    aksMandi: "",
+    // C3. Pemeriksaan Tahunan SKILAS - Lansia
+    skilasOrientasi: "",
+    skilasUlangKata: "",
+    skilasTesKursi: "",
+    skilasBbTurun: "",
+    skilasNafsuMakan: "",
+    skilasLilaKurang: "",
+    skilasMasalahMata: "",
+    skilasTesLihat: "",
+    skilasTesBisik: "",
+    skilasPerasaanSedih: "",
+    skilasHilangMinat: "",
+    skilasImunisasiCovid: "",
+  });
+
+  const [langkah5Form, setLangkah5Form] = useState({
+    topikPenyuluhan: "",
+    mengikutiKelas: "",
+    statusRujukan: "",
+  });
+
+  const [imunisasiRowsByWarga, setImunisasiRowsByWarga] = useState({});
+  const activeImunisasiWargaId = examinationMode === "per-step" ? selectedWargaStep4 : selectedWargaId;
+  const activeImunisasiRows = imunisasiRowsByWarga[String(activeImunisasiWargaId)] || emptyImunisasiRows();
+
+  useEffect(() => {
+    if (!activeImunisasiWargaId) return undefined;
+    let mounted = true;
+    imunisasiService
+      .getImunisasiByWarga(activeImunisasiWargaId)
+      .then((response) => {
+        if (mounted) setImunisasiRowsByWarga((previous) => ({ ...previous, [String(activeImunisasiWargaId)]: mergeImunisasiRows(response?.data) }));
+      })
+      .catch(() => {
+        if (mounted) setImunisasiRowsByWarga((previous) => ({ ...previous, [String(activeImunisasiWargaId)]: emptyImunisasiRows() }));
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeImunisasiWargaId]);
+
+  const updateActiveImunisasiRows = (rows) => {
+    if (!activeImunisasiWargaId) return;
+    setImunisasiRowsByWarga((previous) => ({ ...previous, [String(activeImunisasiWargaId)]: rows }));
+  };
+
+  const saveImunisasiRows = async (wargaId, rows) => {
+    const response = await imunisasiService.bulkUpsertImunisasi(
+      wargaId,
+      rows.map(({ jenis_imunisasi, is_diberikan, tanggal_imunisasi, tempat }) => ({ jenis_imunisasi, is_diberikan, tanggal_imunisasi: tanggal_imunisasi || null, tempat: tempat || null, no_batch: null })),
+    );
+    setImunisasiRowsByWarga((previous) => ({ ...previous, [String(wargaId)]: mergeImunisasiRows(response?.data) }));
+  };
+
+  const [sequentialForm, setSequentialForm] = useState({
+    isSkriningTahunan: false,
+    nik: "",
+    nama: "",
+    tglLahir: "",
+    gender: "",
+    pekerjaan: "",
+    statusPernikahan: "",
+    sekolah: "",
+    kelas: "",
+    usiaKehamilan: "",
+    waktuKunjunganNifas: "",
+    usiaBayi: "",
+    usiaBalita: "",
+    usiaApras: "",
+    checklistKia: "",
+    tb: "",
+    bb: "",
+    lila: "",
+    lk: "",
+    lp: "",
+    tensiSistol: "",
+    tensiDiastol: "",
+    gulaDarah: "",
+    batukTbc: "",
+    demamTbc: "",
+    bbTurunTbc: "",
+    kontakTbc: "",
+    lesuTbc: "",
+    jumlahTtd: "",
+    pemberianTtd: "",
+    rutinTtd: "",
+    komposisiMtBumil: "",
+    rutinMtBumil: "",
+    jumlahVitA: "",
+    rutinVitA: "",
+    menyusui: "",
+    kbPascaPersalinan: "",
+    asiEksklusif: "",
+    mpAsi: "",
+    pmtPemulihan: "",
+    pmtHabis: "",
+    vitA: "",
+    obatCacing: "",
+    ikutKelasBalita: "",
+    perkembanganSdidtk: "",
+    imunisasi: "",
+    skriningPtm: "",
+    mataKanan: "",
+    mataKiri: "",
+    telingaKanan: "",
+    telingaKiri: "",
+    skriningJiwa: "",
+    periksaHb: "",
+    batukBesarTbc: "",
+    nafsuMakanTbc: "",
+    bbMenurunTbc: "",
+    lemahLesuTbc: "",
+    berkeringatMalamTbc: "",
+    batukDarahTbc: "",
+    sesakNafasTbc: "",
+    kolesterol: "",
+    alatKontrasepsi: "",
+    pumaJk: "",
+    pumaUsia: "",
+    pumaMerokok: "",
+    pumaNapasPendek: "",
+    pumaDahak: "",
+    pumaBatukFlu: "",
+    // Skrining Kesehatan Jiwa - Dewasa & Lansia
+    jiwaBulan: "",
+    jiwaQ1: "",
+    jiwaQ2: "",
+    jiwaQ3: "",
+    jiwaQ4: "",
+    // C2. Pemeriksaan Tahunan AKS (Barthel) - Lansia
+    aksBab: "",
+    aksBak: "",
+    aksCuciMuka: "",
+    aksWc: "",
+    aksMakan: "",
+    aksPindah: "",
+    aksJalan: "",
+    aksPakaian: "",
+    aksTangga: "",
+    aksMandi: "",
+    // C3. Pemeriksaan Tahunan SKILAS - Lansia
+    skilasOrientasi: "",
+    skilasUlangKata: "",
+    skilasTesKursi: "",
+    skilasBbTurun: "",
+    skilasNafsuMakan: "",
+    skilasLilaKurang: "",
+    skilasMasalahMata: "",
+    skilasTesLihat: "",
+    skilasTesBisik: "",
+    skilasPerasaanSedih: "",
+    skilasHilangMinat: "",
+    skilasImunisasiCovid: "",
+    topikPenyuluhan: "",
+    mengikutiKelas: "",
+    statusRujukan: "",
+  });
+
+  // Helper setter/getter untuk field Langkah 4 (mendukung kedua mode)
+  const updateLangkah4Value = (field, val) => {
+    const updates = { [field]: val };
+    if (field === "batukTbc") updates.batukBesarTbc = val;
+    if (field === "batukBesarTbc") updates.batukTbc = val;
+    if (field === "pemberianTtd") updates.jumlahTtd = val;
+    if (field === "jumlahTtd") updates.pemberianTtd = val;
+
+    if (examinationMode === "per-step") {
+      setLangkah4Form((prev) => {
+        const next = { ...prev, ...updates };
+        if (activeSubmenu === "lansia") {
+          const evalResult = evaluateSkilas(next);
+          if (evalResult.adaRisiko) {
+            setLangkah5Form((l5) => ({
+              ...l5,
+              statusRujukan: "Rujuk ke Puskesmas / Pustu",
+              topikPenyuluhan: l5.topikPenyuluhan || `Rujukan SKILAS: Domain ${evalResult.issues.join(", ")}`,
+            }));
+          }
+        }
+        return next;
+      });
+    } else {
+      setSequentialForm((prev) => {
+        const next = { ...prev, ...updates };
+        if (activeSubmenu === "lansia") {
+          const evalResult = evaluateSkilas(next);
+          if (evalResult.adaRisiko) {
+            next.statusRujukan = "Rujuk ke Puskesmas / Pustu";
+            if (!next.topikPenyuluhan) {
+              next.topikPenyuluhan = `Rujukan SKILAS: Domain ${evalResult.issues.join(", ")}`;
+            }
+          }
+        }
+        return next;
+      });
+    }
+  };
+
+  const isRemajaPerempuan =
+    String(activeCitizenStep4?.gender || "")
+      .trim()
+      .toLowerCase() === "perempuan" ||
+    String(activeCitizenStep4?.gender || "")
+      .trim()
+      .toUpperCase() === "P";
+
+  const getLangkah4Value = (field) => {
+    const src = examinationMode === "per-step" ? langkah4Form : sequentialForm;
+    if (!src) return "";
+    if (field === "batukBesarTbc") return src.batukBesarTbc || src.batukTbc || "";
+    if (field === "batukTbc") return src.batukTbc || src.batukBesarTbc || "";
+    if (field === "pemberianTtd") return src.pemberianTtd || src.jumlahTtd || "";
+    if (field === "jumlahTtd") return src.jumlahTtd || src.pemberianTtd || "";
+    return src[field] ?? "";
+  };
+
+  // Automatically hydrate all 5 steps when a citizen is selected or category changes
+  useEffect(() => {
+    if (!currentSelectedWarga) return;
+    const defaultGen = currentSelectedWarga.gender || "";
+    const l1 = currentExamData?.langkah1 || {};
+    const l4 = currentExamData?.langkah4 || {};
+    const l5 = currentExamData?.langkah5 || {};
+    const backendDetail = currentExamData?.detail_skrining || {};
+    const backendRemajaAnnual = backendDetail?.pemeriksaan_tahunan_remaja_putri || {};
+
+    setLangkah1Form({
+      nik: currentSelectedWarga.nik || l1.nik || "",
+      nama: currentSelectedWarga.nama || l1.nama || "",
+      tglLahir: currentSelectedWarga.tglLahir || l1.tglLahir || "",
+      gender: defaultGen,
+      usiaKehamilan: l1.usiaKehamilan || currentSelectedWarga.usiaKehamilan || "",
+      waktuKunjunganNifas: l1.waktuKunjunganNifas || "",
+      usiaBayi: l1.usiaBayi || "",
+      usiaBalita: l1.usiaBalita || "",
+      usiaApras: l1.usiaApras || "",
+      checklistKia: l1.checklistKia || "",
+    });
+
+    // Step 2 selalu dimulai kosong saat sasaran dipilih.
+    // Data pengukuran lama tetap dipakai oleh Step 3 melalui backend plotting.
+    setLangkah2Form({
+      bb: "",
+      tb: "",
+      lila: "",
+      lk: "",
+      lp: "",
+      tensiSistol: "",
+      tensiDiastol: "",
+      gulaDarah: "",
+    });
+
+    const hasAnnualData = Boolean(
+      currentExamData?.is_skrining_tahunan ||
+      backendDetail?.is_skrining_tahunan ||
+      backendRemajaAnnual?.is_skrining_jiwa ||
+      backendRemajaAnnual?.is_periksa_hb ||
+      l4.isSkriningTahunan ||
+      l4.is_skrining_tahunan ||
+      (l4.jiwaQ1 !== undefined && l4.jiwaQ1 !== "") ||
+      (l4.aksBab !== undefined && l4.aksBab !== "") ||
+      (l4.skilasOrientasi !== undefined && l4.skilasOrientasi !== "") ||
+      (l4.pumaJk !== undefined && l4.pumaJk !== "") ||
+      (l4.skriningJiwa && l4.skriningJiwa !== ""),
+    );
+
+    setLangkah4Form({
+      isSkriningTahunan: hasAnnualData,
+      batukTbc: l4.batukTbc || "",
+      demamTbc: l4.demamTbc || "",
+      bbTurunTbc: l4.bbTurunTbc || "",
+      kontakTbc: l4.kontakTbc || "",
+      lesuTbc: l4.lesuTbc || "",
+      jumlahTtd: l4.jumlahTtd || "",
+      pemberianTtd: l4.pemberianTtd || l4.jumlahTtd || "",
+      rutinTtd: l4.rutinTtd || "",
+      komposisiMtBumil: l4.komposisiMtBumil || "",
+      rutinMtBumil: l4.rutinMtBumil || "",
+      jumlahVitA: l4.jumlahVitA || "",
+      rutinVitA: l4.rutinVitA || "",
+      menyusui: l4.menyusui || "",
+      kbPascaPersalinan: l4.kbPascaPersalinan || "",
+      asiEksklusif: l4.asiEksklusif || "",
+      mpAsi: l4.mpAsi || "",
+      pmtPemulihan: l4.pmtPemulihan || "",
+      pmtHabis: l4.pmtHabis || "",
+      vitA: l4.vitA || "",
+      obatCacing: l4.obatCacing || "",
+      ikutKelasBalita: l4.ikutKelasBalita || "",
+      perkembanganSdidtk: l4.perkembanganSdidtk || "",
+      imunisasi: l4.imunisasi || "",
+      skriningPtm: l4.skriningPtm || "",
+      mataKanan: l4.mataKanan || "",
+      mataKiri: l4.mataKiri || "",
+      telingaKanan: l4.telingaKanan || "",
+      telingaKiri: l4.telingaKiri || "",
+      skriningJiwa: l4.skriningJiwa || "",
+      periksaHb: l4.periksaHb || "",
+      batukBesarTbc: l4.batukBesarTbc || "",
+      nafsuMakanTbc: l4.nafsuMakanTbc || "",
+      bbMenurunTbc: l4.bbMenurunTbc || "",
+      lemahLesuTbc: l4.lemahLesuTbc || "",
+      berkeringatMalamTbc: l4.berkeringatMalamTbc || "",
+      batukDarahTbc: l4.batukDarahTbc || "",
+      sesakNafasTbc: l4.sesakNafasTbc || "",
+      kolesterol: l4.kolesterol || "",
+      alatKontrasepsi: l4.alatKontrasepsi || "",
+      pumaJk: l4.pumaJk !== undefined ? l4.pumaJk : "",
+      pumaUsia: l4.pumaUsia !== undefined ? l4.pumaUsia : "",
+      pumaMerokok: l4.pumaMerokok !== undefined ? l4.pumaMerokok : "",
+      pumaNapasPendek: l4.pumaNapasPendek !== undefined ? l4.pumaNapasPendek : "",
+      pumaDahak: l4.pumaDahak !== undefined ? l4.pumaDahak : "",
+      pumaBatukFlu: l4.pumaBatukFlu !== undefined ? l4.pumaBatukFlu : "",
+      // C2. AKS - Lansia
+      aksBab: l4.aksBab !== undefined ? l4.aksBab : "",
+      aksBak: l4.aksBak !== undefined ? l4.aksBak : "",
+      aksCuciMuka: l4.aksCuciMuka !== undefined ? l4.aksCuciMuka : "",
+      aksWc: l4.aksWc !== undefined ? l4.aksWc : "",
+      aksMakan: l4.aksMakan !== undefined ? l4.aksMakan : "",
+      aksPindah: l4.aksPindah !== undefined ? l4.aksPindah : "",
+      aksJalan: l4.aksJalan !== undefined ? l4.aksJalan : "",
+      aksPakaian: l4.aksPakaian !== undefined ? l4.aksPakaian : "",
+      aksTangga: l4.aksTangga !== undefined ? l4.aksTangga : "",
+      aksMandi: l4.aksMandi !== undefined ? l4.aksMandi : "",
+      // C3. SKILAS - Lansia
+      skilasOrientasi: l4.skilasOrientasi || "",
+      skilasUlangKata: l4.skilasUlangKata || "",
+      skilasTesKursi: l4.skilasTesKursi || "",
+      skilasBbTurun: l4.skilasBbTurun || "",
+      skilasNafsuMakan: l4.skilasNafsuMakan || "",
+      skilasLilaKurang: l4.skilasLilaKurang || "",
+      skilasMasalahMata: l4.skilasMasalahMata || "",
+      skilasTesLihat: l4.skilasTesLihat || "",
+      skilasTesBisik: l4.skilasTesBisik || "",
+      skilasPerasaanSedih: l4.skilasPerasaanSedih || "",
+      skilasHilangMinat: l4.skilasHilangMinat || "",
+      skilasImunisasiCovid: l4.skilasImunisasiCovid || "",
+    });
+
+    setLangkah5Form({
+      topikPenyuluhan: l5.topikPenyuluhan || "",
+      mengikutiKelas: l5.mengikutiKelas || "",
+      statusRujukan: l5.statusRujukan || "",
+    });
+
+    setSequentialForm({
+      isSkriningTahunan: hasAnnualData,
+      nik: currentSelectedWarga.nik || l1.nik || "",
+      nama: currentSelectedWarga.nama || l1.nama || "",
+      tglLahir: currentSelectedWarga.tglLahir || l1.tglLahir || "",
+      gender: defaultGen,
+      pekerjaan: currentSelectedWarga.pekerjaan || l1.pekerjaan || "",
+      statusPernikahan: currentSelectedWarga.statusPernikahan || l1.statusPernikahan || "",
+      sekolah: currentSelectedWarga.sekolah || l1.sekolah || "",
+      kelas: currentSelectedWarga.kelas || l1.kelas || "",
+      usiaKehamilan: l1.usiaKehamilan || currentSelectedWarga.usiaKehamilan || "",
+      waktuKunjunganNifas: l1.waktuKunjunganNifas || "",
+      usiaBayi: l1.usiaBayi || "",
+      usiaBalita: l1.usiaBalita || "",
+      usiaApras: l1.usiaApras || "",
+      checklistKia: l1.checklistKia || "",
+      tb: "",
+      bb: "",
+      lila: "",
+      lk: "",
+      lp: "",
+      tensiSistol: "",
+      tensiDiastol: "",
+      gulaDarah: "",
+      batukTbc: l4.batukTbc || "",
+      demamTbc: l4.demamTbc || "",
+      bbTurunTbc: l4.bbTurunTbc || "",
+      kontakTbc: l4.kontakTbc || "",
+      lesuTbc: l4.lesuTbc || "",
+      jumlahTtd: l4.jumlahTtd || "",
+      pemberianTtd: l4.pemberianTtd || l4.jumlahTtd || "",
+      rutinTtd: l4.rutinTtd || "",
+      komposisiMtBumil: l4.komposisiMtBumil || "",
+      rutinMtBumil: l4.rutinMtBumil || "",
+      jumlahVitA: l4.jumlahVitA || "",
+      rutinVitA: l4.rutinVitA || "",
+      menyusui: l4.menyusui || "",
+      kbPascaPersalinan: l4.kbPascaPersalinan || "",
+      asiEksklusif: l4.asiEksklusif || "",
+      mpAsi: l4.mpAsi || "",
+      pmtPemulihan: l4.pmtPemulihan || "",
+      pmtHabis: l4.pmtHabis || "",
+      vitA: l4.vitA || "",
+      obatCacing: l4.obatCacing || "",
+      ikutKelasBalita: l4.ikutKelasBalita || "",
+      perkembanganSdidtk: l4.perkembanganSdidtk || "",
+      imunisasi: l4.imunisasi || "",
+      skriningPtm: l4.skriningPtm || "",
+      mataKanan: l4.mataKanan || "",
+      mataKiri: l4.mataKiri || "",
+      telingaKanan: l4.telingaKanan || "",
+      telingaKiri: l4.telingaKiri || "",
+      skriningJiwa: l4.skriningJiwa || "",
+      periksaHb: l4.periksaHb || "",
+      batukBesarTbc: l4.batukBesarTbc || "",
+      nafsuMakanTbc: l4.nafsuMakanTbc || "",
+      bbMenurunTbc: l4.bbMenurunTbc || "",
+      lemahLesuTbc: l4.lemahLesuTbc || "",
+      berkeringatMalamTbc: l4.berkeringatMalamTbc || "",
+      batukDarahTbc: l4.batukDarahTbc || "",
+      sesakNafasTbc: l4.sesakNafasTbc || "",
+      kolesterol: l4.kolesterol || "",
+      alatKontrasepsi: l4.alatKontrasepsi || "",
+      pumaJk: l4.pumaJk !== undefined ? l4.pumaJk : "",
+      pumaUsia: l4.pumaUsia !== undefined ? l4.pumaUsia : "",
+      pumaMerokok: l4.pumaMerokok !== undefined ? l4.pumaMerokok : "",
+      pumaNapasPendek: l4.pumaNapasPendek !== undefined ? l4.pumaNapasPendek : "",
+      pumaDahak: l4.pumaDahak !== undefined ? l4.pumaDahak : "",
+      pumaBatukFlu: l4.pumaBatukFlu !== undefined ? l4.pumaBatukFlu : "",
+      // C2. AKS - Lansia
+      aksBab: l4.aksBab !== undefined ? l4.aksBab : "",
+      aksBak: l4.aksBak !== undefined ? l4.aksBak : "",
+      aksCuciMuka: l4.aksCuciMuka !== undefined ? l4.aksCuciMuka : "",
+      aksWc: l4.aksWc !== undefined ? l4.aksWc : "",
+      aksMakan: l4.aksMakan !== undefined ? l4.aksMakan : "",
+      aksPindah: l4.aksPindah !== undefined ? l4.aksPindah : "",
+      aksJalan: l4.aksJalan !== undefined ? l4.aksJalan : "",
+      aksPakaian: l4.aksPakaian !== undefined ? l4.aksPakaian : "",
+      aksTangga: l4.aksTangga !== undefined ? l4.aksTangga : "",
+      aksMandi: l4.aksMandi !== undefined ? l4.aksMandi : "",
+      // C3. SKILAS - Lansia
+      skilasOrientasi: l4.skilasOrientasi || "",
+      skilasUlangKata: l4.skilasUlangKata || "",
+      skilasTesKursi: l4.skilasTesKursi || "",
+      skilasBbTurun: l4.skilasBbTurun || "",
+      skilasNafsuMakan: l4.skilasNafsuMakan || "",
+      skilasLilaKurang: l4.skilasLilaKurang || "",
+      skilasMasalahMata: l4.skilasMasalahMata || "",
+      skilasTesLihat: l4.skilasTesLihat || "",
+      skilasTesBisik: l4.skilasTesBisik || "",
+      skilasPerasaanSedih: l4.skilasPerasaanSedih || "",
+      skilasHilangMinat: l4.skilasHilangMinat || "",
+      skilasImunisasiCovid: l4.skilasImunisasiCovid || "",
+      topikPenyuluhan: l5.topikPenyuluhan || "",
+      mengikutiKelas: l5.mengikutiKelas || "",
+      statusRujukan: l5.statusRujukan || "",
+    });
+  }, [currentSelectedWarga, currentExamData, backendPlottingByWarga, activeSubmenu, currentCategory.label]);
+
+  // Kalkulasi reaktif skor AKS, hasil SKILAS, dan Skrining Jiwa
+  const currentAks = useMemo(() => {
+    return calculateAks(examinationMode === "per-step" ? langkah4Form : sequentialForm);
+  }, [examinationMode, langkah4Form, sequentialForm]);
+
+  const currentSkilas = useMemo(() => {
+    return evaluateSkilas(examinationMode === "per-step" ? langkah4Form : sequentialForm);
+  }, [examinationMode, langkah4Form, sequentialForm]);
+
+  const currentJiwa = useMemo(() => {
+    return calculateJiwa(examinationMode === "per-step" ? langkah4Form : sequentialForm);
+  }, [examinationMode, langkah4Form, sequentialForm]);
+
+  // Active data for Step 3 Plotting & Step 2 calculations
+  const activeWargaData = useMemo(() => {
+    return {
+      ...(currentSelectedWarga || {}),
+      ...(currentExamData?.langkah1 || {}),
+      ...(currentExamData?.langkah2 || {}),
+      ...langkah1Form,
+      ...langkah2Form,
+    };
+  }, [currentSelectedWarga, currentExamData, langkah1Form, langkah2Form]);
+
+  // Helper fungsi untuk validasi ketat setiap langkah pemeriksaan posyandu
+  const validateStepData = (step, data, submenu) => {
+    const missing = [];
+
+    if (step === 1) {
+      if (!data?.nama || !String(data.nama).trim()) missing.push("Nama Lengkap");
+      if (!data?.nik || !String(data.nik).trim()) {
+        missing.push("NIK (16 digit)");
+      } else {
+        const nikCheck = validateNik(data.nik);
+        if (!nikCheck.isValid) missing.push(nikCheck.message);
+      }
+      if (!data?.tglLahir) missing.push("Tanggal Lahir");
+      if (!["Laki-laki", "Perempuan", "L", "P"].includes(data?.gender)) missing.push("Jenis Kelamin");
+    }
+
+    if (step === 2) {
+      if (!data?.bb || !String(data.bb).trim()) missing.push("Berat Badan (BB)");
+
+      if (["bayi-0-11", "balita-12-59"].includes(submenu)) {
+        if (!data?.tb || !String(data.tb).trim()) missing.push("Panjang / Tinggi Badan (PB/TB)");
+        if (!data?.lk || !String(data.lk).trim()) missing.push("Lingkar Kepala (LK)");
+        if (!data?.lila || !String(data.lila).trim()) missing.push("Lingkar Lengan Atas (LiLA)");
+      } else if (submenu === "apras") {
+        if (!data?.tb || !String(data.tb).trim()) missing.push("Tinggi Badan (TB)");
+        if (!data?.lila || !String(data.lila).trim()) missing.push("Lingkar Lengan Atas (LiLA)");
+      } else if (submenu === "usekrem-6-14") {
+        if (!data?.tb || !String(data.tb).trim()) missing.push("Tinggi Badan (TB)");
+      } else if (submenu === "usekrem-15-18") {
+        if (!data?.tb || !String(data.tb).trim()) missing.push("Tinggi Badan (TB)");
+        if (!data?.lp || !String(data.lp).trim()) missing.push("Lingkar Perut (LP)");
+        if (!data?.tensiSistol || !String(data.tensiSistol).trim()) missing.push("Tekanan Sistol");
+        if (!data?.tensiDiastol || !String(data.tensiDiastol).trim()) missing.push("Tekanan Diastol");
+      } else if (submenu === "dewasa" || submenu === "lansia") {
+        if (!data?.tb || !String(data.tb).trim()) missing.push("Tinggi Badan (TB)");
+        if (!data?.lp || !String(data.lp).trim()) missing.push("Lingkar Perut (LP)");
+        if (!data?.lila || !String(data.lila).trim()) missing.push("Lingkar Lengan Atas (LiLA)");
+        if (!data?.tensiSistol || !String(data.tensiSistol).trim()) missing.push("Tekanan Sistol");
+        if (!data?.tensiDiastol || !String(data.tensiDiastol).trim()) missing.push("Tekanan Diastol");
+      } else if (submenu === "bumil") {
+        if (!data?.lila || !String(data.lila).trim()) missing.push("Lingkar Lengan Atas (LiLA)");
+        if (!data?.tensiSistol || !String(data.tensiSistol).trim()) missing.push("Tekanan Sistol");
+        if (!data?.tensiDiastol || !String(data.tensiDiastol).trim()) missing.push("Tekanan Diastol");
+      } else if (submenu === "nifas") {
+        if (!data?.tensiSistol || !String(data.tensiSistol).trim()) missing.push("Tekanan Sistol");
+        if (!data?.tensiDiastol || !String(data.tensiDiastol).trim()) missing.push("Tekanan Diastol");
+      }
+
+      if (data?.bb) {
+        const measureCheck = validateMeasurements({
+          bb: data.bb,
+          tb: data.tb,
+          lila: data.lila,
+          sistol: data.tensiSistol,
+          diastol: data.tensiDiastol,
+        });
+        if (!measureCheck.isValid && measureCheck.errors) {
+          measureCheck.errors.forEach((err) => missing.push(err));
+        }
+      }
+    }
+
+    if (step === 4) {
+      if (["bayi-0-11", "balita-12-59", "apras"].includes(submenu)) {
+        if (!data?.batukTbc && !data?.batukBesarTbc) missing.push("Gejala Batuk TBC");
+        if (!data?.demamTbc) missing.push("Gejala Demam TBC");
+        if (!data?.bbTurunTbc) missing.push("Gejala BB Turun TBC");
+        if (!data?.lesuTbc) missing.push("Gejala Lesu TBC");
+      } else if (["bumil", "nifas"].includes(submenu)) {
+        if (!data?.batukTbc && !data?.batukBesarTbc) missing.push("Gejala Batuk TBC");
+        if (!data?.demamTbc) missing.push("Gejala Demam TBC");
+        if (!data?.bbTurunTbc) missing.push("Gejala BB Turun TBC");
+        if (!data?.kontakTbc) missing.push("Kontak Erat Pasien TBC");
+      } else if (submenu === "usekrem-6-14") {
+        if (!data?.batukTbc && !data?.batukBesarTbc) missing.push("Gejala Batuk TBC");
+        if (!data?.demamTbc) missing.push("Gejala Demam TBC");
+        if (!data?.bbTurunTbc) missing.push("Gejala BB Turun TBC");
+        if (!data?.lesuTbc) missing.push("Gejala Lesu TBC");
+      } else {
+        if (!data?.batukBesarTbc && !data?.batukTbc) missing.push("Batuk Berdahak ≥ 2 Minggu");
+        if (!data?.nafsuMakanTbc) missing.push("Penurunan Nafsu Makan");
+        if (!data?.bbMenurunTbc) missing.push("BB Menurun Tanpa Sebab");
+        if (!data?.lemahLesuTbc) missing.push("Tubuh Lemas / Lesu");
+        if (!data?.berkeringatMalamTbc) missing.push("Berkeringat Malam");
+        if (!data?.batukDarahTbc) missing.push("Batuk Berdarah");
+        if (!data?.sesakNafasTbc) missing.push("Sesak Napas");
+      }
+
+      if (submenu === "bumil") {
+        if (!data?.pemberianTtd && !data?.jumlahTtd) missing.push("Pemberian TTD");
+        if (!data?.rutinTtd) missing.push("Rutin Konsumsi TTD");
+      } else if (submenu === "nifas") {
+        if (!data?.jumlahVitA && !data?.rutinVitA) missing.push("Pemberian Kapsul Vitamin A");
+        if (!data?.menyusui) missing.push("Status Menyusui");
+        if (!data?.kbPascaPersalinan) missing.push("KB Pasca Persalinan");
+      } else if (submenu === "dewasa") {
+        if (data?.isSkriningTahunan) {
+          if (data?.jiwaQ1 === undefined || data?.jiwaQ1 === "") missing.push("Skrining Jiwa Pertanyaan 1");
+          if (data?.jiwaQ2 === undefined || data?.jiwaQ2 === "") missing.push("Skrining Jiwa Pertanyaan 2");
+          if (data?.jiwaQ3 === undefined || data?.jiwaQ3 === "") missing.push("Skrining Jiwa Pertanyaan 3");
+          if (data?.jiwaQ4 === undefined || data?.jiwaQ4 === "") missing.push("Skrining Jiwa Pertanyaan 4");
+        }
+      }
+    }
+
+    if (step === 5) {
+      if (!data?.topikPenyuluhan || !String(data.topikPenyuluhan).trim()) {
+        missing.push("Topik Penyuluhan");
+      }
+
+      const statusRujukan = String(data?.statusRujukan || "Tidak Perlu Rujukan").trim();
+
+      if (!statusRujukan) {
+        missing.push("Status Rujukan");
+      }
+    }
+
+    return {
+      isValid: missing.length === 0,
+      missingFields: missing,
+      errorMessage: missing.length > 0 ? `Mohon lengkapi isian berikut: ${missing.join(", ")}` : "",
+    };
+  };
+
+  const getBackendCategory = (submenu) => (submenu === "nifas" ? "busui" : submenu);
+
+  const getWargaForId = (id) => activeWargaList.find((w) => String(w.id) === String(id)) || null;
+
+  const saveCompleteExamination = async (formData, isFromSequential = false) => {
+    const targetId = isFromSequential ? selectedWargaId : selectedWargaStep5;
+    const targetWarga = getWargaForId(targetId);
+    if (!targetWarga) {
+      showWarning("Sasaran Tidak Ditemukan", "Pilih sasaran yang berasal dari data backend terlebih dahulu.");
+      return;
+    }
+
+    const measureVal = validateMeasurements(formData);
+    if (!measureVal.isValid) {
+      showWarning("Validasi Pengukuran", measureVal.message);
+      return;
+    }
+
+    try {
+      const kunjunganId = kunjunganIdByWarga[String(targetWarga.id)] || (await ensureKunjunganId(targetWarga));
+      setKunjunganIdByWarga((prev) => ({ ...prev, [String(targetWarga.id)]: kunjunganId }));
+
+      const step2Res = await pemeriksaanService.saveStep2({
+        kunjungan_id: Number(kunjunganId),
+        bb_kg: formData.bb !== "" ? Number(formData.bb) : undefined,
+        tb_cm: formData.tb !== "" ? Number(formData.tb) : undefined,
+        lingkar_kepala_cm: formData.lk !== "" ? Number(formData.lk) : undefined,
+        lila_cm: formData.lila !== "" ? Number(formData.lila) : undefined,
+        lingkar_perut_cm: formData.lp !== "" ? Number(formData.lp) : undefined,
+        td_sistole: formData.tensiSistol !== "" ? Number(formData.tensiSistol) : undefined,
+        td_diastole: formData.tensiDiastol !== "" ? Number(formData.tensiDiastol) : undefined,
+        kadar_gula: formData.gulaDarah !== "" ? Number(formData.gulaDarah) : undefined,
+      });
+      const pemeriksaanId = step2Res?.data?.id;
+      if (!pemeriksaanId) throw new Error("Backend tidak mengembalikan ID pemeriksaan setelah Step 2.");
+      setPemeriksaanByWarga((prev) => ({ ...prev, [String(targetWarga.id)]: pemeriksaanId }));
+
+      const screeningForm = ["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && !isRemajaPerempuan ? { ...formData, periksaHb: "" } : formData;
+
+      const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), screeningForm);
+      const step4Res = await pemeriksaanService.saveStep4({
+        kunjungan_id: Number(kunjunganId),
+        detail_skrining: screeningPayload,
+        is_skrining_tahunan: Boolean(formData.isSkriningTahunan),
+      });
+      if (!step4Res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+      await saveImunisasiRows(targetWarga.id, imunisasiRowsByWarga[String(targetWarga.id)] || emptyImunisasiRows());
+
+      const statusRujukan = String(formData.statusRujukan || "").trim();
+
+      const step5Res = await pemeriksaanService.saveStep5({
+        kunjungan_id: Number(kunjunganId),
+        topik_penyuluhan: String(formData.topikPenyuluhan || "").trim(),
+        is_perlu_rujukan: statusRujukan === "Rujuk ke Puskesmas / Pustu",
+        alasan_rujukan: formData.alasanRujukan || undefined,
+      });
+      if (!step5Res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
+
+      const plottingRes = await pemeriksaanService.getStep3Plotting(step5Res.data.id || pemeriksaanId);
+      if (plottingRes?.data) {
+        setBackendPlottingByWarga((prev) => ({ ...prev, [String(targetWarga.id)]: plottingRes.data }));
+      }
+      setPemeriksaanByWarga((prev) => ({ ...prev, [String(targetWarga.id)]: step5Res.data.id || pemeriksaanId }));
+
+      setGlobalPemeriksaanData?.((prev) => ({ ...prev, [String(targetWarga.id)]: step5Res.data }));
+      setCompletedSteps((prev) => ({ ...prev, [String(targetWarga.id)]: { ...(prev[String(targetWarga.id)] || {}), step1: true, step2: true, step3: true, step4: true, step5: true } }));
+
+      setShowSequentialPreviewModal(false);
+      setActiveStep(1);
+      showSuccess("Pemeriksaan Tersimpan", `Data pemeriksaan untuk "${targetWarga.nama || "Warga"}" berhasil disimpan ke database.`);
+      onRefreshData?.();
+    } catch (err) {
+      console.error("Gagal menyimpan pemeriksaan:", err);
+      showWarning("Gagal Menyimpan Pemeriksaan", err?.message || "Data gagal disimpan ke backend.");
+    }
+  };
+
+  // Handler presensi kehadiran warga di Langkah 1
+  const handleToggleKehadiran = (wargaId, status) => {
+    setKehadiranWarga((prev) => ({
+      ...prev,
+      [String(wargaId)]: status,
+    }));
+  };
+
+  const handleSavePresensiLangkah1 = async () => {
+    try {
+      const hadirIds = Object.entries(kehadiranWarga)
+        .filter(([id, hadir]) => hadir && !backendRegisteredWarga[id])
+        .map(([id]) => id);
+      for (const id of hadirIds) {
+        const w = getWargaForId(id);
+        if (!w) continue;
+        const kunjunganId = await ensureKunjunganId(w);
+        setKunjunganIdByWarga((prev) => ({ ...prev, [String(id)]: kunjunganId }));
+        setBackendRegisteredWarga((prev) => ({ ...prev, [String(id)]: true }));
+        setKehadiranWarga((prev) => ({ ...prev, [String(id)]: true }));
+        setCompletedSteps((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), step1: true } }));
+        setStepDataByWarga((prev) => ({
+          ...prev,
+          [String(id)]: {
+            ...(prev[String(id)] || {}),
+            warga: w,
+            langkah1: {
+              ...(prev[String(id)]?.langkah1 || {}),
+              nik: w.nik,
+              nama: w.nama,
+              tglLahir: w.tglLahir,
+              gender: w.gender,
+              usiaKehamilan: waktuKunjunganPresensi[id] || "",
+              waktuKunjunganNifas: waktuKunjunganPresensi[id] || "",
+            },
+          },
+        }));
+      }
+      showSuccess("Presensi Tersimpan", `Presensi ${hadirIds.length} sasaran berhasil disimpan ke database.`);
+      onRefreshData?.();
+    } catch (err) {
+      showWarning("Gagal Menyimpan Presensi", err?.message || "Presensi gagal disimpan ke backend.");
+    }
+  };
+
+  // Step handlers for Mode Pilih Langkah
+  const handleSaveLangkah1 = async (e) => {
+    e.preventDefault();
+    const valResult = validateStepData(1, langkah1Form, activeSubmenu);
+    if (!valResult.isValid) {
+      showWarning("Data Belum Lengkap", valResult.errorMessage);
+      return;
+    }
+
+    if (!user?.posyandu_id) {
+      showWarning("Posyandu Belum Terhubung", "Akun kader belum memiliki Posyandu pada backend.");
+      return;
+    }
+
+    try {
+      const res = await wargaService.createWarga({
+        nik: langkah1Form.nik.trim(),
+        nama_lengkap: langkah1Form.nama.trim(),
+        jenis_kelamin: langkah1Form.gender === "Laki-laki" || langkah1Form.gender === "L" ? "L" : "P",
+        tanggal_lahir: langkah1Form.tglLahir,
+        posyandu_id: Number(user.posyandu_id),
+        kategori_sasaran: getBackendCategory(activeSubmenu),
+      });
+      const created = res?.data;
+      if (!created?.id) throw new Error("Backend tidak mengembalikan data warga yang baru dibuat.");
+      const mapped = mapBackendWargaToFrontend(created);
+      setGlobalSasaranList?.((prev) => [mapped, ...(prev || []).filter((x) => String(x.id) !== String(mapped.id))]);
+      setStepDataByWarga((prev) => ({ ...prev, [String(mapped.id)]: { warga: mapped, langkah1: { ...langkah1Form } } }));
+      setCompletedSteps((prev) => ({ ...prev, [String(mapped.id)]: { ...(prev[String(mapped.id)] || {}), step1: true } }));
+      setSelectedWargaId(String(mapped.id));
+      setSelectedWargaStep2(String(mapped.id));
+      setSelectedWargaStep3(String(mapped.id));
+      setSelectedWargaStep4(String(mapped.id));
+      setSelectedWargaStep5(String(mapped.id));
+      showSuccess("Sasaran Tersimpan", `Data warga "${mapped.nama}" berhasil disimpan ke database.`);
+      onRefreshData?.();
+    } catch (err) {
+      showWarning("Gagal Menyimpan Sasaran", err?.message || "Data warga gagal disimpan ke backend.");
+    }
+  };
+
+  const handleSaveLangkah2 = async (e) => {
+    e.preventDefault();
+    if (!selectedWargaStep2) {
+      showWarning("Pilih Sasaran Warga", "Silakan pilih nama warga yang akan diperiksa pada dropdown Langkah 2 terlebih dahulu.");
+      return;
+    }
+    const valResult = validateStepData(2, langkah2Form, activeSubmenu);
+    if (!valResult.isValid) {
+      showWarning("Data Belum Lengkap", valResult.errorMessage);
+      return;
+    }
+    const warga = getWargaForId(selectedWargaStep2);
+    try {
+      const kunjunganId = kunjunganIdByWarga[String(selectedWargaStep2)] || (await ensureKunjunganId(warga));
+      const res = await pemeriksaanService.saveStep2({
+        kunjungan_id: Number(kunjunganId),
+        bb_kg: Number(langkah2Form.bb),
+        tb_cm: langkah2Form.tb !== "" ? Number(langkah2Form.tb) : undefined,
+        lingkar_kepala_cm: langkah2Form.lk !== "" ? Number(langkah2Form.lk) : undefined,
+        lila_cm: langkah2Form.lila !== "" ? Number(langkah2Form.lila) : undefined,
+        lingkar_perut_cm: langkah2Form.lp !== "" ? Number(langkah2Form.lp) : undefined,
+        td_sistole: langkah2Form.tensiSistol !== "" ? Number(langkah2Form.tensiSistol) : undefined,
+        td_diastole: langkah2Form.tensiDiastol !== "" ? Number(langkah2Form.tensiDiastol) : undefined,
+        kadar_gula: langkah2Form.gulaDarah !== "" ? Number(langkah2Form.gulaDarah) : undefined,
+      });
+      if (!res?.data?.id) throw new Error("Backend tidak mengembalikan ID pemeriksaan.");
+      setKunjunganIdByWarga((prev) => ({ ...prev, [String(selectedWargaStep2)]: kunjunganId }));
+      setPemeriksaanByWarga((prev) => ({ ...prev, [String(selectedWargaStep2)]: res.data.id }));
+      setStepDataByWarga((prev) => ({ ...prev, [String(selectedWargaStep2)]: { ...(prev[String(selectedWargaStep2)] || {}), warga, langkah2: { ...langkah2Form } } }));
+      const savedWargaId = String(selectedWargaStep2);
+      setCompletedSteps((prev) => ({ ...prev, [savedWargaId]: { ...(prev[savedWargaId] || {}), step2: true } }));
+      setBackendStep2CompletedWarga((prev) => ({ ...prev, [savedWargaId]: true }));
+      const plotRes = await pemeriksaanService.getStep3Plotting(res.data.id);
+      if (plotRes?.data) setBackendPlottingByWarga((prev) => ({ ...prev, [savedWargaId]: plotRes.data }));
+
+      // Bersihkan form dan pindahkan dropdown ke warga berikutnya.
+      const nextWarga = availableWargaStep2.find((item) => String(item.id) !== savedWargaId);
+      setLangkah2Form({ bb: "", tb: "", lila: "", lk: "", lp: "", tensiSistol: "", tensiDiastol: "", gulaDarah: "" });
+      setSelectedWargaStep2(nextWarga ? String(nextWarga.id) : "");
+      showSuccess("Langkah 2 Tersimpan", `Pengukuran untuk "${warga?.nama || "Warga"}" berhasil disimpan ke database.`);
+    } catch (err) {
+      showWarning("Gagal Menyimpan Pengukuran", err?.message || "Pengukuran gagal disimpan ke backend.");
+    }
+  };
+
+  const handleSaveLangkah3 = async (e) => {
+    e.preventDefault();
+    const targetId = String(selectedWargaStep3 || "");
+    const warga = getWargaForId(targetId);
+    const plotting = backendPlottingByWarga[targetId];
+    if (!warga) {
+      showWarning("Pilih Sasaran Warga", "Silakan pilih sasaran dari data backend.");
+      return;
+    }
+    if (!plotting) {
+      showWarning("Plotting Belum Tersedia", "Simpan Langkah 2 terlebih dahulu agar hasil plotting dari backend tersedia.");
+      return;
+    }
+    setStepDataByWarga((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), warga, langkah3: plotting } }));
+    setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step3: true } }));
+    showSuccess("Langkah 3 Tersedia", `Hasil plotting untuk "${warga.nama || "Warga"}" diambil dari backend.`);
+  };
+
+  const handleSaveLangkah4 = async (e) => {
+    e.preventDefault();
+    if (!selectedWargaStep4) {
+      showWarning("Pilih Sasaran Warga", "Silakan pilih nama warga yang akan diskrining pada dropdown Langkah 4 terlebih dahulu.");
+      return;
+    }
+    const valResult = validateStepData(4, langkah4Form, activeSubmenu);
+    if (!valResult.isValid) {
+      showWarning("Data Belum Lengkap", valResult.errorMessage);
+      return;
+    }
+    const targetId = String(selectedWargaStep4);
+    const warga = getWargaForId(targetId);
+    try {
+      const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga));
+      const screeningForm = ["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && !isRemajaPerempuan ? { ...langkah4Form, periksaHb: "" } : langkah4Form;
+
+      const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), screeningForm);
+      const res = await pemeriksaanService.saveStep4({
+        kunjungan_id: Number(kunjunganId),
+        detail_skrining: screeningPayload,
+        is_skrining_tahunan: Boolean(langkah4Form.isSkriningTahunan),
+      });
+      if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+      await saveImunisasiRows(targetId, imunisasiRowsByWarga[targetId] || emptyImunisasiRows());
+      setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
+      setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
+      setStepDataByWarga((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), warga, langkah4: res.data.detail_skrining || screeningPayload } }));
+      setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step4: true } }));
+      setBackendStep4CompletedWarga((prev) => ({ ...prev, [targetId]: true }));
+      showSuccess("Langkah 4 Tersimpan", `Skrining untuk "${warga?.nama || "Warga"}" berhasil disimpan ke database.`);
+    } catch (err) {
+      showWarning("Gagal Menyimpan Skrining", err?.message || "Skrining gagal disimpan ke backend.");
+    }
+  };
+
+  const handleSaveLangkah5 = async (e) => {
+    e.preventDefault();
+    if (!selectedWargaStep5) {
+      showWarning("Pilih Sasaran Warga", "Silakan pilih nama warga pada dropdown Langkah 5 terlebih dahulu.");
+      return;
+    }
+    const valResult = validateStepData(5, langkah5Form, activeSubmenu);
+    if (!valResult.isValid) {
+      showWarning("Data Belum Lengkap", valResult.errorMessage);
+      return;
+    }
+    const targetId = String(selectedWargaStep5);
+    const warga = getWargaForId(targetId);
+    try {
+      const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga));
+      const res = await pemeriksaanService.saveStep5({
+        kunjungan_id: Number(kunjunganId),
+        topik_penyuluhan: String(langkah5Form.topikPenyuluhan || "").trim(),
+        is_perlu_rujukan: String(langkah5Form.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu",
+      });
+      if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
+
+      const savedRujukanStatus = res?.rujukan || res?.data?.is_perlu_rujukan === true ? "Rujuk ke Puskesmas / Pustu" : "Tidak Perlu Rujukan";
+      const savedLangkah5 = {
+        ...langkah5Form,
+        topikPenyuluhan: res?.data?.topik_penyuluhan ?? langkah5Form.topikPenyuluhan ?? "",
+        statusRujukan: savedRujukanStatus,
+      };
+
+      setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
+      setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
+      setGlobalPemeriksaanData?.((prev) => ({ ...prev, [targetId]: res.data }));
+      setStepDataByWarga((prev) => ({
+        ...prev,
+        [targetId]: {
+          ...(prev[targetId] || {}),
+          warga,
+          langkah5: savedLangkah5,
+        },
+      }));
+      setLangkah5Form(savedLangkah5);
+      setSequentialForm((prev) => ({ ...prev, ...savedLangkah5 }));
+      setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step5: true } }));
+      setBackendStep5CompletedWarga((prev) => ({ ...prev, [targetId]: true }));
+      showSuccess("Langkah 5 Tersimpan", `Pemeriksaan untuk "${warga?.nama || "Warga"}" selesai dan tersimpan di database.`);
+      onRefreshData?.();
+    } catch (err) {
+      showWarning("Gagal Menyelesaikan Pemeriksaan", err?.message || "Langkah 5 gagal disimpan ke backend.");
+    }
+  };
+
+  // Step handlers for Mode Bertahap
+  const handleNextSequentialStep = async (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    if (activeStep === 1) {
+      if (!selectedWargaId) {
+        showWarning("Pilih Sasaran Warga", "Silakan pilih sasaran dari database terlebih dahulu.");
+        return;
+      }
+      const w = getWargaForId(selectedWargaId);
+      if (w) {
+        setKehadiranWarga((prev) => ({ ...prev, [String(w.id)]: true }));
+        try {
+          const kunjunganId = kunjunganIdByWarga[String(w.id)] || (await ensureKunjunganId(w));
+          setKunjunganIdByWarga((prev) => ({ ...prev, [String(w.id)]: kunjunganId }));
+          setCompletedSteps((prev) => ({ ...prev, [String(w.id)]: { ...(prev[String(w.id)] || {}), step1: true } }));
+        } catch (err) {
+          showWarning("Gagal Membuka Kunjungan", err?.message || "Kunjungan gagal dibuat.");
+          return;
+        }
+      }
+      setActiveStep(2);
+      return;
+    }
+    if (activeStep === 2) {
+      const val = validateStepData(2, sequentialForm, activeSubmenu);
+      if (!val.isValid) {
+        showWarning("Data Belum Lengkap", val.errorMessage);
+        return;
+      }
+      const w = getWargaForId(selectedWargaId);
+      try {
+        const kunjunganId = kunjunganIdByWarga[String(selectedWargaId)] || (await ensureKunjunganId(w));
+        const res = await pemeriksaanService.saveStep2({
+          kunjungan_id: Number(kunjunganId),
+          bb_kg: Number(sequentialForm.bb),
+          tb_cm: sequentialForm.tb !== "" ? Number(sequentialForm.tb) : undefined,
+          lingkar_kepala_cm: sequentialForm.lk !== "" ? Number(sequentialForm.lk) : undefined,
+          lila_cm: sequentialForm.lila !== "" ? Number(sequentialForm.lila) : undefined,
+          lingkar_perut_cm: sequentialForm.lp !== "" ? Number(sequentialForm.lp) : undefined,
+          td_sistole: sequentialForm.tensiSistol !== "" ? Number(sequentialForm.tensiSistol) : undefined,
+          td_diastole: sequentialForm.tensiDiastol !== "" ? Number(sequentialForm.tensiDiastol) : undefined,
+          kadar_gula: sequentialForm.gulaDarah !== "" ? Number(sequentialForm.gulaDarah) : undefined,
+        });
+        if (!res?.data?.id) throw new Error("Backend tidak mengembalikan ID pemeriksaan.");
+        setKunjunganIdByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: kunjunganId }));
+        setPemeriksaanByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: res.data.id }));
+        const plotRes = await pemeriksaanService.getStep3Plotting(res.data.id);
+        if (plotRes?.data) setBackendPlottingByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: plotRes.data }));
+        setStepDataByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), warga: w, langkah2: { ...sequentialForm } } }));
+        setCompletedSteps((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), step1: true, step2: true } }));
+        setActiveStep(3);
+      } catch (err) {
+        showWarning("Gagal Menyimpan Pengukuran", err?.message || "Pengukuran gagal disimpan ke backend.");
+      }
+      return;
+    }
+    if (activeStep === 3) {
+      if (!activeBackendPlotting) {
+        showWarning("Plotting Belum Tersedia", "Hasil plotting belum tersedia dari backend.");
+        return;
+      }
+      setStepDataByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), langkah3: activeBackendPlotting } }));
+      setCompletedSteps((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), step3: true } }));
+      setActiveStep(4);
+      return;
+    }
+    if (activeStep === 4) {
+      const val = validateStepData(4, sequentialForm, activeSubmenu);
+      if (!val.isValid) {
+        showWarning("Data Belum Lengkap", val.errorMessage);
+        return;
+      }
+      try {
+        const kunjunganId = kunjunganIdByWarga[String(selectedWargaId)] || (await ensureKunjunganId(getWargaForId(selectedWargaId)));
+        const screeningForm = ["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && !isRemajaPerempuan ? { ...sequentialForm, periksaHb: "" } : sequentialForm;
+
+        const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), screeningForm);
+        const res = await pemeriksaanService.saveStep4({
+          kunjungan_id: Number(kunjunganId),
+          detail_skrining: screeningPayload,
+          is_skrining_tahunan: Boolean(sequentialForm.isSkriningTahunan),
+        });
+        if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+        await saveImunisasiRows(selectedWargaId, imunisasiRowsByWarga[String(selectedWargaId)] || emptyImunisasiRows());
+        setKunjunganIdByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: kunjunganId }));
+        setPemeriksaanByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: res.data.id }));
+        setStepDataByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), langkah4: res.data.detail_skrining || screeningPayload } }));
+        setCompletedSteps((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), step4: true } }));
+        setActiveStep(5);
+      } catch (err) {
+        showWarning("Gagal Menyimpan Skrining", err?.message || "Skrining gagal disimpan ke backend.");
+      }
+    }
+  };
+
+  const handleTriggerSequentialPreview = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    for (const s of [1, 2, 4, 5]) {
+      const val = validateStepData(s, sequentialForm, activeSubmenu);
+      if (!val.isValid) {
+        showWarning(`Data Langkah ${s} Belum Lengkap`, val.errorMessage);
+        setActiveStep(s);
+        return;
+      }
+    }
+    setShowSequentialPreviewModal(true);
+  };
+
+  const handleSaveSequentialAll = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    for (const s of [1, 2, 4, 5]) {
+      const val = validateStepData(s, sequentialForm, activeSubmenu);
+      if (!val.isValid) {
+        showWarning(`Data Langkah ${s} Belum Lengkap`, val.errorMessage);
+        setActiveStep(s);
+        return;
+      }
+    }
+    saveCompleteExamination(sequentialForm, true);
+  };
+
+  const activeSourceDataL3 = useMemo(() => {
+    const targetId = examinationMode === "sequential" ? selectedWargaId : selectedWargaStep3;
+    if (!targetId) return null;
+    return activeWargaList.find((w) => String(w.id) === String(targetId)) || null;
+  }, [examinationMode, selectedWargaId, selectedWargaStep3, activeWargaList]);
+
+  const activeBackendPlotting = useMemo(() => {
+    const targetId = examinationMode === "sequential" ? selectedWargaId : selectedWargaStep3;
+    return targetId ? backendPlottingByWarga[String(targetId)] || null : null;
+  }, [examinationMode, selectedWargaId, selectedWargaStep3, backendPlottingByWarga]);
+
+  const plottingResult = activeBackendPlotting?.hasil_plot || null;
+
+  const activeStep5TargetId = examinationMode === "per-step" ? selectedWargaStep5 : selectedWargaId;
+  const activeStep5BackendExam = useMemo(() => {
+    if (!activeStep5TargetId) return null;
+    return globalPemeriksaanData?.[String(activeStep5TargetId)] || globalPemeriksaanData?.[activeStep5TargetId] || null;
+  }, [globalPemeriksaanData, activeStep5TargetId]);
+
+  // Step 5 harus mengambil keputusan rujukan yang sudah tersimpan di backend
+  // untuk SESI HARI INI, bukan mengandalkan default state frontend.
+  useEffect(() => {
+    if (activeStep !== 5 || !activeStep5TargetId) return undefined;
+
+    let cancelled = false;
+    const hydrateStep5FromBackend = async () => {
+      try {
+        const warga = getWargaForId(activeStep5TargetId);
+        if (!warga) return;
+
+        const session = await getTodaySessionForWarga(warga);
+        const response = await pemeriksaanService.getAllPemeriksaan({
+          page: 1,
+          limit: 10,
+          warga_id: Number(activeStep5TargetId),
+          sesi_posyandu_id: Number(session.id),
+        });
+
+        const items = Array.isArray(response?.data) ? response.data : Array.isArray(response?.data?.items) ? response.data.items : [];
+        const backendExam = items[0] || activeStep5BackendExam;
+        if (!backendExam || cancelled) return;
+
+        const persistedRujukan = backendExam?.is_perlu_rujukan === true || Boolean(backendExam?.rujukan) ? "Rujuk ke Puskesmas / Pustu" : backendExam?.is_perlu_rujukan === false ? "Tidak Perlu Rujukan" : "";
+        const persistedTopik = backendExam?.topik_penyuluhan ?? "";
+
+        setGlobalPemeriksaanData?.((prev) => ({ ...prev, [String(activeStep5TargetId)]: backendExam }));
+
+        if (examinationMode === "per-step") {
+          setLangkah5Form((prev) => ({
+            ...prev,
+            topikPenyuluhan: persistedTopik || prev.topikPenyuluhan || "",
+            statusRujukan: persistedRujukan || prev.statusRujukan || "",
+          }));
+        } else {
+          setSequentialForm((prev) => ({
+            ...prev,
+            topikPenyuluhan: persistedTopik || prev.topikPenyuluhan || "",
+            statusRujukan: persistedRujukan || prev.statusRujukan || "",
+          }));
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data Step 5 dari backend:", error);
+      }
+    };
+
+    hydrateStep5FromBackend();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStep, examinationMode, activeStep5TargetId]);
+
+  // Auto-rujukan Step 5 dihitung sekali di scope komponen agar dapat dipakai
+  // secara konsisten baik pada mode per-step maupun sequential.
+  const step5AutoReferral = useMemo(() => {
+    const form4 = examinationMode === "per-step" ? langkah4Form : sequentialForm;
+
+    const tbcFields = ["batukTbc", "demamTbc", "bbTurunTbc", "kontakTbc", "lesuTbc", "batukBesarTbc", "nafsuMakanTbc", "bbMenurunTbc", "lemahLesuTbc", "berkeringatMalamTbc", "batukDarahTbc", "sesakNafasTbc"];
+    const tbcRisiko = tbcFields.some((field) => form4[field] === "Ya");
+
+    const pr = plottingResult;
+    const imtRisiko = Boolean(pr && pr.imtKey && pr.imtKey !== "normal");
+    const lilaRisiko = Boolean(
+      pr &&
+      (activeSubmenu === "lansia"
+        ? pr.lilaLansiaKey && pr.lilaLansiaKey !== "normal"
+        : activeSubmenu === "dewasa" || activeSubmenu === "bumil" || activeSubmenu === "nifas"
+          ? pr.lilaDewasaKey && pr.lilaDewasaKey !== "normal"
+          : ["bayi-0-11", "balita-12-59"].includes(activeSubmenu)
+            ? pr.lilaBayiKey && pr.lilaBayiKey !== "normal"
+            : activeSubmenu === "apras"
+              ? pr.lilaAprasKey && pr.lilaAprasKey !== "normal"
+              : false),
+    );
+    const tensiRisiko = Boolean(pr && pr.tensiAdultKey && pr.tensiAdultKey !== "normal");
+    const gulaRisiko = Boolean(pr?.isGulaRisiko);
+    const lpRisiko = Boolean(pr && pr.lpPlottingKey && pr.lpPlottingKey !== "normal");
+    const aksRisiko = activeSubmenu === "lansia" && Boolean(currentAks.perluRujuk);
+    const skilasRisiko = activeSubmenu === "lansia" && Boolean(currentSkilas.adaRisiko);
+
+    const reasons = [];
+    if (tbcRisiko) reasons.push("Gejala TBC Positif");
+    if (imtRisiko) reasons.push(`IMT: ${pr?.imtDewasaStatus || pr?.imtAprasStatus || pr?.imtUsekremStatus || pr?.imtStatus || "Berisiko"}`);
+    if (lilaRisiko) reasons.push("LiLA Berisiko / KEK");
+    if (tensiRisiko) reasons.push(`Tensi: ${pr?.tensiStatus || pr?.tensiRemajaStatus || "Berisiko"}`);
+    if (gulaRisiko) reasons.push("Gula Darah Risiko");
+    if (lpRisiko) reasons.push("Lingkar Perut Berisiko");
+    if (aksRisiko) reasons.push(`AKS: ${currentAks.kategori}`);
+    if (skilasRisiko) reasons.push(`SKILAS: ${currentSkilas.issues.join(", ")}`);
+
+    return {
+      perluRujuk: tbcRisiko || imtRisiko || lilaRisiko || tensiRisiko || gulaRisiko || lpRisiko || aksRisiko || skilasRisiko,
+      reasons,
+    };
+  }, [examinationMode, langkah4Form, sequentialForm, plottingResult, activeSubmenu, currentAks, currentSkilas]);
+
+  // Sinkronisasi status rujukan hanya dari hasil backend plotting.
+  useEffect(() => {
+    if (activeStep !== 5) return;
+
+    const perluRujukan = Boolean(activeBackendPlotting?.hasil_plot?.is_perlu_rujukan || step5AutoReferral?.perluRujuk);
+
+    const effectiveStatus = perluRujukan ? "Rujuk ke Puskesmas / Pustu" : "Tidak Perlu Rujukan";
+
+    if (examinationMode === "per-step") {
+      setLangkah5Form((prev) => {
+        if (prev.statusRujukan === effectiveStatus) return prev;
+
+        return {
+          ...prev,
+          statusRujukan: effectiveStatus,
+        };
+      });
+    } else {
+      setSequentialForm((prev) => {
+        if (prev.statusRujukan === effectiveStatus) return prev;
+
+        return {
+          ...prev,
+          statusRujukan: effectiveStatus,
+        };
+      });
+    }
+  }, [activeStep, activeBackendPlotting, examinationMode, step5AutoReferral]);
+
+  return (
+    <div className="container-fluid p-0">
+      {/* Top Banner Header Card (Original Style with Icon & Title) */}
+      <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "20px" }}>
+        <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+          <div className="d-flex align-items-center gap-3">
+            <div className="bg-primary text-white rounded-4 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "56px", height: "56px" }}>
+              <Stethoscope size={28} />
+            </div>
+            <div>
+              <span className="badge bg-primary-subtle text-primary fw-bold px-3 py-1 rounded-pill mb-1 small">Form Pemeriksaan 5 Langkah</span>
+              <h2 className="fw-bold text-dark mb-1">{currentCategory.label}</h2>
+              <p className="text-secondary small mb-0">Alur pencatatan dan evaluasi kesehatan berkala per-langkah</p>
+            </div>
+          </div>
+
+          {/* Top Right Header Buttons: Segmented [Pilih Langkah] [Bertahap] & Kembali Button */}
+          <div className="d-flex align-items-center gap-2">
+            <div className="d-inline-flex align-items-center bg-light p-1 rounded-pill border shadow-xs" style={{ borderColor: "#cbd5e1" }}>
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1.5 fw-semibold transition-all ${examinationMode === "per-step" ? "bg-white text-dark shadow-sm border" : "text-secondary border-0"}`}
+                style={{ fontSize: "0.825rem" }}
+                onClick={() => {
+                  setExaminationMode("per-step");
+                }}
+              >
+                Pilih Langkah
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1.5 fw-semibold transition-all ${examinationMode === "sequential" ? "text-white shadow-sm border-0" : "text-secondary border-0"}`}
+                style={{
+                  backgroundColor: examinationMode === "sequential" ? "#2b2e4a" : "transparent",
+                  fontSize: "0.825rem",
+                }}
+                onClick={() => {
+                  setExaminationMode("sequential");
+                }}
+              >
+                Bertahap
+              </button>
+            </div>
+
+            <button className="btn btn-outline-secondary rounded-3 py-2 px-3 d-flex align-items-center gap-2 shadow-sm" style={{ fontSize: "0.875rem" }} onClick={() => onNavigate("data-sasaran")}>
+              <ArrowLeft size={15} />
+              <span>Kembali ke Data Sasaran</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Examination Card Container */}
+      <div className="card card-custom bg-white border-0 shadow-sm overflow-hidden" style={{ borderRadius: "20px" }}>
+        {/* ========================================================================= */}
+        {/* MODE 2 (BERTAHAP): STEPPER LINGKARAN (1) -> (2) -> (3) -> (4) -> (5) */}
+        {/* ========================================================================= */}
+        {examinationMode === "sequential" ? (
+          <div className="d-flex align-items-center justify-content-center my-4 py-3">
+            {[1, 2, 3, 4, 5].map((stepNum, idx) => (
+              <React.Fragment key={stepNum}>
+                <div
+                  className={`rounded-circle d-flex align-items-center justify-content-center fw-bold transition-all shadow-sm ${
+                    activeStep === stepNum ? "bg-dark text-white" : activeStep > stepNum ? "bg-secondary text-white" : "bg-light text-secondary border"
+                  }`}
+                  style={{
+                    width: "58px",
+                    height: "58px",
+                    fontSize: "1.35rem",
+                    backgroundColor: activeStep === stepNum ? "#2b2e4a" : activeStep > stepNum ? "#475569" : "#e2e8f0",
+                    color: activeStep === stepNum || activeStep > stepNum ? "#ffffff" : "#64748b",
+                    cursor: "default",
+                    userSelect: "none",
+                  }}
+                  title={`Langkah ${stepNum}`}
+                >
+                  {stepNum}
+                </div>
+
+                {idx < 4 && (
+                  <div className="mx-2 mx-md-4 text-muted d-flex align-items-center">
+                    <span style={{ fontSize: "1.4rem", fontWeight: "bold", color: "#94a3b8" }}>&rarr;</span>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        ) : (
+          /* ========================================================================= */
+          /* MODE 1 (PILIH LANGKAH): TABS ASLI LANGKAH 1 - 5 */
+          /* ========================================================================= */
+          <div className="d-flex border-bottom overflow-x-auto bg-light p-3 gap-3">
+            {[1, 2, 3, 4, 5].map((stepNum) => {
+              const isActive = activeStep === stepNum;
+              return (
+                <button
+                  key={stepNum}
+                  type="button"
+                  className={`py-3 px-4.5 rounded-3 fw-bold text-nowrap transition-all border ${isActive ? "bg-white text-primary border-2 border-primary shadow-sm" : "bg-white text-secondary border-light-subtle shadow-xs"}`}
+                  style={{
+                    fontSize: "1.1rem",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    color: isActive ? "#F25B8E" : "#334155",
+                    borderColor: isActive ? "#F25B8E" : "#cbd5e1",
+                    boxShadow: isActive ? "0 4px 14px rgba(242, 91, 142, 0.45)" : "0 1px 3px rgba(0,0,0,0.05)",
+                  }}
+                  onClick={() => setActiveStep(stepNum)}
+                  title={`Buka Langkah ${stepNum}`}
+                >
+                  Langkah {stepNum}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Gray Container Form Area */}
+        <div className="p-4 p-md-5" style={{ backgroundColor: "#cbd5e1" }}>
+          {/* ========================================================================= */}
+          {/* LANGKAH 1: PENDAFTARAN & PRESENSI KEHADIRAN SASARAN */}
+          {/* ========================================================================= */}
+          {activeStep === 1 && (
+            <div>
+              {/* Header Langkah 1 */}
+              <div className="mb-4">
+                <h3 className="fw-bold text-dark mb-1">Pendaftaran &amp; Presensi Sasaran</h3>
+              </div>
+
+              {/* =================================================================== */}
+              {/* KONTEN UTAMA LANGKAH 1: DAFTAR PRESENSI & IDENTITAS SASARAN */}
+              {/* =================================================================== */}
+              <div className="card bg-white border-0 shadow-sm rounded-4 p-4">
+                <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                  <div>
+                    <h5 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                      <Users size={20} className="text-primary" />
+                      <span>Daftar Presensi Sasaran Hari Ini</span>
+                    </h5>
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="input-group input-group-sm" style={{ maxWidth: "280px" }}>
+                      <span className="input-group-text bg-white border-end-0 text-muted">
+                        <Search size={14} />
+                      </span>
+                      <input type="text" className="form-control border-start-0 ps-0" placeholder="Cari nama atau NIK..." value={searchWargaQuery} onChange={(e) => setSearchWargaQuery(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0" style={{ fontSize: "0.85rem" }}>
+                    <thead className="table-light">
+                      <tr className="text-muted fw-bold">
+                        <th className="py-2.5 px-3 text-center" style={{ width: "45px" }}>
+                          No
+                        </th>
+                        <th className="py-2.5 px-3" style={{ minWidth: "180px" }}>
+                          Nama Lengkap / NIK
+                        </th>
+                        <th className="py-2.5 px-3" style={{ minWidth: "130px" }}>
+                          Tanggal Lahir / Usia
+                        </th>
+                        <th className="py-2.5 px-3 text-center" style={{ minWidth: "100px" }}>
+                          Jenis Kelamin
+                        </th>
+                        {activeSubmenu === "bumil" && (
+                          <th className="py-2.5 px-3 text-center" style={{ minWidth: "150px" }}>
+                            Usia Kehamilan
+                          </th>
+                        )}
+                        {activeSubmenu === "nifas" && (
+                          <th className="py-2.5 px-3 text-center" style={{ minWidth: "170px" }}>
+                            Waktu Kunjungan
+                          </th>
+                        )}
+                        <th className="py-2.5 px-3 text-center" style={{ minWidth: "150px" }}>
+                          Alamat
+                        </th>
+                        <th className="py-2.5 px-3 text-center" style={{ minWidth: "160px", width: "160px" }}>
+                          Status Kehadiran
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSasaranLangkah1.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="text-center py-5 text-muted">
+                            {searchWargaQuery.trim() ? (
+                              <div className="py-2">
+                                <div className="fw-semibold text-dark mb-1">Sasaran Tidak Ditemukan</div>
+                                <p className="text-muted small mb-0">
+                                  Tidak ada sasaran <strong>{currentCategory.label}</strong> yang cocok dengan kata kunci "<strong>{searchWargaQuery}</strong>".
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="d-flex flex-column align-items-center justify-content-center py-3">
+                                <div className="p-3 bg-light rounded-circle mb-2 text-primary">
+                                  <Search size={24} />
+                                </div>
+                                <div className="fw-bold text-dark fs-6 mb-1">Cari Sasaran {currentCategory.label}</div>
+                                <p className="text-muted small mb-0" style={{ maxWidth: "440px" }}>
+                                  Ketik nama lengkap atau NIK pada kolom pencarian di atas untuk menampilkan data sasaran kategori <strong>{currentCategory.label}</strong> dan menandai kehadiran presensi hari ini.
+                                </p>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredSasaranLangkah1.map((warga, idx) => {
+                          const wId = String(warga.id);
+
+                          const presenceStatus = kehadiranWarga[wId];
+                          const isAlreadyRegistered = backendRegisteredWarga[wId] === true;
+                          const isHadir = presenceStatus === true;
+                          const isTidakHadir = presenceStatus === false;
+                          const isBelumDatang = !isAlreadyRegistered && presenceStatus === undefined;
+                          const isSelectedSequential = examinationMode === "sequential" && selectedWargaId === wId;
+                          const rawTglLahir = warga.tglLahir || warga.tanggal_lahir || warga._raw?.tanggal_lahir || warga._raw?.tglLahir || "";
+                          const displayTgl = rawTglLahir ? String(rawTglLahir).slice(0, 10) : "-";
+                          const ageInMonths = getAgeInMonths(warga);
+                          const displayUsia = ageInMonths === null ? "-" : ageInMonths < 12 ? `${ageInMonths} bulan` : `${Math.floor(ageInMonths / 12)} tahun${ageInMonths % 12 !== 0 ? ` ${ageInMonths % 12} bulan` : ""}`;
+                          return (
+                            <tr
+                              key={warga.id}
+                              className={isSelectedSequential ? "table-primary bg-opacity-25" : ""}
+                              style={{ cursor: examinationMode === "sequential" ? "pointer" : "default" }}
+                              onClick={() => {
+                                if (examinationMode === "sequential") {
+                                  setSelectedWargaId(wId);
+                                  setSequentialForm((prev) => ({
+                                    ...prev,
+                                    nik: warga.nik || "",
+                                    nama: warga.nama || "",
+                                    tglLahir: warga.tglLahir || "",
+                                    gender: warga.gender || "",
+                                    pekerjaan: warga.pekerjaan || prev.pekerjaan || "",
+                                    statusPernikahan: warga.statusPernikahan || prev.statusPernikahan || "",
+                                    sekolah: warga.sekolah || prev.sekolah || "",
+                                    kelas: warga.kelas || prev.kelas || "",
+                                    tb: warga.tb || prev.tb,
+                                    bb: warga.bb || prev.bb,
+                                  }));
+                                }
+                              }}
+                            >
+                              <td className="text-center fw-semibold text-muted px-3">{idx + 1}</td>
+                              <td className="px-3">
+                                <div className="fw-bold text-dark">{warga.nama}</div>
+                                <div className="text-muted font-monospace" style={{ fontSize: "0.78rem" }}>
+                                  {warga.nik}
+                                </div>
+                              </td>
+                              <td className="px-3">
+                                <div className="text-dark fw-medium">{displayTgl}</div>
+                                {displayUsia && (
+                                  <div className="text-muted" style={{ fontSize: "0.78rem" }}>
+                                    {displayUsia}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="text-center px-3 text-dark fw-medium">{warga.gender || ""}</td>
+
+                              {/* Kolom Opsi Khusus Bumil */}
+                              {activeSubmenu === "bumil" && (
+                                <td className="px-3">
+                                  <select
+                                    className="form-select form-select-sm bg-white border text-dark py-1"
+                                    style={{ fontSize: "0.82rem" }}
+                                    value={waktuKunjunganPresensi[wId] || ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setWaktuKunjunganPresensi((prev) => ({ ...prev, [wId]: val }));
+                                      if (examinationMode === "sequential" && selectedWargaId === wId) {
+                                        setSequentialForm((prev) => ({ ...prev, usiaKehamilan: val }));
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <option value="">-- Pilih --</option>
+                                    {OPSI_UMUR_KEHAMILAN_BUMIL.map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                              )}
+
+                              {/* Kolom Opsi Khusus Nifas */}
+                              {activeSubmenu === "nifas" && (
+                                <td className="px-3">
+                                  <select
+                                    className="form-select form-select-sm bg-white border text-dark py-1 mb-1"
+                                    style={{ fontSize: "0.82rem" }}
+                                    value={waktuKunjunganPresensi[wId] || ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setWaktuKunjunganPresensi((prev) => ({ ...prev, [wId]: val }));
+                                      if (examinationMode === "sequential" && selectedWargaId === wId) {
+                                        setSequentialForm((prev) => ({ ...prev, waktuKunjunganNifas: val }));
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <option value="">-- Pilih --</option>
+                                    <optgroup label="Masa Nifas">
+                                      {OPSI_WAKTU_NIFAS_MENYUSUI.slice(0, 3).map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                    <optgroup label="Masa Menyusui (Tahun 1: Bln 2 - 12)">
+                                      {OPSI_WAKTU_NIFAS_MENYUSUI.slice(3, 14).map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                    <optgroup label="Masa Menyusui (Tahun 2: Bln 13 - 24)">
+                                      {OPSI_WAKTU_NIFAS_MENYUSUI.slice(14).map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  </select>
+                                  <div className="text-muted small d-flex align-items-center gap-1" style={{ fontSize: "0.74rem" }}>
+                                    <span>Lahir Bayi:</span>
+                                    <span className="fw-semibold text-dark">{warga.tglPersalinan || warga.tglLahirBayi || ""}</span>
+                                  </div>
+                                </td>
+                              )}
+
+                              <td className="px-3 text-secondary">{warga.alamat || ""}</td>
+
+                              <td className="text-center px-2">
+                                {isAlreadyRegistered ? (
+                                  <span
+                                    className="badge rounded-pill px-3 py-2 fw-semibold"
+                                    style={{
+                                      backgroundColor: "#e8f5e9",
+                                      color: "#1e6b37",
+                                      border: "1px solid #81c784",
+                                    }}
+                                  >
+                                    <UserCheck size={12} className="me-1" />
+                                    Sudah Datang
+                                  </span>
+                                ) : (
+                                  <div className="d-flex flex-column align-items-center gap-1.5">
+                                    {isBelumDatang && (
+                                      <span
+                                        className="badge rounded-pill px-2.5 py-1 fw-medium"
+                                        style={{
+                                          backgroundColor: "#f1f5f9",
+                                          color: "#64748b",
+                                          border: "1px solid #cbd5e1",
+                                          fontSize: "0.7rem",
+                                        }}
+                                      >
+                                        Belum Datang
+                                      </span>
+                                    )}
+
+                                    <div className="btn-group btn-group-sm" role="group" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        type="button"
+                                        className={`btn px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1 ${isHadir ? "shadow-xs" : "bg-white text-secondary"}`}
+                                        style={{
+                                          fontSize: "0.76rem",
+                                          ...(isHadir
+                                            ? {
+                                                backgroundColor: "#e8f5e9",
+                                                borderColor: "#81c784",
+                                                color: "#1e6b37",
+                                              }
+                                            : {
+                                                backgroundColor: "#ffffff",
+                                                borderColor: "#cbd5e1",
+                                                color: "#475569",
+                                              }),
+                                        }}
+                                        onClick={() => {
+                                          handleToggleKehadiran(wId, true);
+
+                                          if (examinationMode === "sequential") {
+                                            setSelectedWargaId(wId);
+                                            setSequentialForm((prev) => ({
+                                              ...prev,
+                                              nik: warga.nik || "",
+                                              nama: warga.nama || "",
+                                              tglLahir: warga.tglLahir || "",
+                                              gender: warga.gender || "",
+                                              pekerjaan: warga.pekerjaan || prev.pekerjaan || "",
+                                              statusPernikahan: warga.statusPernikahan || prev.statusPernikahan || "",
+                                              sekolah: warga.sekolah || prev.sekolah || "",
+                                              kelas: warga.kelas || prev.kelas || "",
+                                              tb: warga.tb || prev.tb,
+                                              bb: warga.bb || prev.bb,
+                                            }));
+                                          }
+                                        }}
+                                      >
+                                        <UserCheck size={12.5} />
+                                        <span>Datang</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={`btn px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1 ${isTidakHadir ? "shadow-xs" : "bg-white text-secondary"}`}
+                                        style={{
+                                          fontSize: "0.76rem",
+                                          ...(isTidakHadir
+                                            ? {
+                                                backgroundColor: "#ffebee",
+                                                borderColor: "#ef9a9a",
+                                                color: "#b71c1c",
+                                              }
+                                            : {
+                                                backgroundColor: "#ffffff",
+                                                borderColor: "#cbd5e1",
+                                                color: "#475569",
+                                              }),
+                                        }}
+                                        onClick={() => handleToggleKehadiran(wId, false)}
+                                      >
+                                        <UserX size={12.5} />
+                                        <span>Tidak Datang</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer Presensi Langkah 1 */}
+                <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 pt-3 mt-3 border-top">
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-semibold">
+                      {Object.entries(kehadiranWarga).filter(([id, status]) => status === true && activeWargaList.some((w) => String(w.id) === String(id))).length} Sasaran Datang
+                    </span>
+                    <span className="badge bg-secondary-subtle text-secondary border px-3 py-2 rounded-pill fw-semibold">
+                      {Object.entries(kehadiranWarga).filter(([id, status]) => status === false && activeWargaList.some((w) => String(w.id) === String(id))).length} Tidak Datang
+                    </span>
+                  </div>
+
+                  <div>
+                    {examinationMode === "per-step" ? (
+                      <button
+                        type="button"
+                        className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5"
+                        style={{ backgroundColor: "#2b2e4a" }}
+                        onClick={handleSavePresensiLangkah1}
+                      >
+                        <UserCheck size={16} />
+                        <span>Simpan</span>
+                      </button>
+                    ) : (
+                      <button type="button" className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }} onClick={handleNextSequentialStep}>
+                        <span>Lanjut ke Langkah 2</span>
+                        <ArrowRight size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* LANGKAH 2: SKRINING PENIMBANGAN DAN PENGUKURAN */}
+          {/* ========================================================================= */}
+          {activeStep === 2 && (
+            <form onSubmit={examinationMode === "per-step" ? handleSaveLangkah2 : handleNextSequentialStep}>
+              <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 gap-3">
+                <div>
+                  <h3 className="fw-bold text-dark mb-1">Skrining Penimbangan dan Pengukuran</h3>
+                </div>
+
+                {examinationMode === "per-step" && (
+                  <div className="bg-white px-3 py-2 rounded-3 border-0 shadow-sm d-flex align-items-center gap-2">
+                    <label className="fw-bold text-dark small mb-0 text-nowrap">Pilih Nama Lengkap / NIK:</label>
+                    <select
+                      className="form-select form-select-sm border-0 fw-semibold text-dark"
+                      style={{ minWidth: "220px" }}
+                      value={selectedWargaStep2}
+                      onChange={(e) => {
+                        setSelectedWargaStep2(e.target.value);
+                      }}
+                    >
+                      {availableWargaStep2.length === 0 ? (
+                        <option value="">{hadirWargaList.length === 0 ? "-- Belum ada sasaran hadir di Langkah 1 --" : "-- Semua sasaran telah diperiksa di Langkah 2 --"}</option>
+                      ) : (
+                        availableWargaStep2.map((w) => (
+                          <option key={w.id} value={String(w.id)}>
+                            {w.nama} - NIK {String(w.nik).slice(-4)}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {examinationMode === "per-step" && hadirWargaList.length === 0 && (
+                <div className="alert alert-warning border-0 shadow-sm d-flex align-items-center gap-2 mb-4 rounded-3">
+                  <AlertCircle size={18} className="flex-shrink-0" />
+                  <span className="small">
+                    Belum ada sasaran <strong>{currentCategory.label}</strong> yang ditandai <strong>Datang</strong> pada Langkah 1. Silakan cari dan tandai kehadiran di <strong>Langkah 1 (Presensi)</strong> terlebih dahulu.
+                  </span>
+                </div>
+              )}
+
+              <div className="row g-4 mb-4">
+                {/* BB (Berat Badan) */}
+                <div className="col-12 col-md-6">
+                  <label className="form-label fw-bold text-dark small mb-1">BB (kg)</label>
+                  <div className="input-group">
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="form-control form-control-custom bg-white border-0 py-3"
+                      placeholder="Masukkan berat badan"
+                      value={examinationMode === "per-step" ? langkah2Form.bb : sequentialForm.bb}
+                      onChange={(e) => {
+                        if (examinationMode === "per-step") {
+                          setLangkah2Form({ ...langkah2Form, bb: e.target.value });
+                        } else {
+                          setSequentialForm({ ...sequentialForm, bb: e.target.value });
+                        }
+                      }}
+                      required
+                    />
+                    <span className="input-group-text bg-white border-0 fw-semibold text-muted">kg</span>
+                  </div>
+                </div>
+
+                {/* Tekanan Darah (mm/Hg) - Nifas/Menyusui, Bumil, Dewasa, Lansia */}
+                {["bumil", "nifas", "usekrem-15-18", "dewasa", "lansia"].includes(activeSubmenu) && (
+                  <div className="col-12 col-md-6">
+                    <label className="form-label fw-bold text-dark small mb-1">Tekanan darah (mm/Hg)</label>
+                    <div className="d-flex align-items-center gap-2">
+                      <input
+                        type="number"
+                        className="form-control form-control-custom bg-white border-0 py-3 text-center"
+                        style={{ width: "85px", flex: "none" }}
+                        placeholder="120"
+                        value={examinationMode === "per-step" ? langkah2Form.tensiSistol : sequentialForm.tensiSistol}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah2Form({ ...langkah2Form, tensiSistol: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, tensiSistol: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="fw-bold text-muted px-1" style={{ fontSize: "1.4rem", lineHeight: "1", userSelect: "none" }}>
+                        /
+                      </span>
+                      <input
+                        type="number"
+                        className="form-control form-control-custom bg-white border-0 py-3 text-center"
+                        style={{ width: "85px", flex: "none" }}
+                        placeholder="80"
+                        value={examinationMode === "per-step" ? langkah2Form.tensiDiastol : sequentialForm.tensiDiastol}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah2Form({ ...langkah2Form, tensiDiastol: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, tensiDiastol: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="fw-semibold text-muted ms-1" style={{ fontSize: "0.95rem" }}>
+                        mm/Hg
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* TB / PB (TB Bumil Dihapus sesuai permintaan, hanya untuk anak-anak & dewasa/lansia) */}
+                {["bayi-0-11", "balita-12-59", "apras", "usekrem-6-14", "usekrem-15-18", "dewasa", "lansia"].includes(activeSubmenu) && (
+                  <div className="col-12 col-md-6">
+                    <label className="form-label fw-bold text-dark small mb-1">{["bayi-0-11", "balita-12-59"].includes(activeSubmenu) ? "Panjang / Tinggi Badan (PB/TB)" : "Tinggi Badan (TB)"}</label>
+                    <div className="input-group">
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="form-control form-control-custom bg-white border-0 py-3"
+                        placeholder={["bayi-0-11", "balita-12-59"].includes(activeSubmenu) ? "Masukkan panjang / tinggi badan" : "Masukkan tinggi badan"}
+                        value={examinationMode === "per-step" ? langkah2Form.tb : sequentialForm.tb}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah2Form({ ...langkah2Form, tb: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, tb: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="input-group-text bg-white border-0 fw-semibold text-muted">cm</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Lingkar Kepala (cm) - Bayi & Balita 12-59 Bulan */}
+                {["bayi-0-11", "balita-12-59"].includes(activeSubmenu) && (
+                  <div className="col-12 col-md-6">
+                    <label className="form-label fw-bold text-dark small mb-1">Lingkar Kepala (cm)</label>
+                    <div className="input-group">
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="form-control form-control-custom bg-white border-0 py-3"
+                        placeholder="Masukkan lingkar kepala"
+                        value={examinationMode === "per-step" ? langkah2Form.lk : sequentialForm.lk}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah2Form({ ...langkah2Form, lk: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, lk: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="input-group-text bg-white border-0 fw-semibold text-muted">cm</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* LiLA (Lingkar Lengan Atas) - Bumil, Bayi/Balita/Apras, Dewasa, & Lansia */}
+                {["bumil", "bayi-0-11", "balita-12-59", "apras", "dewasa", "lansia"].includes(activeSubmenu) && (
+                  <div className="col-12 col-md-6">
+                    <label className="form-label fw-bold text-dark small mb-1">Lingkar Lengan Atas (LiLA)</label>
+                    <div className="input-group">
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="form-control form-control-custom bg-white border-0 py-3"
+                        placeholder="Masukkan LiLA"
+                        value={examinationMode === "per-step" ? langkah2Form.lila : sequentialForm.lila}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah2Form({ ...langkah2Form, lila: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, lila: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="input-group-text bg-white border-0 fw-semibold text-muted">cm</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Lingkar Perut (cm) - Usekrem 15-18, Dewasa, Lansia */}
+                {["usekrem-15-18", "dewasa", "lansia"].includes(activeSubmenu) && (
+                  <div className="col-12 col-md-6">
+                    <label className="form-label fw-bold text-dark small mb-1">Lingkar Perut (cm)</label>
+                    <div className="input-group">
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="form-control form-control-custom bg-white border-0 py-3"
+                        placeholder="Masukkan lingkar perut"
+                        value={examinationMode === "per-step" ? langkah2Form.lp : sequentialForm.lp}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah2Form({ ...langkah2Form, lp: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, lp: e.target.value });
+                          }
+                        }}
+                      />
+                      <span className="input-group-text bg-white border-0 fw-semibold text-muted">cm</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="d-flex justify-content-end pt-3 gap-2">
+                {examinationMode === "per-step" ? (
+                  <button type="submit" className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }}>
+                    <span>Simpan</span>
+                  </button>
+                ) : (
+                  <div className="d-flex justify-content-between align-items-center w-100">
+                    <button type="button" className="btn btn-outline-secondary btn-sm px-3.5 py-2 rounded-3 d-inline-flex align-items-center gap-1.5" onClick={() => setActiveStep(1)}>
+                      <ArrowLeft size={15} />
+                      <span>Kembali</span>
+                    </button>
+                    <button type="submit" className="btn btn-dark-custom btn-sm px-3.5 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }}>
+                      <span>Lanjut ke Langkah 3</span>
+                      <ArrowRight size={15} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </form>
+          )}
+
+          {/* ========================================================================= */}
+          {/* LANGKAH 3: PLOTTING DARI BACKEND */}
+          {/* ========================================================================= */}
+          {activeStep === 3 && (
+            <form onSubmit={examinationMode === "per-step" ? handleSaveLangkah3 : handleNextSequentialStep}>
+              <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
+                <div>
+                  <h3 className="fw-bold text-dark mb-1">Plotting</h3>
+                  <p className="text-secondary small mb-0">Seluruh hasil plotting dibaca dari backend.</p>
+                </div>
+
+                {examinationMode === "per-step" && (
+                  <div className="bg-white px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2">
+                    <label className="fw-bold text-dark small mb-0 text-nowrap">Pilih Nama Lengkap / NIK:</label>
+                    <select className="form-select form-select-sm border-0 fw-semibold text-dark" style={{ minWidth: "220px" }} value={selectedWargaStep3} onChange={(e) => setSelectedWargaStep3(e.target.value)}>
+                      {availableWargaStep3.length === 0 ? (
+                        <option value="">{hadirWargaList.length === 0 ? "-- Belum ada sasaran hadir di Langkah 1 --" : "-- Semua sasaran telah dievaluasi di Langkah 3 --"}</option>
+                      ) : (
+                        availableWargaStep3.map((w) => (
+                          <option key={w.id} value={String(w.id)}>
+                            {w.nama} - NIK {String(w.nik || "").slice(-4)}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {!activeBackendPlotting ? (
+                <div className="p-4 bg-white rounded-4 border border-warning-subtle text-center my-4 shadow-sm">
+                  <AlertCircle size={40} className="text-warning mb-2" />
+                  <h5 className="fw-bold text-dark mb-1">Hasil Plotting Belum Tersedia</h5>
+                  <p className="text-muted small mb-0">Simpan Langkah 2 terlebih dahulu agar plotting dapat dihitung.</p>
+                </div>
+              ) : (
+                <div className="mb-3">
+                  <GrowthChartPlotter plottingData={activeBackendPlotting} />
+                </div>
+              )}
+
+              <div className="d-flex justify-content-end pt-3 gap-2">
+                {examinationMode === "per-step" ? (
+                  <button type="submit" className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium" style={{ backgroundColor: "#2b2e4a" }} disabled={!selectedWargaStep3 || !activeBackendPlotting}>
+                    <span>Simpan</span>
+                  </button>
+                ) : (
+                  <div className="d-flex justify-content-between align-items-center w-100">
+                    <button type="button" className="btn btn-outline-secondary btn-sm px-3.5 py-2 rounded-3 d-inline-flex align-items-center gap-1.5" onClick={() => setActiveStep(2)}>
+                      <ArrowLeft size={15} />
+                      <span>Kembali</span>
+                    </button>
+                    <button type="submit" className="btn btn-dark-custom btn-sm px-3.5 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }} disabled={!activeBackendPlotting}>
+                      <span>Lanjut ke Langkah 4</span>
+                      <ArrowRight size={15} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </form>
+          )}
+
+          {/* ========================================================================= */}
+          {/* LANGKAH 4: SKRINING GEJALA TBC & PELAYANAN KESEHATAN */}
+          {/* ========================================================================= */}
+          {activeStep === 4 && (
+            <form onSubmit={examinationMode === "per-step" ? handleSaveLangkah4 : handleNextSequentialStep}>
+              <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
+                <div>
+                  <h3 className="fw-bold text-dark mb-1">Pelayanan Kesehatan &amp; Skrining TBC</h3>
+                </div>
+
+                {examinationMode === "per-step" && (
+                  <div className="bg-white px-3 py-2 rounded-3 border-0 shadow-sm d-flex align-items-center gap-2">
+                    <label className="fw-bold text-dark small mb-0 text-nowrap">Pilih Nama Lengkap / NIK:</label>
+                    <select
+                      className="form-select form-select-sm border-0 fw-semibold text-dark"
+                      style={{ minWidth: "220px" }}
+                      value={selectedWargaStep4}
+                      onChange={(e) => {
+                        const wId = e.target.value;
+                        setSelectedWargaStep4(wId);
+                        const saved = stepDataByWarga[wId]?.langkah4;
+                        if (saved) {
+                          setLangkah4Form({ ...saved });
+                        }
+                      }}
+                    >
+                      {availableWargaStep4.length === 0 ? (
+                        <option value="">{hadirWargaList.length === 0 ? "-- Belum ada sasaran hadir di Langkah 1 --" : "-- Semua sasaran telah diskrining di Langkah 4 --"}</option>
+                      ) : (
+                        availableWargaStep4.map((w) => (
+                          <option key={w.id} value={String(w.id)}>
+                            {w.nama} - NIK {String(w.nik).slice(-4)}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {examinationMode === "per-step" && hadirWargaList.length === 0 && (
+                <div className="alert alert-warning border-0 shadow-sm d-flex align-items-center gap-2 mb-4 rounded-3">
+                  <AlertCircle size={18} className="flex-shrink-0" />
+                  <span className="small">
+                    Belum ada sasaran <strong>{currentCategory.label}</strong> yang ditandai <strong>Datang</strong> pada Langkah 1. Silakan cari dan tandai kehadiran di <strong>Langkah 1 (Presensi)</strong> terlebih dahulu.
+                  </span>
+                </div>
+              )}
+
+              {/* Tampilkan Riwayat Pemeriksaan Terakhir Sebelumnya */}
+              {renderRiwayatPemeriksaanTerakhir(examinationMode === "per-step" ? selectedWargaStep4 : selectedWargaId)}
+
+              {["dewasa", "lansia"].includes(activeSubmenu) ? (
+                <>
+                  {/* Kadar Gula Darah, Kolesterol & Kontrasepsi */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Skrining PTM: Gula Darah &amp; Kolesterol</h5>
+
+                    <div className="row g-3">
+                      {/* 1. Kadar Gula Darah (mg/dl) */}
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Kadar gula darah (mg/dl)</label>
+                        <div className="input-group">
+                          <input
+                            type="number"
+                            className="form-control bg-light border-0 py-2"
+                            placeholder="Contoh: 110"
+                            value={examinationMode === "per-step" ? langkah2Form.gulaDarah || "" : sequentialForm.gulaDarah || ""}
+                            onChange={(e) => {
+                              if (examinationMode === "per-step") {
+                                setLangkah2Form({ ...langkah2Form, gulaDarah: e.target.value });
+                              } else {
+                                setSequentialForm({ ...sequentialForm, gulaDarah: e.target.value });
+                              }
+                            }}
+                          />
+                          <span className="input-group-text bg-light border-0 text-muted">mg/dl</span>
+                        </div>
+                      </div>
+
+                      {/* 2. Ploting gula darah */}
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Ploting gula darah</label>
+                        <div className="bg-light p-2 px-3 rounded-3 border-0 d-flex align-items-center justify-content-between" style={{ minHeight: "38px" }}>
+                          <span className="fw-semibold text-dark small">
+                            {(() => {
+                              const gdVal = examinationMode === "per-step" ? langkah2Form.gulaDarah : sequentialForm.gulaDarah;
+                              if (!gdVal || gdVal === "") return <span className="text-muted fw-normal">Belum Diisi</span>;
+                              const gdNum = parseInt(gdVal);
+                              if (isNaN(gdNum)) return <span className="text-muted fw-normal">Belum Diisi</span>;
+                              if (gdNum >= 200) return <span className="text-danger fw-bold">Diabetisi (D) &bull; ≥ 200 mg/dl</span>;
+                              if (gdNum >= 140) return <span className="text-warning-emphasis fw-bold">Prediabetisi (Pd) &bull; 140–199 mg/dl</span>;
+                              return <span className="text-success fw-bold">Normal (N) &bull; 80–140 mg/dl</span>;
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 3. Kadar Kolesterol (mg/dl) */}
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Kadar Kolesterol (mg/dl)</label>
+                        <div className="input-group">
+                          <input
+                            type="number"
+                            className="form-control bg-light border-0 py-2"
+                            placeholder="Contoh: 180"
+                            value={examinationMode === "per-step" ? langkah4Form.kolesterol || "" : sequentialForm.kolesterol || ""}
+                            onChange={(e) => {
+                              if (examinationMode === "per-step") {
+                                setLangkah4Form({ ...langkah4Form, kolesterol: e.target.value });
+                              } else {
+                                setSequentialForm({ ...sequentialForm, kolesterol: e.target.value });
+                              }
+                            }}
+                          />
+                          <span className="input-group-text bg-light border-0 text-muted">mg/dl</span>
+                        </div>
+                      </div>
+
+                      {/* 4. Ploting Kolesterol */}
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Ploting Kolesterol</label>
+                        <div className="bg-light p-2 px-3 rounded-3 border-0 d-flex align-items-center justify-content-between" style={{ minHeight: "38px" }}>
+                          <span className="fw-semibold text-dark small">
+                            {(() => {
+                              const kolVal = examinationMode === "per-step" ? langkah4Form.kolesterol : sequentialForm.kolesterol;
+                              if (!kolVal || kolVal === "") return <span className="text-muted fw-normal">Belum Diisi</span>;
+                              const kolNum = parseInt(kolVal);
+                              if (isNaN(kolNum)) return <span className="text-muted fw-normal">Belum Diisi</span>;
+                              if (kolNum >= 200) return <span className="text-danger fw-bold">Tinggi (T) &bull; ≥ 200 mg/dl</span>;
+                              return <span className="text-success fw-bold">Normal (N) &bull; &lt; 200 mg/dl</span>;
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 5. Menggunakan alat kontrasepsi (Khusus Dewasa) */}
+                      {activeSubmenu === "dewasa" && (
+                        <div className="col-12 col-md-6">
+                          <YesNoCard label="Menggunakan alat kontrasepsi" name={`alatKontrasepsi_${examinationMode}`} value={getLangkah4Value("alatKontrasepsi")} onChange={(val) => updateLangkah4Value("alatKontrasepsi", val)} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Skrining Gejala TBC */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Skrining Gejala TBC</h5>
+
+                    <div className="row g-3">
+                      <div className="col-12 col-md-6">
+                        <YesNoCard label="Batuk ≥ 2 minggu" name={`batukTbc_dewasa_${examinationMode}`} value={getLangkah4Value("batukTbc")} onChange={(val) => updateLangkah4Value("batukTbc", val)} />
+                      </div>
+
+                      <div className="col-12 mt-2">
+                        <div className="p-2 px-3 rounded-2 bg-light fw-bold text-dark small border-start border-primary border-3">Batuk &lt; 2 minggu dengan tambahan:</div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="a. Nafsu makan menurun" name={`nafsuMakanTbc_dewasa_${examinationMode}`} value={getLangkah4Value("nafsuMakanTbc")} onChange={(val) => updateLangkah4Value("nafsuMakanTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="b. Berat badan menurun" name={`bbMenurunTbc_dewasa_${examinationMode}`} value={getLangkah4Value("bbMenurunTbc")} onChange={(val) => updateLangkah4Value("bbMenurunTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="c. Lemah, letih, lesu" name={`lemahLesuTbc_dewasa_${examinationMode}`} value={getLangkah4Value("lemahLesuTbc")} onChange={(val) => updateLangkah4Value("lemahLesuTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard
+                          label="d. Berkeringat malam hari tanpa kegiatan fisik"
+                          name={`berkeringatMalamTbc_dewasa_${examinationMode}`}
+                          value={getLangkah4Value("berkeringatMalamTbc")}
+                          onChange={(val) => updateLangkah4Value("berkeringatMalamTbc", val)}
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="e. Batuk darah" name={`batukDarahTbc_dewasa_${examinationMode}`} value={getLangkah4Value("batukDarahTbc")} onChange={(val) => updateLangkah4Value("batukDarahTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="f. Sesak nafas" name={`sesakNafasTbc_dewasa_${examinationMode}`} value={getLangkah4Value("sesakNafasTbc")} onChange={(val) => updateLangkah4Value("sesakNafasTbc", val)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* B. Pemeriksaan 6 Bulan Sekali */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">B. Pemeriksaan 6 Bulan Sekali</h5>
+
+                    <h6 className="fw-bold text-primary mb-2">Tes Penglihatan (Hitung Jari)</h6>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Mata Kanan</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.mataKanan || "" : sequentialForm.mataKanan || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, mataKanan: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, mataKanan: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Mata Kiri</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.mataKiri || "" : sequentialForm.mataKiri || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, mataKiri: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, mataKiri: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <h6 className="fw-bold text-primary mb-2">Tes Pendengaran (Berbisik)</h6>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Telinga Kanan</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.telingaKanan || "" : sequentialForm.telingaKanan || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, telingaKanan: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, telingaKanan: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Telinga Kiri</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.telingaKiri || "" : sequentialForm.telingaKiri || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, telingaKiri: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, telingaKiri: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* C. PEMERIKSAAN TAHUNAN */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                      <div>
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span className="badge bg-primary-subtle text-primary fw-bold px-2.5 py-1 rounded-pill">Berkala 1x / Tahun</span>
+                          <h5 className="fw-bold text-dark mb-0">C. Pemeriksaan Tahunan</h5>
+                        </div>
+                        <p className="text-muted small mb-0">Skrining komprehensif tahunan ({activeSubmenu === "lansia" ? "PUMA, Jiwa, AKS Barthel & SKILAS" : "PUMA & Kesehatan Jiwa SRQ-20"}). Hanya perlu diisi 1 tahun sekali.</p>
+                      </div>
+                      <div className="d-flex align-items-center gap-3 bg-light p-2.5 px-3 rounded-4 border">
+                        <div className="form-check form-switch mb-0 d-flex align-items-center gap-2">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="toggleSkriningTahunan"
+                            style={{ width: "2.4em", height: "1.2em", cursor: "pointer" }}
+                            checked={Boolean(getLangkah4Value("isSkriningTahunan"))}
+                            onChange={(e) => updateLangkah4Value("isSkriningTahunan", e.target.checked)}
+                          />
+                          <label className="form-check-label fw-bold text-dark small cursor-pointer" htmlFor="toggleSkriningTahunan">
+                            {getLangkah4Value("isSkriningTahunan") ? "Lakukan Skrining" : "Tidak Dilakukan"}
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Banner Riwayat Terakhir Skrining Tahunan */}
+                    <div className="p-3 rounded-3 bg-light border d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mt-3 mb-1">
+                      <div className="d-flex align-items-center gap-2">
+                        <Clock size={18} className={`flex-shrink-0 ${annualScreeningInfo.isCurrentYear ? "text-success" : annualScreeningInfo.hasHistory ? "text-warning" : "text-secondary"}`} />
+                        <div>
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <span className="fw-bold text-dark small">Riwayat Skrining Tahunan:</span>
+                            <span className={`badge ${annualScreeningInfo.badgeClass} rounded-pill px-2.5 py-1 small fw-bold`}>{annualScreeningInfo.statusLabel}</span>
+                          </div>
+                          <div className="text-muted small mt-0.5" style={{ fontSize: "0.82rem" }}>
+                            {annualScreeningInfo.detailText}
+                          </div>
+                        </div>
+                      </div>
+
+                      {annualScreeningInfo.tglFormatted !== "-" && (
+                        <div className="text-md-end text-muted small ps-md-3 border-md-start" style={{ fontSize: "0.8rem" }}>
+                          <span className="d-block text-secondary fw-semibold">Terakhir Diisi:</span>
+                          <span className="badge bg-white text-dark border px-2 py-1 font-monospace">{annualScreeningInfo.tglFormatted}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {!getLangkah4Value("isSkriningTahunan") && (
+                      <div className="alert alert-primary-subtle border-0 rounded-3 mt-2 mb-0 d-flex align-items-center justify-content-between flex-wrap gap-2 py-2.5">
+                        <div className="d-flex align-items-center gap-2 small text-primary-emphasis">
+                          <Info size={18} className="flex-shrink-0 text-primary" />
+                          <span>Pemeriksaan tahunan tidak dilakukan pada kunjungan ini. Anda dapat langsung menyimpan data langkah 4 tanpa instrumen tahunan.</span>
+                        </div>
+                        <button type="button" className="btn btn-sm btn-primary rounded-pill px-3 fw-bold" onClick={() => updateLangkah4Value("isSkriningTahunan", true)}>
+                          Aktifkan Skrining
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {Boolean(getLangkah4Value("isSkriningTahunan")) && (
+                    <>
+                      {/* C1. Skrining PPOK PUMA (Khusus Usia ≥ 40 Tahun / Lansia) */}
+                      <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                        <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 pb-2 border-bottom gap-2">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-primary text-white fw-bold px-2.5 py-1 rounded-pill">C1</span>
+                            <h5 className="fw-bold text-dark mb-0">C.1 Skrining PPOK PUMA (Khusus Usia &gt; 40 Tahun / Lansia)</h5>
+                          </div>
+                          {(() => {
+                            const jk = examinationMode === "per-step" ? langkah4Form.pumaJk : sequentialForm.pumaJk;
+                            const usia = examinationMode === "per-step" ? langkah4Form.pumaUsia : sequentialForm.pumaUsia;
+                            const rokok = examinationMode === "per-step" ? langkah4Form.pumaMerokok : sequentialForm.pumaMerokok;
+                            const np = examinationMode === "per-step" ? langkah4Form.pumaNapasPendek : sequentialForm.pumaNapasPendek;
+                            const dh = examinationMode === "per-step" ? langkah4Form.pumaDahak : sequentialForm.pumaDahak;
+                            const bt = examinationMode === "per-step" ? langkah4Form.pumaBatukFlu : sequentialForm.pumaBatukFlu;
+
+                            const isAny = [jk, usia, rokok, np, dh, bt].some((v) => v !== "" && v !== undefined && v !== null);
+                            if (!isAny) {
+                              return <span className="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill fw-bold">Skor PUMA: - (Belum Diisi)</span>;
+                            }
+                            const score =
+                              (jk !== "" && jk !== undefined ? Number(jk) : 0) +
+                              (usia !== "" && usia !== undefined ? Number(usia) : 0) +
+                              (rokok !== "" && rokok !== undefined ? Number(rokok) : 0) +
+                              (np === "Ya" || np === 1 ? 1 : 0) +
+                              (dh === "Ya" || dh === 1 ? 1 : 0) +
+                              (bt === "Ya" || bt === 1 ? 1 : 0);
+                            const isRisiko = score >= 6;
+                            return (
+                              <span className={`badge ${isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success"} px-3 py-2 rounded-pill fw-bold`}>
+                                Skor PUMA: {score} ({isRisiko ? "Risiko Tinggi PPOK" : "Risiko Rendah PPOK"})
+                              </span>
+                            );
+                          })()}
+                        </div>
+
+                        <div className="row g-3">
+                          <div className="col-md-6">
+                            <label className="form-label fw-semibold text-dark small mb-1">1. Jenis Kelamin</label>
+                            <select
+                              className="form-select bg-light border-0 py-2"
+                              value={examinationMode === "per-step" ? (langkah4Form.pumaJk ?? "") : (sequentialForm.pumaJk ?? "")}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                if (examinationMode === "per-step") {
+                                  setLangkah4Form({ ...langkah4Form, pumaJk: val });
+                                } else {
+                                  setSequentialForm({ ...sequentialForm, pumaJk: val });
+                                }
+                              }}
+                            >
+                              <option value="">-- Pilih Jenis Kelamin --</option>
+                              <option value={0}>Perempuan (Skor 0)</option>
+                              <option value={1}>Laki-laki (Skor 1)</option>
+                            </select>
+                          </div>
+
+                          <div className="col-md-6">
+                            <label className="form-label fw-semibold text-dark small mb-1">2. Usia</label>
+                            <select
+                              className="form-select bg-light border-0 py-2"
+                              value={examinationMode === "per-step" ? (langkah4Form.pumaUsia ?? "") : (sequentialForm.pumaUsia ?? "")}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                if (examinationMode === "per-step") {
+                                  setLangkah4Form({ ...langkah4Form, pumaUsia: val });
+                                } else {
+                                  setSequentialForm({ ...sequentialForm, pumaUsia: val });
+                                }
+                              }}
+                            >
+                              <option value="">-- Pilih Kelompok Usia --</option>
+                              <option value={0}>40-49 Tahun (Skor 0)</option>
+                              <option value={1}>50-59 Tahun (Skor 1)</option>
+                              <option value={2}>≥ 60 Tahun (Skor 2)</option>
+                            </select>
+                          </div>
+
+                          <div className="col-md-6">
+                            <label className="form-label fw-semibold text-dark small mb-1">3. Kebiasaan Merokok</label>
+                            <select
+                              className="form-select bg-light border-0 py-2"
+                              value={examinationMode === "per-step" ? (langkah4Form.pumaMerokok ?? "") : (sequentialForm.pumaMerokok ?? "")}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                if (examinationMode === "per-step") {
+                                  setLangkah4Form({ ...langkah4Form, pumaMerokok: val });
+                                } else {
+                                  setSequentialForm({ ...sequentialForm, pumaMerokok: val });
+                                }
+                              }}
+                            >
+                              <option value="">-- Pilih Riwayat Merokok --</option>
+                              <option value={0}>Tidak Merokok / &lt; 20 bks/th (Skor 0)</option>
+                              <option value={1}>20 - 30 bks/th (Skor 1)</option>
+                              <option value={2}>&gt; 30 bks/th (Skor 2)</option>
+                            </select>
+                          </div>
+
+                          <div className="col-md-6">
+                            <YesNoCard
+                              label="4. Napas pendek saat jalan cepat/menanjak?"
+                              name={`pumaNapasPendek_${examinationMode}`}
+                              value={getLangkah4Value("pumaNapasPendek")}
+                              onChange={(val) => updateLangkah4Value("pumaNapasPendek", val)}
+                            />
+                          </div>
+
+                          <div className="col-md-6">
+                            <YesNoCard label="5. Mempunyai dahak saat tidak menderita flu?" name={`pumaDahak_${examinationMode}`} value={getLangkah4Value("pumaDahak")} onChange={(val) => updateLangkah4Value("pumaDahak", val)} />
+                          </div>
+
+                          <div className="col-md-6">
+                            <YesNoCard label="6. Batuk walau tidak flu / tes spirometri?" name={`pumaBatukFlu_${examinationMode}`} value={getLangkah4Value("pumaBatukFlu")} onChange={(val) => updateLangkah4Value("pumaBatukFlu", val)} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* C2. SKRINING KESEHATAN JIWA (DEWASA) SESUAI FORMAT BUKU KIA / KEMENKES */}
+                      {(activeSubmenu === "dewasa" || activeSubmenu === "lansia" || activeSubmenu === "usekrem-6-14" || activeSubmenu === "usekrem-15-18") && (
+                        <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                          <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 pb-2 border-bottom gap-2">
+                            <div>
+                              <div className="d-flex align-items-center gap-2">
+                                <span className="badge bg-primary text-white fw-bold px-2.5 py-1 rounded-pill">C2</span>
+                                <h5 className="fw-bold text-dark mb-0">C.2 Skrining Kesehatan Jiwa</h5>
+                              </div>
+                            </div>
+                            <div className="d-flex align-items-center gap-2">
+                              <span
+                                className={`px-3 py-1.5 rounded-pill fw-bold small ${
+                                  !currentJiwa.isAnswered
+                                    ? "bg-secondary-subtle text-secondary border border-secondary-subtle"
+                                    : currentJiwa.isRisiko
+                                      ? "bg-danger-subtle text-danger border border-danger-subtle"
+                                      : "bg-success-subtle text-success border border-success-subtle"
+                                }`}
+                              >
+                                Total Skor: {!currentJiwa.isAnswered ? "-" : currentJiwa.total} / 12 &bull; {currentJiwa.kategori}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Dropdown Bulan Skrining */}
+                          <div className="row align-items-center mb-3 g-2">
+                            <div className="col-auto">
+                              <label className="form-label fw-semibold text-dark small mb-0">Skrining Kesehatan Jiwa dilakukan pada bulan :</label>
+                            </div>
+                            <div className="col-auto">
+                              <select
+                                className="form-select form-select-sm bg-light border-0 py-1.5 px-3 fw-medium"
+                                style={{ minWidth: "160px" }}
+                                value={examinationMode === "per-step" ? langkah4Form.jiwaBulan || "" : sequentialForm.jiwaBulan || ""}
+                                onChange={(e) => {
+                                  if (examinationMode === "per-step") {
+                                    setLangkah4Form({ ...langkah4Form, jiwaBulan: e.target.value });
+                                  } else {
+                                    setSequentialForm({ ...sequentialForm, jiwaBulan: e.target.value });
+                                  }
+                                }}
+                              >
+                                {["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"].map((m) => (
+                                  <option key={m} value={m}>
+                                    {m}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Tabel 4 Pertanyaan Skrining Kesehatan Jiwa */}
+                          <div className="table-responsive border rounded-3 mb-3">
+                            <table className="table table-bordered align-middle mb-0 text-center" style={{ borderColor: "#cbd5e1" }}>
+                              <thead style={{ backgroundColor: "#dbeafe", color: "#1e3a8a" }}>
+                                <tr style={{ fontSize: "0.82rem" }}>
+                                  <th style={{ width: "45px" }} className="py-2.5 px-2 fw-bold text-center">
+                                    No
+                                  </th>
+                                  <th style={{ minWidth: "240px" }} className="py-2.5 px-3 fw-bold text-start">
+                                    Pertanyaan
+                                  </th>
+                                  <th style={{ width: "110px" }} className="py-2.5 px-2 fw-bold">
+                                    Tidak sama sekali (0)
+                                  </th>
+                                  <th style={{ width: "130px" }} className="py-2.5 px-2 fw-bold">
+                                    Kurang dari 1 (satu) minggu (1)
+                                  </th>
+                                  <th style={{ width: "130px" }} className="py-2.5 px-2 fw-bold">
+                                    Lebih dari 1 (satu) minggu (2)
+                                  </th>
+                                  <th style={{ width: "120px" }} className="py-2.5 px-2 fw-bold">
+                                    Hampir setiap hari (3)
+                                  </th>
+                                  <th style={{ width: "90px", backgroundColor: "#e2e8f0", color: "#334155" }} className="py-2.5 px-2 fw-bold text-center">
+                                    Total skor
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody style={{ fontSize: "0.84rem" }}>
+                                {[
+                                  {
+                                    no: 1,
+                                    field: "jiwaQ1",
+                                    q: "Dalam 2 minggu terakhir, seberapa sering anda kurang/tidak bersemangat dalam melakukan kegiatan sehari/hari?",
+                                  },
+                                  {
+                                    no: 2,
+                                    field: "jiwaQ2",
+                                    q: "Dalam 2 minggu terakhir, seberapa sering anda merasa murung, tertekan, atau putus asa?",
+                                  },
+                                  {
+                                    no: 3,
+                                    field: "jiwaQ3",
+                                    q: "Dalam 2 minggu terakhir, seberapa sering anda merasa gugup, cemas, atau gelisah?",
+                                  },
+                                  {
+                                    no: 4,
+                                    field: "jiwaQ4",
+                                    q: "Dalam 2 minggu terakhir, seberapa sering anda tidak mampu mengendalikan rasa khawatir?",
+                                  },
+                                ].map((item) => {
+                                  const val = examinationMode === "per-step" ? langkah4Form[item.field] : sequentialForm[item.field];
+                                  const numVal = val !== "" && val !== undefined && val !== null ? Number(val) : null;
+                                  return (
+                                    <tr key={item.no}>
+                                      <td className="fw-bold text-dark text-center">{item.no}</td>
+                                      <td className="text-start px-3 py-2.5 text-dark fw-medium">{item.q}</td>
+                                      {[0, 1, 2, 3].map((optionScore) => (
+                                        <td key={optionScore} className="text-center py-2">
+                                          <input
+                                            type="radio"
+                                            className="form-check-input cursor-pointer"
+                                            name={`${item.field}_${examinationMode}`}
+                                            checked={numVal === optionScore}
+                                            onChange={() => {
+                                              if (examinationMode === "per-step") {
+                                                setLangkah4Form({ ...langkah4Form, [item.field]: optionScore });
+                                              } else {
+                                                setSequentialForm({ ...sequentialForm, [item.field]: optionScore });
+                                              }
+                                            }}
+                                            style={{ width: "1.15rem", height: "1.15rem", cursor: "pointer" }}
+                                          />
+                                        </td>
+                                      ))}
+                                      <td className="text-center fw-bold py-2" style={{ backgroundColor: "#f8fafc", color: numVal !== null ? "#1e3a8a" : "#94a3b8" }}>
+                                        {numVal !== null ? numVal : "—"}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot style={{ backgroundColor: "#f1f5f9" }}>
+                                <tr>
+                                  <td colSpan="6" className="text-end fw-bold py-2.5 px-3 text-dark">
+                                    Total Skor Skrining Kesehatan Jiwa :
+                                  </td>
+                                  <td className="text-center fw-bold py-2.5 px-2 fs-6" style={{ color: currentJiwa.isRisiko ? "#dc2626" : "#16a34a" }}>
+                                    {currentJiwa.isAnswered ? currentJiwa.total : "—"}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+
+                          {/* Panduan Interpretasi & Keterangan */}
+                          <div className="p-3 rounded-3 bg-light border">
+                            <div className="d-flex flex-column gap-1 text-muted small mb-2">
+                              <div>
+                                <strong>Interpretasi Skor:</strong> Skor &lt; 6 = Normal / Sehat Jiwa; Skor &ge; 6 = Risiko Masalah Kesehatan Jiwa (Perlu Konseling/Rujukan ke Puskesmas).
+                              </div>
+                            </div>
+                            {!currentJiwa.isAnswered ? (
+                              <div className="alert alert-light text-muted d-flex align-items-center gap-2 mb-0 py-2 small border">
+                                <Info size={16} className="flex-shrink-0 text-primary" />
+                                <div>Silakan isi 4 pertanyaan di atas untuk mengevaluasi skrining kesehatan jiwa sasaran.</div>
+                              </div>
+                            ) : currentJiwa.isRisiko ? (
+                              <div className="alert alert-danger d-flex align-items-center gap-2 mb-0 py-2 small">
+                                <AlertCircle size={16} className="flex-shrink-0" />
+                                <div>
+                                  <strong>Indikasi Masalah Kesehatan Jiwa:</strong> Total skor ({currentJiwa.total}) &ge; 6 menunjukkan adanya risiko kecemasan / depresi &rarr; Status rujukan otomatis disinkronkan ke{" "}
+                                  <strong>"Rujuk ke Puskesmas / Pustu"</strong> untuk konseling lebih lanjut.
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="alert alert-success d-flex align-items-center gap-2 mb-0 py-2 small">
+                                <CheckCircle2 size={16} className="flex-shrink-0" />
+                                <div>
+                                  <strong>Hasil Normal:</strong> Total skor ({currentJiwa.total}) &lt; 6, kondisi kesehatan mental dan emosional sasaran dalam batas baik dan stabil.
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* KHUSUS LANSIA: C2 AKS & C3 SKILAS SESUAI FORMAT JUKNIS KEMENKES */}
+                      {activeSubmenu === "lansia" && (
+                        <>
+                          {/* C2. PEMERIKSAAN TAHUNAN SKRINING AKTIFITAS KEHIDUPAN SEHARI-HARI (AKS) */}
+                          <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                            <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 pb-2 border-bottom gap-2">
+                              <div>
+                                <div className="d-flex align-items-center gap-2">
+                                  <span className="badge bg-primary text-white fw-bold px-2.5 py-1 rounded-pill">C2</span>
+                                  <h5 className="fw-bold text-dark mb-0">C2. Pemeriksaan Tahunan Skrining Aktifitas Kehidupan Sehari-hari (AKS)</h5>
+                                </div>
+                              </div>
+                              <div className="d-flex align-items-center gap-2">
+                                <span
+                                  className={`px-3 py-1.5 rounded-pill fw-bold small ${
+                                    !currentAks.isAnswered
+                                      ? "bg-secondary-subtle text-secondary border border-secondary-subtle"
+                                      : currentAks.total === 20
+                                        ? "bg-success-subtle text-success border border-success-subtle"
+                                        : currentAks.total >= 12
+                                          ? "bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                                          : "bg-danger-subtle text-danger border border-danger-subtle"
+                                  }`}
+                                >
+                                  Total Skor: {!currentAks.isAnswered ? "-" : currentAks.total} / 20 &bull; {currentAks.kategori}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="table-responsive mb-3">
+                              <table className="table table-bordered align-middle mb-0" style={{ borderColor: "#e2e8f0" }}>
+                                <thead style={{ backgroundColor: "#fed7aa", color: "#7c2d12" }}>
+                                  <tr>
+                                    <th style={{ width: "50%" }} className="py-2.5 px-3 fw-bold text-dark">
+                                      Pertanyaan
+                                    </th>
+                                    <th style={{ width: "50%" }} className="py-2.5 px-3 fw-bold text-dark">
+                                      Waktu ke Posyandu (Skor &amp; Kondisi)
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {/* 1. BAB */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">1. Mengendalikan rangsang Buang Air Besar (BAB)</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksBab ?? "") : (sequentialForm.aksBab ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksBab: val });
+                                          else setSequentialForm({ ...sequentialForm, aksBab: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tidak terkendali/ tak teratur (perlu pencahar)</option>
+                                        <option value={1}>Skor 1 : Kadang-kadang tak terkendali (1x /minggu)</option>
+                                        <option value={2}>Skor 2 : Terkendali teratur</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 2. BAK */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">2. Mengendalikan rangsang Buang Air Kecil (BAK)</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksBak ?? "") : (sequentialForm.aksBak ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksBak: val });
+                                          else setSequentialForm({ ...sequentialForm, aksBak: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tidak terkendali atau pakai kateter</option>
+                                        <option value={1}>Skor 1 : Kadang-kadang tak terkendali (1x/24 jam)</option>
+                                        <option value={2}>Skor 2 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 3. Membersihkan Diri */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">3. Membersihkan diri (mencuci wajah, menyikat rambut, mencukur kumis, sikat gigi)</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksCuciMuka ?? "") : (sequentialForm.aksCuciMuka ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksCuciMuka: val });
+                                          else setSequentialForm({ ...sequentialForm, aksCuciMuka: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Butuh pertolongan orang lain</option>
+                                        <option value={1}>Skor 1 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 4. Penggunaan WC */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">4. Penggunaan WC (keluar masuk WC, melepas/memakai celana, cebok, menyiram)</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksWc ?? "") : (sequentialForm.aksWc ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksWc: val });
+                                          else setSequentialForm({ ...sequentialForm, aksWc: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tergantung pertolongan orang lain</option>
+                                        <option value={1}>Skor 1 : Perlu pertolongan pada beberapa kegiatan tetapi dapat</option>
+                                        <option value={2}>Skor 2 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 5. Makan Minum */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">5. Makan minum (Jika makan harus berupa potongan, dianggap dibantu)</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksMakan ?? "") : (sequentialForm.aksMakan ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksMakan: val });
+                                          else setSequentialForm({ ...sequentialForm, aksMakan: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tidak mampu</option>
+                                        <option value={1}>Skor 1 : Perlu ditolong memotong makanan</option>
+                                        <option value={2}>Skor 2 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 6. Bergerak dari kursi roda */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">6. Bergerak dari kursi roda ke tempat tidur dan sebaliknya (termasuk duduk di tempat tidur)</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksPindah ?? "") : (sequentialForm.aksPindah ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksPindah: val });
+                                          else setSequentialForm({ ...sequentialForm, aksPindah: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tidak mampu</option>
+                                        <option value={1}>Skor 1 : Perlu bantuan untuk bisa duduk (2 org)</option>
+                                        <option value={2}>Skor 2 : Bantuan minimal 1 org</option>
+                                        <option value={3}>Skor 3 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 7. Berjalan di tempat rata */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">7. Berjalan di tempat rata (atau jika tidak bisa berjalan, menjalankan kursi roda)</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksJalan ?? "") : (sequentialForm.aksJalan ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksJalan: val });
+                                          else setSequentialForm({ ...sequentialForm, aksJalan: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tidak mampu</option>
+                                        <option value={1}>Skor 1 : bisa (pindah) dengan kursi roda</option>
+                                        <option value={2}>Skor 2 : Berjalan dengan bantuan 1 org</option>
+                                        <option value={3}>Skor 3 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 8. Berpakaian */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">8. Berpakaian (termasuk memasang tali sepatu, mengencangkan sabuk)</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksPakaian ?? "") : (sequentialForm.aksPakaian ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksPakaian: val });
+                                          else setSequentialForm({ ...sequentialForm, aksPakaian: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tergantung orang lain</option>
+                                        <option value={1}>Skor 1 : Sebagian dibantu misal mengancing baju</option>
+                                        <option value={2}>Skor 2 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 9. Naik turun tangga */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">9. Naik turun tangga</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksTangga ?? "") : (sequentialForm.aksTangga ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksTangga: val });
+                                          else setSequentialForm({ ...sequentialForm, aksTangga: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tidak mampu</option>
+                                        <option value={1}>Skor 1 : Butuh pertolongan</option>
+                                        <option value={2}>Skor 2 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+
+                                  {/* 10. Mandi */}
+                                  <tr>
+                                    <td className="px-3 py-2 fw-semibold text-dark">10. Mandi</td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        className="form-select form-select-sm bg-light border-0 py-2"
+                                        value={examinationMode === "per-step" ? (langkah4Form.aksMandi ?? "") : (sequentialForm.aksMandi ?? "")}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? "" : parseInt(e.target.value);
+                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksMandi: val });
+                                          else setSequentialForm({ ...sequentialForm, aksMandi: val });
+                                        }}
+                                      >
+                                        <option value="">-- Pilih Kondisi --</option>
+                                        <option value={0}>Skor 0 : Tergantung orang lain</option>
+                                        <option value={1}>Skor 1 : Mandiri</option>
+                                      </select>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Catatan Ketergantungan & Rujukan AKS */}
+                            <div className="p-3 rounded-3 bg-light border">
+                              <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                <span className="fw-bold text-dark small">Tingkat Ketergantungan:</span>
+                                <div className="d-flex flex-wrap gap-1.5 small">
+                                  <span className={`badge ${currentAks.shortCode === "M" ? "bg-success text-white" : "bg-secondary-subtle text-secondary"}`}>Mandiri (M=20)</span>
+                                  <span className={`badge ${currentAks.shortCode === "R" ? "bg-warning text-dark" : "bg-secondary-subtle text-secondary"}`}>Ringan (R=12-19)</span>
+                                  <span className={`badge ${currentAks.shortCode === "S" ? "bg-warning text-dark" : "bg-secondary-subtle text-secondary"}`}>Sedang (S=9-11)</span>
+                                  <span className={`badge ${currentAks.shortCode === "B" ? "bg-danger text-white" : "bg-secondary-subtle text-secondary"}`}>Berat (B=5-8)</span>
+                                  <span className={`badge ${currentAks.shortCode === "T" ? "bg-danger text-white" : "bg-secondary-subtle text-secondary"}`}>Total (T=0-4)</span>
+                                </div>
+                              </div>
+                              {!currentAks.isAnswered ? (
+                                <div className="alert alert-light text-muted d-flex align-items-center gap-2 mb-0 py-2 small border">
+                                  <Info size={16} className="flex-shrink-0 text-primary" />
+                                  <div>Silakan lengkapi instrumen 10 pertanyaan di atas untuk menghitung Indeks Barthel (AKS) lansia.</div>
+                                </div>
+                              ) : currentAks.perluRujuk ? (
+                                <div className="alert alert-danger d-flex align-items-center gap-2 mb-0 py-2 small">
+                                  <AlertCircle size={16} className="flex-shrink-0" />
+                                  <div>
+                                    <strong>Rujukan*:</strong> Skor perhitungan AKS = {currentAks.total} (&lt; 20). Termasuk kelompok <strong>{currentAks.kategori}</strong>, maka dilakukan rujuk ke Pustu/Puskesmas.
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="alert alert-success d-flex align-items-center gap-2 mb-0 py-2 small">
+                                  <CheckCircle2 size={16} className="flex-shrink-0" />
+                                  <div>
+                                    <strong>Status Mandiri (Skor 20):</strong> Pasien mandiri dalam seluruh aktifitas kehidupan sehari-hari, tidak perlu rujukan ketergantungan.
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* C3. PEMERIKSAAN TAHUNAN SKILAS */}
+                          <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                            <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 pb-2 border-bottom gap-2">
+                              <div>
+                                <div className="d-flex align-items-center gap-2">
+                                  <span className="badge bg-primary text-white fw-bold px-2.5 py-1 rounded-pill">C3</span>
+                                  <h5 className="fw-bold text-dark mb-0">C3. Pemeriksaan Tahunan SKILAS</h5>
+                                </div>
+                              </div>
+                              <div>
+                                <span
+                                  className={`px-3 py-1.5 rounded-pill fw-bold small ${
+                                    !currentSkilas.isAnswered
+                                      ? "bg-secondary-subtle text-secondary border border-secondary-subtle"
+                                      : currentSkilas.adaRisiko
+                                        ? "bg-danger-subtle text-danger border border-danger-subtle"
+                                        : "bg-success-subtle text-success border border-success-subtle"
+                                  }`}
+                                >
+                                  {!currentSkilas.isAnswered ? "Belum Diisi" : currentSkilas.adaRisiko ? "⚠️ Ada Indikasi Risiko SKILAS" : "✓ Semua Domain Terpenuhi Normal"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="table-responsive mb-3">
+                              <table className="table table-bordered align-middle mb-0" style={{ borderColor: "#e2e8f0" }}>
+                                <thead style={{ backgroundColor: "#fed7aa", color: "#7c2d12" }}>
+                                  <tr>
+                                    <th style={{ width: "60%" }} className="py-2.5 px-3 fw-bold text-dark">
+                                      Pertanyaan
+                                    </th>
+                                    <th style={{ width: "40%" }} className="py-2.5 px-3 fw-bold text-dark">
+                                      Waktu Wawancara
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {/* 1. PENURUNAN KOGNITIF */}
+                                  <tr style={{ backgroundColor: "#f1f5f9" }}>
+                                    <td colSpan="2" className="px-3 py-1.5 fw-bold text-dark small">
+                                      Penurunan Kognitif
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Orientasi waktu dan tempat</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasOrientasi_${examinationMode}`} value={getLangkah4Value("skilasOrientasi")} onChange={(val) => updateLangkah4Value("skilasOrientasi", val)} />
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Mengulang ketiga kata</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasUlangKata_${examinationMode}`} value={getLangkah4Value("skilasUlangKata")} onChange={(val) => updateLangkah4Value("skilasUlangKata", val)} />
+                                    </td>
+                                  </tr>
+
+                                  {/* 2. KETERBATASAN MOBILISASI */}
+                                  <tr style={{ backgroundColor: "#f1f5f9" }}>
+                                    <td colSpan="2" className="px-3 py-1.5 fw-bold text-dark small">
+                                      Keterbatasan Mobilisasi
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Tes berdiri dari kursi</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasTesKursi_${examinationMode}`} value={getLangkah4Value("skilasTesKursi")} onChange={(val) => updateLangkah4Value("skilasTesKursi", val)} />
+                                    </td>
+                                  </tr>
+
+                                  {/* 3. MALNUTRISI */}
+                                  <tr style={{ backgroundColor: "#f1f5f9" }}>
+                                    <td colSpan="2" className="px-3 py-1.5 fw-bold text-dark small">
+                                      Malnutrisi
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; BB berkurang &gt;3kg dalam 3 bulan terakhir atau pakaian jadi lebih longgar</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasBbTurun_${examinationMode}`} value={getLangkah4Value("skilasBbTurun")} onChange={(val) => updateLangkah4Value("skilasBbTurun", val)} />
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Hilang nafsu makan/kesulitan makan</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasNafsuMakan_${examinationMode}`} value={getLangkah4Value("skilasNafsuMakan")} onChange={(val) => updateLangkah4Value("skilasNafsuMakan", val)} />
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; LILA &lt;21 cm</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasLilaKurang_${examinationMode}`} value={getLangkah4Value("skilasLilaKurang")} onChange={(val) => updateLangkah4Value("skilasLilaKurang", val)} />
+                                    </td>
+                                  </tr>
+
+                                  {/* 4. GANGGUAN PENGLIHATAN */}
+                                  <tr style={{ backgroundColor: "#f1f5f9" }}>
+                                    <td colSpan="2" className="px-3 py-1.5 fw-bold text-dark small">
+                                      Gangguan Penglihatan
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Masalah pada mata (sulit lihat jauh, membaca, penyakit mata, sedang dalam pengobatan Hipertensi/Diabetes)</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasMasalahMata_${examinationMode}`} value={getLangkah4Value("skilasMasalahMata")} onChange={(val) => updateLangkah4Value("skilasMasalahMata", val)} />
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Tes Melihat</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasTesLihat_${examinationMode}`} value={getLangkah4Value("skilasTesLihat")} onChange={(val) => updateLangkah4Value("skilasTesLihat", val)} />
+                                    </td>
+                                  </tr>
+
+                                  {/* 5. GANGGUAN PENDENGARAN */}
+                                  <tr style={{ backgroundColor: "#f1f5f9" }}>
+                                    <td colSpan="2" className="px-3 py-1.5 fw-bold text-dark small">
+                                      Gangguan Pendengaran
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Tes Berbisik</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasTesBisik_${examinationMode}`} value={getLangkah4Value("skilasTesBisik")} onChange={(val) => updateLangkah4Value("skilasTesBisik", val)} />
+                                    </td>
+                                  </tr>
+
+                                  {/* 6. GEJALA DEPRESI */}
+                                  <tr style={{ backgroundColor: "#f1f5f9" }}>
+                                    <td colSpan="2" className="px-3 py-1.5 fw-bold text-dark small">
+                                      Gejala Depresi (dalam 2 minggu terakhir)
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Perasaan sedih, tertekan, atau putus asa</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasPerasaanSedih_${examinationMode}`} value={getLangkah4Value("skilasPerasaanSedih")} onChange={(val) => updateLangkah4Value("skilasPerasaanSedih", val)} />
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Sedikit minat atau kesenangan dalam melakukan sesuatu</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasHilangMinat_${examinationMode}`} value={getLangkah4Value("skilasHilangMinat")} onChange={(val) => updateLangkah4Value("skilasHilangMinat", val)} />
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Catatan Penyuluhan & Rujukan SKILAS */}
+                            <div className="p-3 rounded-3 bg-light border">
+                              <div className="d-flex flex-column gap-1 text-muted small mb-2">
+                                <div>
+                                  <strong>Penyuluhan*:</strong> Tema edukasi yang diberikan disesuaikan dengan domain risiko skrining.
+                                </div>
+                                <div>
+                                  <strong>Rujukan*:</strong> Rujuk puskesmas atau pustu bila ada indikasi resiko hasil pemeriksaan dan skrining.
+                                </div>
+                              </div>
+                              {!currentSkilas.isAnswered ? (
+                                <div className="alert alert-light text-muted d-flex align-items-center gap-2 mb-0 py-2 small border">
+                                  <Info size={16} className="flex-shrink-0 text-primary" />
+                                  <div>Silakan jawab instrumen skrining SKILAS di atas untuk mengevaluasi 6 domain kapasitas fungsional lansia.</div>
+                                </div>
+                              ) : currentSkilas.adaRisiko ? (
+                                <div className="alert alert-danger d-flex align-items-center gap-2 mb-0 py-2 small">
+                                  <AlertCircle size={16} className="flex-shrink-0" />
+                                  <div>
+                                    <strong>Indikasi Rujukan Otomatis SKILAS:</strong> Ditemukan indikasi risiko pada domain: <em>{currentSkilas.issues.join(", ")}</em> &rarr; Status rujukan otomatis diset ke{" "}
+                                    <strong>"Rujuk ke Puskesmas / Pustu"</strong>.
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="alert alert-success d-flex align-items-center gap-2 mb-0 py-2 small">
+                                  <CheckCircle2 size={16} className="flex-shrink-0" />
+                                  <div>
+                                    <strong>Hasil SKILAS Baik:</strong> Seluruh domain kognitif, mobilisasi, nutrisi, sensorik, dan psikologis lansia terpantau dalam batas aman.
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : activeSubmenu === "usekrem-15-18" ? (
+                <>
+                  {/* Kadar Gula Darah & Plotting Gula Darah */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Kadar Gula Darah &amp; Plotting</h5>
+
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Kadar Gula Darah (mg/dl)</label>
+                        <div className="input-group">
+                          <input
+                            type="number"
+                            className="form-control bg-light border-0 py-2"
+                            placeholder="Contoh: 110"
+                            value={examinationMode === "per-step" ? langkah2Form.gulaDarah : sequentialForm.gulaDarah}
+                            onChange={(e) => {
+                              if (examinationMode === "per-step") {
+                                setLangkah2Form({ ...langkah2Form, gulaDarah: e.target.value });
+                              } else {
+                                setSequentialForm({ ...sequentialForm, gulaDarah: e.target.value });
+                              }
+                            }}
+                          />
+                          <span className="input-group-text bg-light border-0 text-muted">mg/dl</span>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Plotting Gula Darah</label>
+                        <div className="bg-light p-2 rounded-3 border-0 fw-bold text-dark d-flex align-items-center justify-content-between" style={{ minHeight: "38px" }}>
+                          <span>
+                            {parseInt(examinationMode === "per-step" ? langkah2Form.gulaDarah : sequentialForm.gulaDarah) >= 200
+                              ? "Diabetisi (D) - ≥ 200 mg/dl"
+                              : parseInt(examinationMode === "per-step" ? langkah2Form.gulaDarah : sequentialForm.gulaDarah) >= 140
+                                ? "Prediabetisi (Pd) - 140-199 mg/dl"
+                                : "Normal (N) - 80-140 mg/dl"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Skrining Gejala TBC */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Skrining Gejala TBC</h5>
+
+                    <div className="row g-3">
+                      <div className="col-12 col-md-6">
+                        <YesNoCard label="Batuk > 2 minggu" name={`batukBesarTbc_u1518_${examinationMode}`} value={getLangkah4Value("batukBesarTbc")} onChange={(val) => updateLangkah4Value("batukBesarTbc", val)} />
+                      </div>
+
+                      <div className="col-12 mt-2">
+                        <div className="p-2 px-3 rounded-2 bg-light fw-bold text-dark small border-start border-primary border-3">Batuk &lt; 2 minggu dengan tambahan:</div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="a. Nafsu makan menurun" name={`nafsuMakanTbc_u1518_${examinationMode}`} value={getLangkah4Value("nafsuMakanTbc")} onChange={(val) => updateLangkah4Value("nafsuMakanTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="b. Berat badan menurun" name={`bbMenurunTbc_u1518_${examinationMode}`} value={getLangkah4Value("bbMenurunTbc")} onChange={(val) => updateLangkah4Value("bbMenurunTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="c. Lemah, letih, lesu" name={`lemahLesuTbc_u1518_${examinationMode}`} value={getLangkah4Value("lemahLesuTbc")} onChange={(val) => updateLangkah4Value("lemahLesuTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard
+                          label="d. Berkeringat malam hari tanpa kegiatan fisik"
+                          name={`berkeringatMalamTbc_u1518_${examinationMode}`}
+                          value={getLangkah4Value("berkeringatMalamTbc")}
+                          onChange={(val) => updateLangkah4Value("berkeringatMalamTbc", val)}
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="e. Batuk darah" name={`batukDarahTbc_u1518_${examinationMode}`} value={getLangkah4Value("batukDarahTbc")} onChange={(val) => updateLangkah4Value("batukDarahTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="f. Sesak nafas" name={`sesakNafasTbc_u1518_${examinationMode}`} value={getLangkah4Value("sesakNafasTbc")} onChange={(val) => updateLangkah4Value("sesakNafasTbc", val)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* B. Pemeriksaan 6 Bulan Sekali */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">B. Pemeriksaan 6 Bulan Sekali</h5>
+
+                    <h6 className="fw-bold text-primary mb-2">Tes Penglihatan (Hitung Jari)</h6>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Mata Kanan</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.mataKanan || "" : sequentialForm.mataKanan || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, mataKanan: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, mataKanan: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Mata Kiri</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.mataKiri || "" : sequentialForm.mataKiri || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, mataKiri: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, mataKiri: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <h6 className="fw-bold text-primary mb-2">Tes Pendengaran (Berbisik)</h6>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Telinga Kanan</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.telingaKanan || "" : sequentialForm.telingaKanan || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, telingaKanan: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, telingaKanan: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Telinga Kiri</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.telingaKiri || "" : sequentialForm.telingaKiri || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, telingaKiri: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, telingaKiri: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* C. Skrining Remaja */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                      <div>
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span className="badge bg-primary-subtle text-primary fw-bold px-2.5 py-1 rounded-pill">1x / Tahun</span>
+                          <h5 className="fw-bold text-dark mb-0">Skrining Remaja</h5>
+                        </div>
+                        <p className="text-muted small mb-0">Skrining Kesehatan Jiwa &amp; Pemeriksaan Anemia (Hb) berkala tahunan.</p>
+                      </div>
+                      <div className="d-flex align-items-center gap-3 bg-light p-2 px-3 rounded-4 border">
+                        <div className="form-check form-switch mb-0 d-flex align-items-center gap-2">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="toggleSkriningTahunanRemaja15"
+                            style={{ width: "2.4em", height: "1.2em", cursor: "pointer" }}
+                            checked={Boolean(getLangkah4Value("isSkriningTahunan"))}
+                            onChange={(e) => updateLangkah4Value("isSkriningTahunan", e.target.checked)}
+                          />
+                          <label className="form-check-label fw-bold text-dark small cursor-pointer" htmlFor="toggleSkriningTahunanRemaja15">
+                            {getLangkah4Value("isSkriningTahunan") ? "Lakukan Skrining" : "Tidak Dilakukan"}
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Banner Riwayat Terakhir Skrining Tahunan Remaja */}
+                    <div className="p-3 rounded-3 bg-light border d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+                      <div className="d-flex align-items-center gap-2">
+                        <Clock size={18} className={`flex-shrink-0 ${annualScreeningInfo.isCurrentYear ? "text-success" : annualScreeningInfo.hasHistory ? "text-warning" : "text-secondary"}`} />
+                        <div>
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <span className="fw-bold text-dark small">Riwayat Skrining Tahunan:</span>
+                            <span className={`badge ${annualScreeningInfo.badgeClass} rounded-pill px-2.5 py-1 small fw-bold`}>{annualScreeningInfo.statusLabel}</span>
+                          </div>
+                          <div className="text-muted small mt-0.5" style={{ fontSize: "0.82rem" }}>
+                            {annualScreeningInfo.detailText}
+                          </div>
+                        </div>
+                      </div>
+
+                      {annualScreeningInfo.tglFormatted !== "-" && (
+                        <div className="text-md-end text-muted small ps-md-3 border-md-start" style={{ fontSize: "0.8rem" }}>
+                          <span className="d-block text-secondary fw-semibold">Terakhir Diisi:</span>
+                          <span className="badge bg-white text-dark border px-2 py-1 font-monospace">{annualScreeningInfo.tglFormatted}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {!getLangkah4Value("isSkriningTahunan") ? (
+                      <div className="alert alert-light border rounded-3 mb-0 d-flex align-items-center justify-content-between flex-wrap gap-2 py-2 small">
+                        <div className="d-flex align-items-center gap-2 text-muted">
+                          <Info size={16} className="text-primary flex-shrink-0" />
+                          <span>Pemeriksaan tahunan tidak dilakukan pada kunjungan ini. Anda dapat langsung menyimpan data langkah 4 tanpa instrumen tahunan.</span>
+                        </div>
+                        <button type="button" className="btn btn-sm btn-outline-primary rounded-pill px-3" onClick={() => updateLangkah4Value("isSkriningTahunan", true)}>
+                          Isi Pemeriksaan
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="row g-3 pt-2 border-top">
+                        <div className="col-md-6">
+                          <label className="form-label fw-semibold text-dark small mb-1">Melakukan skrining jiwa</label>
+                          <select
+                            className="form-select bg-light border-0 py-2"
+                            value={examinationMode === "per-step" ? langkah4Form.skriningJiwa || "" : sequentialForm.skriningJiwa || ""}
+                            onChange={(e) => {
+                              if (examinationMode === "per-step") {
+                                setLangkah4Form({ ...langkah4Form, skriningJiwa: e.target.value });
+                              } else {
+                                setSequentialForm({ ...sequentialForm, skriningJiwa: e.target.value });
+                              }
+                            }}
+                          >
+                            <option value="">-- Pilih Status --</option>
+                            <option value="Sudah">Sudah</option>
+                            <option value="Belum">Belum</option>
+                          </select>
+                        </div>
+
+                        {isRemajaPerempuan && (
+                          <div className="col-md-6">
+                            <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
+
+                            <select
+                              className="form-select bg-light border-0 py-2"
+                              value={examinationMode === "per-step" ? langkah4Form.periksaHb || "" : sequentialForm.periksaHb || ""}
+                              onChange={(e) => {
+                                if (examinationMode === "per-step") {
+                                  setLangkah4Form({
+                                    ...langkah4Form,
+                                    periksaHb: e.target.value,
+                                  });
+                                } else {
+                                  setSequentialForm({
+                                    ...sequentialForm,
+                                    periksaHb: e.target.value,
+                                  });
+                                }
+                              }}
+                            >
+                              <option value="">-- Pilih Status --</option>
+                              <option value="Sudah">Sudah</option>
+                              <option value="Belum">Belum</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : activeSubmenu === "usekrem-6-14" ? (
+                <>
+                  {/* Skrining Gejala TBC */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Skrining Gejala TBC</h5>
+
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <YesNoCard label="Batuk ≥ 2 minggu" name={`batukTbc_u614_${examinationMode}`} value={getLangkah4Value("batukTbc")} onChange={(val) => updateLangkah4Value("batukTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="Demam hilang timbul > 2 minggu" name={`demamTbc_u614_${examinationMode}`} value={getLangkah4Value("demamTbc")} onChange={(val) => updateLangkah4Value("demamTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="Berat badan turun/tidak naik dalam 2 bulan" name={`bbTurunTbc_u614_${examinationMode}`} value={getLangkah4Value("bbTurunTbc")} onChange={(val) => updateLangkah4Value("bbTurunTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="Lesu / malaise" name={`lesuTbc_u614_${examinationMode}`} value={getLangkah4Value("lesuTbc")} onChange={(val) => updateLangkah4Value("lesuTbc", val)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* B. Pemeriksaan 6 Bulan Sekali */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">B. Pemeriksaan 6 Bulan Sekali</h5>
+
+                    <h6 className="fw-bold text-primary mb-2">Tes Penglihatan (Hitung Jari)</h6>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Mata Kanan</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.mataKanan || "" : sequentialForm.mataKanan || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, mataKanan: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, mataKanan: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Mata Kiri</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.mataKiri || "" : sequentialForm.mataKiri || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, mataKiri: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, mataKiri: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <h6 className="fw-bold text-primary mb-2">Tes Pendengaran (Berbisik)</h6>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Telinga Kanan</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.telingaKanan || "" : sequentialForm.telingaKanan || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, telingaKanan: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, telingaKanan: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-dark small mb-1">Telinga Kiri</label>
+                        <select
+                          className="form-select bg-light border-0 py-2"
+                          value={examinationMode === "per-step" ? langkah4Form.telingaKiri || "" : sequentialForm.telingaKiri || ""}
+                          onChange={(e) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah4Form({ ...langkah4Form, telingaKiri: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, telingaKiri: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">-- Pilih Hasil --</option>
+                          <option value="Normal">Normal</option>
+                          <option value="Ada Gangguan">Ada Gangguan</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* C. Skrining Remaja */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                      <div>
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span className="badge bg-primary-subtle text-primary fw-bold px-2.5 py-1 rounded-pill">1x / Tahun</span>
+                          <h5 className="fw-bold text-dark mb-0">Skrining Remaja</h5>
+                        </div>
+                        <p className="text-muted small mb-0">Skrining Kesehatan Jiwa &amp; Pemeriksaan Anemia (Hb) berkala tahunan.</p>
+                      </div>
+                      <div className="d-flex align-items-center gap-3 bg-light p-2 px-3 rounded-4 border">
+                        <div className="form-check form-switch mb-0 d-flex align-items-center gap-2">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="toggleSkriningTahunanRemaja6"
+                            style={{ width: "2.4em", height: "1.2em", cursor: "pointer" }}
+                            checked={Boolean(getLangkah4Value("isSkriningTahunan"))}
+                            onChange={(e) => updateLangkah4Value("isSkriningTahunan", e.target.checked)}
+                          />
+                          <label className="form-check-label fw-bold text-dark small cursor-pointer" htmlFor="toggleSkriningTahunanRemaja6">
+                            {getLangkah4Value("isSkriningTahunan") ? "Lakukan Skrining" : "Tidak Dilakukan"}
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Banner Riwayat Terakhir Skrining Tahunan Remaja */}
+                    <div className="p-3 rounded-3 bg-light border d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+                      <div className="d-flex align-items-center gap-2">
+                        <Clock size={18} className={`flex-shrink-0 ${annualScreeningInfo.isCurrentYear ? "text-success" : annualScreeningInfo.hasHistory ? "text-warning" : "text-secondary"}`} />
+                        <div>
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <span className="fw-bold text-dark small">Riwayat Skrining Tahunan:</span>
+                            <span className={`badge ${annualScreeningInfo.badgeClass} rounded-pill px-2.5 py-1 small fw-bold`}>{annualScreeningInfo.statusLabel}</span>
+                          </div>
+                          <div className="text-muted small mt-0.5" style={{ fontSize: "0.82rem" }}>
+                            {annualScreeningInfo.detailText}
+                          </div>
+                        </div>
+                      </div>
+
+                      {annualScreeningInfo.tglFormatted !== "-" && (
+                        <div className="text-md-end text-muted small ps-md-3 border-md-start" style={{ fontSize: "0.8rem" }}>
+                          <span className="d-block text-secondary fw-semibold">Terakhir Diisi:</span>
+                          <span className="badge bg-white text-dark border px-2 py-1 font-monospace">{annualScreeningInfo.tglFormatted}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {!getLangkah4Value("isSkriningTahunan") ? (
+                      <div className="alert alert-light border rounded-3 mb-0 d-flex align-items-center justify-content-between flex-wrap gap-2 py-2 small">
+                        <div className="d-flex align-items-center gap-2 text-muted">
+                          <Info size={16} className="text-primary flex-shrink-0" />
+                          <span>Pemeriksaan tahunan tidak dilakukan pada kunjungan ini. Anda dapat langsung menyimpan data langkah 4 tanpa instrumen tahunan.</span>
+                        </div>
+                        <button type="button" className="btn btn-sm btn-outline-primary rounded-pill px-3" onClick={() => updateLangkah4Value("isSkriningTahunan", true)}>
+                          Isi Pemeriksaan
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="row g-3 pt-2 border-top">
+                        <div className="col-md-6">
+                          <label className="form-label fw-semibold text-dark small mb-1">Melakukan skrining jiwa</label>
+                          <select
+                            className="form-select bg-light border-0 py-2"
+                            value={examinationMode === "per-step" ? langkah4Form.skriningJiwa || "" : sequentialForm.skriningJiwa || ""}
+                            onChange={(e) => {
+                              if (examinationMode === "per-step") {
+                                setLangkah4Form({ ...langkah4Form, skriningJiwa: e.target.value });
+                              } else {
+                                setSequentialForm({ ...sequentialForm, skriningJiwa: e.target.value });
+                              }
+                            }}
+                          >
+                            <option value="">-- Pilih Status --</option>
+                            <option value="Sudah">Sudah</option>
+                            <option value="Belum">Belum</option>
+                          </select>
+                        </div>
+
+                        {isRemajaPerempuan && (
+                          <div className="col-md-6">
+                            <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
+                            <select
+                              className="form-select bg-light border-0 py-2"
+                              value={examinationMode === "per-step" ? langkah4Form.periksaHb || "" : sequentialForm.periksaHb || ""}
+                              onChange={(e) => {
+                                if (examinationMode === "per-step") {
+                                  setLangkah4Form({ ...langkah4Form, periksaHb: e.target.value });
+                                } else {
+                                  setSequentialForm({ ...sequentialForm, periksaHb: e.target.value });
+                                }
+                              }}
+                            >
+                              <option value="">-- Pilih Status --</option>
+                              <option value="Sudah">Sudah</option>
+                              <option value="Belum">Belum</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : ["bayi-0-11", "balita-12-59"].includes(activeSubmenu) ? (
+                <>
+                  {/* 1. Imunisasi */}
+                  <ImunisasiTableHistory rows={activeImunisasiRows} onChange={updateActiveImunisasiRows} />
+
+                  {/* 2. Pemberian ASI & MP-ASI (Dipisah di bawah Imunisasi) */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Pemberian ASI &amp; MP-ASI</h5>
+
+                    <div className="row g-3">
+                      {/* ASI Eksklusif: Otomatis hanya untuk bayi usia 0 - 6 bulan */}
+                      {activeSubmenu === "bayi-0-11" &&
+                        (() => {
+                          const targetW = activeWargaList.find((w) => String(w.id) === String(examinationMode === "per-step" ? selectedWargaStep4 : selectedWargaId));
+                          const ageMos = getAgeInMonths(targetW);
+                          if (ageMos > 6) return null;
+                          return (
+                            <div className="col-md-6">
+                              <YesNoCard label="ASI Eksklusif (0-6 Bulan)" name={`asiEksklusif_${examinationMode}`} value={getLangkah4Value("asiEksklusif")} onChange={(val) => updateLangkah4Value("asiEksklusif", val)} />
+                            </div>
+                          );
+                        })()}
+
+                      <div className="col-md-6">
+                        <YesNoCard label="MP ASI (Komposisi, jenis sesuai umur)" name={`mpAsi_${examinationMode}`} value={getLangkah4Value("mpAsi")} onChange={(val) => updateLangkah4Value("mpAsi", val)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Skrining Gejala TBC Bayi / Balita */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Skrining Gejala TBC</h5>
+
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <YesNoCard label="a. Batuk ≥ 2 minggu" name={`batukTbc_bayi_${examinationMode}`} value={getLangkah4Value("batukTbc")} onChange={(val) => updateLangkah4Value("batukTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="b. Demam hilang dan timbul > 2 minggu" name={`demamTbc_bayi_${examinationMode}`} value={getLangkah4Value("demamTbc")} onChange={(val) => updateLangkah4Value("demamTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="c. Berat badan turun/tidak naik dalam 2 bulan" name={`bbTurunTbc_bayi_${examinationMode}`} value={getLangkah4Value("bbTurunTbc")} onChange={(val) => updateLangkah4Value("bbTurunTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="d. Lesu / malaise" name={`lesuTbc_bayi_${examinationMode}`} value={getLangkah4Value("lesuTbc")} onChange={(val) => updateLangkah4Value("lesuTbc", val)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Balita / Bayi Mendapatkan Layanan Kesehatan */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Layanan Kesehatan Tambahan &amp; Vitamin</h5>
+
+                    <div className="row g-3">
+                      {/* 1. PMT lokal pemulihan (+ Sub-pertanyaan Konsumsi PMT habis di dalamnya secara stabil) */}
+                      <div className="col-md-6">
+                        <div className="p-3.5 rounded-3 border bg-white h-100 d-flex flex-column justify-content-center" style={{ borderColor: "#cbd5e1", backgroundColor: "#ffffff", minHeight: "58px" }}>
+                          <div className="d-flex align-items-center justify-content-between gap-3">
+                            <span className="fw-medium text-dark small mb-0">PMT lokal pemulihan</span>
+                            <div className="d-flex align-items-center gap-4 flex-shrink-0">
+                              <label className="d-flex align-items-center gap-2 cursor-pointer small fw-medium text-dark mb-0" style={{ cursor: "pointer" }}>
+                                <input
+                                  type="radio"
+                                  name={`pmtPemulihan_${examinationMode}`}
+                                  value="Ya"
+                                  checked={getLangkah4Value("pmtPemulihan") === "Ya"}
+                                  onChange={() => updateLangkah4Value("pmtPemulihan", "Ya")}
+                                  className="form-check-input m-0 cursor-pointer"
+                                  style={{ width: "1.15rem", height: "1.15rem", cursor: "pointer", accentColor: "#F25B8E" }}
+                                />
+                                <span>Ya</span>
+                              </label>
+                              <label className="d-flex align-items-center gap-2 cursor-pointer small fw-medium text-dark mb-0" style={{ cursor: "pointer" }}>
+                                <input
+                                  type="radio"
+                                  name={`pmtPemulihan_${examinationMode}`}
+                                  value="Tidak"
+                                  checked={getLangkah4Value("pmtPemulihan") === "Tidak"}
+                                  onChange={() => {
+                                    updateLangkah4Value("pmtPemulihan", "Tidak");
+                                    updateLangkah4Value("pmtHabis", "");
+                                  }}
+                                  className="form-check-input m-0 cursor-pointer"
+                                  style={{ width: "1.15rem", height: "1.15rem", cursor: "pointer", accentColor: "#F25B8E" }}
+                                />
+                                <span>Tidak</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* 2. Konsumsi PMT habis: Terbuka secara konsisten di dalam slot PMT tanpa menggeser kartu lain */}
+                          {getLangkah4Value("pmtPemulihan") === "Ya" && (
+                            <div className="mt-3 pt-3 border-top d-flex align-items-center justify-content-between gap-3">
+                              <span className="small fw-semibold text-primary mb-0">&bull; Konsumsi PMT habis?</span>
+                              <div className="d-flex align-items-center gap-4 flex-shrink-0">
+                                <label className="d-flex align-items-center gap-2 cursor-pointer small fw-medium text-dark mb-0" style={{ cursor: "pointer" }}>
+                                  <input
+                                    type="radio"
+                                    name={`pmtHabis_${examinationMode}`}
+                                    value="Ya"
+                                    checked={getLangkah4Value("pmtHabis") === "Ya"}
+                                    onChange={() => updateLangkah4Value("pmtHabis", "Ya")}
+                                    className="form-check-input m-0 cursor-pointer"
+                                    style={{ width: "1.15rem", height: "1.15rem", cursor: "pointer", accentColor: "#F25B8E" }}
+                                  />
+                                  <span>Ya</span>
+                                </label>
+                                <label className="d-flex align-items-center gap-2 cursor-pointer small fw-medium text-dark mb-0" style={{ cursor: "pointer" }}>
+                                  <input
+                                    type="radio"
+                                    name={`pmtHabis_${examinationMode}`}
+                                    value="Tidak"
+                                    checked={getLangkah4Value("pmtHabis") === "Tidak"}
+                                    onChange={() => updateLangkah4Value("pmtHabis", "Tidak")}
+                                    className="form-check-input m-0 cursor-pointer"
+                                    style={{ width: "1.15rem", height: "1.15rem", cursor: "pointer", accentColor: "#F25B8E" }}
+                                  />
+                                  <span>Tidak</span>
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 3. Vitamin A: Hanya muncul di bulan Februari (2) dan Agustus (8) */}
+                      {isBulanVitA && (
+                        <div className="col-md-6">
+                          <YesNoCard label="Vitamin A (Bulan Feb &amp; Ags)" name={`vitA_${examinationMode}`} value={getLangkah4Value("vitA")} onChange={(val) => updateLangkah4Value("vitA", val)} />
+                        </div>
+                      )}
+
+                      {/* 4. Obat Cacing - Balita 12-59 Bulan */}
+                      {activeSubmenu === "balita-12-59" && (
+                        <div className="col-md-6">
+                          <YesNoCard label="Obat Cacing" name={`obatCacing_${examinationMode}`} value={getLangkah4Value("obatCacing")} onChange={(val) => updateLangkah4Value("obatCacing", val)} />
+                        </div>
+                      )}
+
+                      {/* 5. Ikut kelas balita: Posisi tetap konsisten dan tidak berpindah baris */}
+                      <div className="col-md-6">
+                        <YesNoCard label="Ikut kelas balita" name={`ikutKelasBalita_${examinationMode}`} value={getLangkah4Value("ikutKelasBalita")} onChange={(val) => updateLangkah4Value("ikutKelasBalita", val)} />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : activeSubmenu === "apras" ? (
+                /* Apras 60-72 Bln: Skrining Gejala TBC & Obat Cacing (Y/T) */
+                <>
+                  {/* Skrining Gejala TBC */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Skrining Gejala TBC</h5>
+
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <YesNoCard label="a. Batuk ≥ 2 minggu" name={`batukTbc_apras_${examinationMode}`} value={getLangkah4Value("batukTbc")} onChange={(val) => updateLangkah4Value("batukTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="b. Demam hilang dan timbul > 2 minggu" name={`demamTbc_apras_${examinationMode}`} value={getLangkah4Value("demamTbc")} onChange={(val) => updateLangkah4Value("demamTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="c. Berat badan turun/tidak naik dalam 2 bulan" name={`bbTurunTbc_apras_${examinationMode}`} value={getLangkah4Value("bbTurunTbc")} onChange={(val) => updateLangkah4Value("bbTurunTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="d. Lesu / malaise" name={`lesuTbc_apras_${examinationMode}`} value={getLangkah4Value("lesuTbc")} onChange={(val) => updateLangkah4Value("lesuTbc", val)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Obat Cacing (Y/T) */}
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Pemberian Obat Cacing</h5>
+
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <YesNoCard label="Obat Cacing (Y/T)" name={`obatCacing_apras_${examinationMode}`} value={getLangkah4Value("obatCacing")} onChange={(val) => updateLangkah4Value("obatCacing", val)} />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Standard TBC & Pelayanan Kesehatan for Bumil/Nifas/Adults */
+                <>
+                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                    <h5 className="fw-bold text-dark mb-3">Skrining Gejala TBC</h5>
+
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <YesNoCard label="Batuk terus menerus" name={`batukTbc_bumil_${examinationMode}`} value={getLangkah4Value("batukTbc")} onChange={(val) => updateLangkah4Value("batukTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="Demam ≥ 2 minggu" name={`demamTbc_bumil_${examinationMode}`} value={getLangkah4Value("demamTbc")} onChange={(val) => updateLangkah4Value("demamTbc", val)} />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard
+                          label="BB tidak naik atau turun dalam 2 bulan berturut-turut"
+                          name={`bbTurunTbc_bumil_${examinationMode}`}
+                          value={getLangkah4Value("bbTurunTbc")}
+                          onChange={(val) => updateLangkah4Value("bbTurunTbc", val)}
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <YesNoCard label="Kontak erat Pasien TBC" name={`kontakTbc_bumil_${examinationMode}`} value={getLangkah4Value("kontakTbc")} onChange={(val) => updateLangkah4Value("kontakTbc", val)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pelayanan Kesehatan khusus Ibu Hamil */}
+                  {activeSubmenu === "bumil" && (
+                    <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                      <h5 className="fw-bold text-dark mb-3">Pelayanan Kesehatan</h5>
+
+                      <div className="row g-3">
+                        <div className="col-md-6">
+                          <YesNoCard
+                            label="Pemberian TTD/MMS"
+                            name={`pemberianTtd_bumil_${examinationMode}`}
+                            value={getLangkah4Value("pemberianTtd") || getLangkah4Value("jumlahTtd")}
+                            onChange={(val) => {
+                              updateLangkah4Value("pemberianTtd", val);
+                              updateLangkah4Value("jumlahTtd", val);
+                            }}
+                            yesLabel="Sudah"
+                            noLabel="Belum"
+                            yesValue="Sudah"
+                            noValue="Belum"
+                          />
+                        </div>
+
+                        <div className="col-md-6">
+                          <YesNoCard
+                            label="Konsumsi TTD/MMS rutin (1 butir setiap hari selama kehamilan)"
+                            name={`rutinTtd_bumil_${examinationMode}`}
+                            value={getLangkah4Value("rutinTtd")}
+                            onChange={(val) => updateLangkah4Value("rutinTtd", val)}
+                          />
+                        </div>
+
+                        <div className="col-md-6">
+                          <div className="p-3 bg-light border border-light-subtle rounded-3 h-100">
+                            <label className="form-label text-dark fw-semibold small mb-1.5">Jika mendapatkan MT Bumil KEK, tuliskan komposisi dan jumlah porsi</label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm bg-white border"
+                              placeholder="Contoh: Biskuit PMT, 1 Bungkus / Hari"
+                              value={getLangkah4Value("komposisiMtBumil") || ""}
+                              onChange={(e) => updateLangkah4Value("komposisiMtBumil", e.target.value)}
+                              style={{ borderRadius: "8px", fontSize: "0.85rem" }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="col-md-6">
+                          <YesNoCard label="Rutin konsumsi MT Bumil KEK" name={`rutinMtBumil_bumil_${examinationMode}`} value={getLangkah4Value("rutinMtBumil")} onChange={(val) => updateLangkah4Value("rutinMtBumil", val)} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pelayanan Kesehatan khusus Ibu Nifas / Menyusui */}
+                  {activeSubmenu === "nifas" && (
+                    <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                      <h5 className="fw-bold text-dark mb-3">Pelayanan Kesehatan</h5>
+
+                      <div className="row g-3">
+                        <div className="col-md-6">
+                          <YesNoCard
+                            label="Pemberian kapsul vitamin A"
+                            name={`jumlahVitA_${examinationMode}`}
+                            value={getLangkah4Value("jumlahVitA")}
+                            onChange={(val) => updateLangkah4Value("jumlahVitA", val)}
+                            yesLabel="Sudah"
+                            noLabel="Belum"
+                            yesValue="Sudah"
+                            noValue="Belum"
+                          />
+                        </div>
+
+                        <div className="col-md-6">
+                          <YesNoCard label="Rutin konsumsi vitamin A" name={`rutinVitA_${examinationMode}`} value={getLangkah4Value("rutinVitA")} onChange={(val) => updateLangkah4Value("rutinVitA", val)} />
+                        </div>
+
+                        <div className="col-md-6">
+                          <YesNoCard label="Menyusui" name={`menyusui_${examinationMode}`} value={getLangkah4Value("menyusui")} onChange={(val) => updateLangkah4Value("menyusui", val)} />
+                        </div>
+
+                        <div className="col-md-6">
+                          <YesNoCard label="KB pasca persalinan" name={`kbPascaPersalinan_${examinationMode}`} value={getLangkah4Value("kbPascaPersalinan")} onChange={(val) => updateLangkah4Value("kbPascaPersalinan", val)} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Skrining Kesehatan Jiwa khusus Usia Dewasa (PHQ-4) */}
+                  {activeSubmenu === "dewasa" && (
+                    <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                      <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between mb-3 gap-2">
+                        <div>
+                          <h5 className="fw-bold text-dark mb-1">Skrining Kesehatan Jiwa</h5>
+                          <span className="text-muted small">Pemeriksaan skrining kesehatan jiwa berkala untuk sasaran usia dewasa (PHQ-4)</span>
+                        </div>
+                        <div className="d-flex align-items-center gap-2">
+                          <label className="text-muted small fw-semibold mb-0 text-nowrap">Bulan Pelaksanaan:</label>
+                          <select
+                            className="form-select form-select-sm bg-light border-0 fw-semibold"
+                            style={{ width: "130px" }}
+                            value={getLangkah4Value("bulanSkriningJiwa") || ""}
+                            onChange={(e) => updateLangkah4Value("bulanSkriningJiwa", e.target.value)}
+                          >
+                            {["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"].map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="table-responsive border rounded-3 mb-2">
+                        <table className="table table-bordered table-hover align-middle mb-0" style={{ fontSize: "0.85rem" }}>
+                          <thead className="table-light text-center" style={{ fontSize: "0.80rem" }}>
+                            <tr>
+                              <th style={{ width: "45px", verticalAlign: "middle" }}>No</th>
+                              <th style={{ verticalAlign: "middle" }}>Pertanyaan</th>
+                              <th style={{ width: "125px", verticalAlign: "middle" }}>
+                                Tidak sama sekali
+                                <br />
+                                <span className="text-muted small fw-normal">(0)</span>
+                              </th>
+                              <th style={{ width: "135px", verticalAlign: "middle" }}>
+                                Kurang dari 1 minggu
+                                <br />
+                                <span className="text-muted small fw-normal">(1)</span>
+                              </th>
+                              <th style={{ width: "135px", verticalAlign: "middle" }}>
+                                Lebih dari 1 minggu
+                                <br />
+                                <span className="text-muted small fw-normal">(2)</span>
+                              </th>
+                              <th style={{ width: "135px", verticalAlign: "middle" }}>
+                                Hampir setiap hari
+                                <br />
+                                <span className="text-muted small fw-normal">(3)</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { id: "jiwaQ1", no: 1, text: "Kurang berminat atau bergairah dalam melakukan kegiatan?" },
+                              { id: "jiwaQ2", no: 2, text: "Merasa sedih, muram, depresi atau putus asa?" },
+                              { id: "jiwaQ3", no: 3, text: "Merasa gugup, cemas, gelisah, tegang, atau mudah marah?" },
+                              { id: "jiwaQ4", no: 4, text: "Merasa tidak mampu menghentikan atau mengendalikan rasa khawatir?" },
+                            ].map((q) => {
+                              const currentVal = getLangkah4Value(q.id);
+                              return (
+                                <tr key={q.id}>
+                                  <td className="text-center fw-bold text-muted">{q.no}</td>
+                                  <td className="fw-medium text-dark">{q.text}</td>
+                                  {[0, 1, 2, 3].map((score) => (
+                                    <td key={score} className="text-center">
+                                      <label className="w-100 h-100 d-flex align-items-center justify-content-center cursor-pointer m-0 py-1" style={{ cursor: "pointer" }}>
+                                        <input
+                                          type="radio"
+                                          name={`${q.id}_${examinationMode}`}
+                                          value={String(score)}
+                                          checked={String(currentVal) === String(score)}
+                                          onChange={() => {
+                                            updateLangkah4Value(q.id, String(score));
+                                            const v1 = q.id === "jiwaQ1" ? score : Number(getLangkah4Value("jiwaQ1")) || 0;
+                                            const v2 = q.id === "jiwaQ2" ? score : Number(getLangkah4Value("jiwaQ2")) || 0;
+                                            const v3 = q.id === "jiwaQ3" ? score : Number(getLangkah4Value("jiwaQ3")) || 0;
+                                            const v4 = q.id === "jiwaQ4" ? score : Number(getLangkah4Value("jiwaQ4")) || 0;
+                                            const tot = v1 + v2 + v3 + v4;
+                                            updateLangkah4Value("totalSkorJiwa", String(tot));
+                                            updateLangkah4Value("skriningJiwa", tot >= 3 ? `Skor: ${tot} (Perlu Rujukan)` : `Skor: ${tot} (Normal)`);
+                                          }}
+                                          className="form-check-input m-0 cursor-pointer"
+                                          style={{ width: "1.15rem", height: "1.15rem", cursor: "pointer", accentColor: "#F25B8E" }}
+                                        />
+                                      </label>
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot className="table-light">
+                            {(() => {
+                              const v1 = Number(getLangkah4Value("jiwaQ1")) || 0;
+                              const v2 = Number(getLangkah4Value("jiwaQ2")) || 0;
+                              const v3 = Number(getLangkah4Value("jiwaQ3")) || 0;
+                              const v4 = Number(getLangkah4Value("jiwaQ4")) || 0;
+                              const isFilled =
+                                getLangkah4Value("jiwaQ1") !== undefined &&
+                                getLangkah4Value("jiwaQ1") !== "" &&
+                                getLangkah4Value("jiwaQ2") !== undefined &&
+                                getLangkah4Value("jiwaQ2") !== "" &&
+                                getLangkah4Value("jiwaQ3") !== undefined &&
+                                getLangkah4Value("jiwaQ3") !== "" &&
+                                getLangkah4Value("jiwaQ4") !== undefined &&
+                                getLangkah4Value("jiwaQ4") !== "";
+                              const total = v1 + v2 + v3 + v4;
+                              const isRisk = total >= 3;
+                              return (
+                                <tr>
+                                  <td colSpan="2" className="fw-bold text-dark text-end pe-3">
+                                    Total Skor:
+                                  </td>
+                                  <td colSpan="4" className="fw-bold text-center">
+                                    {isFilled ? (
+                                      <div className="d-flex align-items-center justify-content-center gap-2">
+                                        <span className="fs-6 fw-bold text-dark">{total}</span>
+                                        <span className={`badge ${isRisk ? "bg-danger text-white" : "bg-success text-white"} px-2.5 py-1 rounded-pill small`}>
+                                          {isRisk ? "Skor ≥ 3: Indikasi Gangguan Emosional (Perlu Rujukan / Konseling)" : "Skor < 3: Normal / Tidak Ada Indikasi"}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-muted small fw-normal fst-italic">Pilih jawaban pada seluruh pertanyaan di atas (Skor 0 - 12)</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })()}
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="d-flex justify-content-end pt-3 gap-2">
+                {examinationMode === "per-step" ? (
+                  <button type="submit" className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }}>
+                    <span>Simpan</span>
+                  </button>
+                ) : (
+                  <div className="d-flex justify-content-between align-items-center w-100">
+                    <button type="button" className="btn btn-outline-secondary btn-sm px-3.5 py-2 rounded-3 d-inline-flex align-items-center gap-1.5" onClick={() => setActiveStep(3)}>
+                      <ArrowLeft size={15} />
+                      <span>Kembali</span>
+                    </button>
+                    <button type="submit" className="btn btn-dark-custom btn-sm px-3.5 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }}>
+                      <span>Lanjut ke Langkah 5</span>
+                      <ArrowRight size={15} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </form>
+          )}
+
+          {/* ========================================================================= */}
+          {/* LANGKAH 5: PENYULUHANA* & RUJUKAN* */}
+          {/* ========================================================================= */}
+          {activeStep === 5 &&
+            (() => {
+              // ======= AUTO-RUJUKAN LOGIC =======
+              // Hitung apakah ada indikasi rujukan berdasarkan skrining & plotting
+              const form5 = examinationMode === "per-step" ? langkah5Form : sequentialForm;
+              const form4 = examinationMode === "per-step" ? langkah4Form : sequentialForm;
+
+              // 1. TBC Skrining: jika salah satu jawaban 'Ya' => risiko TBC
+              const tbcFields = ["batukTbc", "demamTbc", "bbTurunTbc", "kontakTbc", "lesuTbc", "batukBesarTbc", "nafsuMakanTbc", "bbMenurunTbc", "lemahLesuTbc", "berkeringatMalamTbc", "batukDarahTbc", "sesakNafasTbc"];
+              const tbcRisiko = tbcFields.some((f) => form4[f] === "Ya");
+
+              // 2. Plotting hasil pengukuran
+              const pr = plottingResult;
+              const imtRisiko = pr && pr.imtKey !== "normal";
+              const lilaRisiko =
+                pr &&
+                (activeSubmenu === "lansia"
+                  ? pr.lilaLansiaKey !== "normal"
+                  : activeSubmenu === "dewasa" || activeSubmenu === "bumil" || activeSubmenu === "nifas"
+                    ? pr.lilaDewasaKey !== "normal"
+                    : ["bayi-0-11", "balita-12-59"].includes(activeSubmenu)
+                      ? pr.lilaBayiKey !== "normal"
+                      : activeSubmenu === "apras"
+                        ? pr.lilaAprasKey !== "normal"
+                        : false);
+              const tensiRisiko = pr && pr.tensiAdultKey !== "normal";
+              const gulaRisiko = pr && pr.isGulaRisiko;
+              const lpRisiko = pr && pr.lpPlottingKey !== "normal";
+
+              // 3. Lansia: AKS dan SKILAS
+              const aksRisiko = activeSubmenu === "lansia" && currentAks.perluRujuk;
+              const skilasRisiko = activeSubmenu === "lansia" && currentSkilas.adaRisiko;
+
+              // Gabungan: apakah perlu dirujuk berdasarkan skrining
+
+              // Daftar alasan rujukan untuk ditampilkan
+              const alasanRujukan = [];
+              if (tbcRisiko) alasanRujukan.push("Gejala TBC Positif");
+              if (imtRisiko) alasanRujukan.push(`IMT: ${pr?.imtDewasaStatus || pr?.imtAprasStatus || pr?.imtUsekremStatus || pr?.imtStatus}`);
+              if (lilaRisiko) alasanRujukan.push("LiLA Berisiko / KEK");
+              if (tensiRisiko) alasanRujukan.push(`Tensi: ${pr?.tensiStatus || pr?.tensiRemajaStatus}`);
+              if (gulaRisiko) alasanRujukan.push("Gula Darah Risiko");
+              if (lpRisiko) alasanRujukan.push("Lingkar Perut Berisiko");
+              if (aksRisiko) alasanRujukan.push(`AKS: ${currentAks.kategori}`);
+              if (skilasRisiko) alasanRujukan.push(`SKILAS: ${currentSkilas.issues.join(", ")}`);
+
+              // Auto-set: gunakan nilai terkomputasi langsung (tidak setState di dalam render)
+              // State rujukan tetap bisa diupdate melalui useEffect atau onChange
+              const backendPersistedRujukan = activeStep5BackendExam?.is_perlu_rujukan === true || Boolean(activeStep5BackendExam?.rujukan);
+              const effectiveRujukan = step5AutoReferral.perluRujuk || backendPersistedRujukan ? "Rujuk ke Puskesmas / Pustu" : examinationMode === "per-step" ? langkah5Form.statusRujukan : sequentialForm.statusRujukan;
+
+              return (
+                <form onSubmit={examinationMode === "per-step" ? handleSaveLangkah5 : handleSaveSequentialAll}>
+                  <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
+                    <div>
+                      <h3 className="fw-bold text-dark mb-1">Penyuluhan* &amp; Rujukan*</h3>
+                    </div>
+
+                    {examinationMode === "per-step" && (
+                      <div className="bg-white px-3 py-2 rounded-3 border-0 shadow-sm d-flex align-items-center gap-2">
+                        <label className="fw-bold text-dark small mb-0 text-nowrap">Pilih Nama Lengkap / NIK:</label>
+                        <select
+                          className="form-select form-select-sm border-0 fw-semibold text-dark"
+                          style={{ minWidth: "220px" }}
+                          value={selectedWargaStep5}
+                          onChange={(e) => {
+                            const wId = e.target.value;
+                            setSelectedWargaStep5(wId);
+                            setLangkah5Form({ topikPenyuluhan: "", mengikutiKelas: "", statusRujukan: "" });
+                          }}
+                        >
+                          {availableWargaStep5.length === 0 ? (
+                            <option value="">{hadirWargaList.length === 0 ? "-- Belum ada sasaran hadir di Langkah 1 --" : "-- Semua sasaran telah selesai di Langkah 5 --"}</option>
+                          ) : (
+                            availableWargaStep5.map((w) => (
+                              <option key={w.id} value={String(w.id)}>
+                                {w.nama} - NIK {String(w.nik).slice(-4)}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {examinationMode === "per-step" && hadirWargaList.length === 0 && (
+                    <div className="alert alert-warning border-0 shadow-sm d-flex align-items-center gap-2 mb-4 rounded-3">
+                      <AlertCircle size={18} className="flex-shrink-0" />
+                      <span className="small">
+                        Belum ada sasaran <strong>{currentCategory.label}</strong> yang ditandai <strong>Datang</strong> pada Langkah 1. Silakan cari dan tandai kehadiran di <strong>Langkah 1 (Presensi)</strong> terlebih dahulu.
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="row g-4 mb-4">
+                    <div className="col-12">
+                      <label className="form-label fw-bold text-dark small mb-1">Topik Penyuluhan*</label>
+                      <textarea
+                        rows="3"
+                        className="form-control form-control-custom bg-white border-0 py-3"
+                        placeholder="Tulis topik edukasi yang diberikan (Contoh: Gizi Seimbang Balita &amp; Pencegahan Stunting)"
+                        value={examinationMode === "per-step" ? langkah5Form.topikPenyuluhan : sequentialForm.topikPenyuluhan}
+                        required
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah5Form({ ...langkah5Form, topikPenyuluhan: e.target.value });
+                          } else {
+                            setSequentialForm({ ...sequentialForm, topikPenyuluhan: e.target.value });
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label fw-bold text-dark small mb-1">Rujukan* (Puskesmas / Pustu)</label>
+                      <select
+                        className="form-select form-select-custom bg-white border-0 py-3"
+                        value={effectiveRujukan}
+                        disabled={step5AutoReferral.perluRujuk || backendPersistedRujukan}
+                        onChange={(e) => {
+                          if (!step5AutoReferral.perluRujuk && !backendPersistedRujukan) {
+                            if (examinationMode === "per-step") {
+                              setLangkah5Form({ ...langkah5Form, statusRujukan: e.target.value });
+                            } else {
+                              setSequentialForm({ ...sequentialForm, statusRujukan: e.target.value });
+                            }
+                          }
+                        }}
+                      >
+                        <option value="Tidak Perlu Rujukan">Tidak Perlu Rujukan</option>
+                        <option value="Rujuk ke Puskesmas / Pustu">Rujuk Puskesmas atau Pustu (Bila ada indikasi medis hasil pemeriksaan &amp; skrining)</option>
+                      </select>
+                      <div className="form-text text-muted">Rujuk puskesmas atau pustu bila ada indikasi medis hasil pemeriksaan dan skrining.</div>
+                    </div>
+                  </div>
+
+                  <div className="d-flex justify-content-end pt-3 gap-2">
+                    {examinationMode === "per-step" ? (
+                      <button type="submit" className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }}>
+                        <span>Simpan</span>
+                      </button>
+                    ) : (
+                      <div className="d-flex justify-content-between align-items-center w-100">
+                        <button type="button" className="btn btn-outline-secondary btn-sm px-3.5 py-2 rounded-3 d-inline-flex align-items-center gap-1.5" onClick={() => setActiveStep(4)}>
+                          <ArrowLeft size={15} />
+                          <span>Kembali</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-dark-custom btn-sm px-3.5 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5"
+                          style={{ backgroundColor: "#2b2e4a" }}
+                          onClick={handleTriggerSequentialPreview}
+                        >
+                          <span>Review &amp; Simpan Pemeriksaan</span>
+                          <CheckCircle2 size={15} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              );
+            })()}
+        </div>
+      </div>
+
+      {/* MODAL PREVIEW MODE BERTAHAP (SEBELUM DISIMPAN) */}
+      {showSequentialPreviewModal && (
+        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.6)", zIndex: 1060 }} tabIndex="-1">
+          <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+              <div className="modal-header bg-dark text-white p-3 px-4">
+                <div>
+                  <span className="badge bg-warning text-dark fw-bold mb-1">PREVIEW HASIL PEMERIKSAAN BERTAHAP (LANGKAH 1 - 5)</span>
+                  <h4 className="modal-title fw-bold text-white mb-0">Konfirmasi Simpan Data</h4>
+                  <div className="text-white-50 small">Kategori: {currentCategory.label}</div>
+                </div>
+                <button type="button" className="btn-close btn-close-white" onClick={() => setShowSequentialPreviewModal(false)}></button>
+              </div>
+
+              <div className="modal-body p-4 bg-light">
+                <div className="alert bg-white border border-warning-subtle text-dark rounded-3 p-3 mb-4 shadow-xs">
+                  <strong>ⓘ Mohon periksa kembali ringkasan data dari Langkah 1 s/d Langkah 5 sebelum menekan Konfirmasi Simpan.</strong>
+                </div>
+
+                {(() => {
+                  const previewWarga = activeWargaList.find((w) => String(w.id) === String(selectedWargaId)) || {};
+
+                  // PUMA evaluation
+                  const pumaEvaluation = (() => {
+                    const jk = sequentialForm.pumaJk;
+                    const usia = sequentialForm.pumaUsia;
+                    const rokok = sequentialForm.pumaMerokok;
+                    const np = sequentialForm.pumaNapasPendek;
+                    const dh = sequentialForm.pumaDahak;
+                    const bt = sequentialForm.pumaBatukFlu;
+
+                    const isAny = [jk, usia, rokok, np, dh, bt].some((v) => v !== "" && v !== undefined && v !== null);
+                    if (!isAny) {
+                      return { score: "-", text: "Belum Diisi", isRisiko: false };
+                    }
+                    const score =
+                      (jk !== "" && jk !== undefined ? Number(jk) : 0) +
+                      (usia !== "" && usia !== undefined ? Number(usia) : 0) +
+                      (rokok !== "" && rokok !== undefined ? Number(rokok) : 0) +
+                      (np === "Ya" || np === 1 ? 1 : 0) +
+                      (dh === "Ya" || dh === 1 ? 1 : 0) +
+                      (bt === "Ya" || bt === 1 ? 1 : 0);
+                    const isRisiko = score >= 6;
+                    return {
+                      score,
+                      text: `${score} (${isRisiko ? "Risiko Tinggi PPOK" : "Risiko Rendah PPOK"})`,
+                      isRisiko,
+                    };
+                  })();
+
+                  // Kolesterol evaluation
+                  const kolesterolEval = (() => {
+                    if (!sequentialForm.kolesterol) return "-";
+                    const kNum = parseInt(sequentialForm.kolesterol);
+                    if (isNaN(kNum)) return sequentialForm.kolesterol;
+                    if (kNum >= 200) return `${kNum} mg/dL (Tinggi ≥ 200 mg/dL)`;
+                    return `${kNum} mg/dL (Normal < 200 mg/dL)`;
+                  })();
+
+                  // Gula Darah evaluation
+                  const gulaDarahEval = (() => {
+                    if (!sequentialForm.gulaDarah) return "-";
+                    const gNum = parseInt(sequentialForm.gulaDarah);
+                    if (isNaN(gNum)) return sequentialForm.gulaDarah;
+                    if (gNum >= 200) return `${gNum} mg/dL (Diabetisi ≥ 200 mg/dL)`;
+                    if (gNum >= 140) return `${gNum} mg/dL (Prediabetisi 140–199 mg/dL)`;
+                    return `${gNum} mg/dL (Normal < 140 mg/dL)`;
+                  })();
+
+                  // TBC Gejala for Dewasa & Lansia
+                  const tbcAdultGejala = (() => {
+                    const batukVal = sequentialForm.batukBesarTbc || sequentialForm.batukTbc;
+                    const flags = [
+                      batukVal === "Ya" ? "Batuk Berdahak ≥ 2 Minggu" : null,
+                      sequentialForm.nafsuMakanTbc === "Ya" ? "Nafsu Makan Turun" : null,
+                      sequentialForm.bbMenurunTbc === "Ya" ? "BB Menurun" : null,
+                      sequentialForm.lemahLesuTbc === "Ya" ? "Lemah / Lesu" : null,
+                      sequentialForm.berkeringatMalamTbc === "Ya" ? "Keringat Malam" : null,
+                      sequentialForm.batukDarahTbc === "Ya" ? "Batuk Berdarah" : null,
+                      sequentialForm.sesakNafasTbc === "Ya" ? "Sesak Nafas" : null,
+                    ].filter(Boolean);
+
+                    const isFilled = [batukVal, sequentialForm.nafsuMakanTbc, sequentialForm.bbMenurunTbc, sequentialForm.lemahLesuTbc, sequentialForm.berkeringatMalamTbc, sequentialForm.batukDarahTbc, sequentialForm.sesakNafasTbc].some(
+                      (v) => v !== "" && v !== undefined,
+                    );
+
+                    if (flags.length > 0) return { text: `Berisiko TBC (${flags.join(", ")})`, isRisiko: true };
+                    if (isFilled) return { text: "Tidak Ada Gejala TBC (Normal)", isRisiko: false };
+                    return { text: "Tidak Ada Gejala TBC (Normal)", isRisiko: false };
+                  })();
+
+                  // TBC Gejala for Children & Maternal
+                  const tbcChildGejala = (() => {
+                    const batukVal = sequentialForm.batukTbc || sequentialForm.batukBesarTbc;
+                    const flags = [
+                      batukVal === "Ya" ? "Batuk ≥ 2 mgg" : null,
+                      sequentialForm.demamTbc === "Ya" ? "Demam > 2 mgg" : null,
+                      sequentialForm.bbTurunTbc === "Ya" ? "BB Turun / Tidak Naik" : null,
+                      sequentialForm.kontakTbc === "Ya" ? "Kontak Pasien TBC" : null,
+                      sequentialForm.lesuTbc === "Ya" ? "Lesu / Lemas" : null,
+                    ].filter(Boolean);
+
+                    const isFilled = [batukVal, sequentialForm.demamTbc, sequentialForm.bbTurunTbc, sequentialForm.kontakTbc, sequentialForm.lesuTbc].some((v) => v !== "" && v !== undefined);
+
+                    if (flags.length > 0) return { text: `Berisiko TBC (${flags.join(", ")})`, isRisiko: true };
+                    if (isFilled) return { text: "Tidak Ada Gejala TBC (Normal)", isRisiko: false };
+                    return { text: "Tidak Ada Gejala TBC (Normal)", isRisiko: false };
+                  })();
+
+                  return (
+                    <>
+                      {/* LANGKAH 1 */}
+                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
+                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
+                          <h6 className="fw-bold text-primary mb-0">Langkah 1: Identitas Sasaran</h6>
+                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">Pendaftaran</span>
+                        </div>
+                        <div className="row g-2 small">
+                          <div className="col-6">
+                            <strong>NIK:</strong> {sequentialForm.nik || previewWarga.nik || ""}
+                          </div>
+                          <div className="col-6">
+                            <strong>Nama Lengkap:</strong> {sequentialForm.nama || previewWarga.nama || ""}
+                          </div>
+                          <div className="col-6">
+                            <strong>Tanggal Lahir:</strong> {sequentialForm.tglLahir || previewWarga.tglLahir || ""}
+                          </div>
+                          <div className="col-6">
+                            <strong>Jenis Kelamin:</strong> {["bumil", "nifas"].includes(activeSubmenu) ? "Perempuan" : sequentialForm.gender || previewWarga.gender || ""}
+                          </div>
+
+                          {["dewasa", "lansia"].includes(activeSubmenu) && (
+                            <>
+                              <div className="col-6">
+                                <strong>Pekerjaan:</strong> {sequentialForm.pekerjaan || previewWarga.pekerjaan || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Status Pernikahan:</strong> {sequentialForm.statusPernikahan || previewWarga.statusPernikahan || ""}
+                              </div>
+                            </>
+                          )}
+
+                          {["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && (
+                            <>
+                              <div className="col-6">
+                                <strong>Sekolah:</strong> {sequentialForm.sekolah || previewWarga.sekolah || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Kelas:</strong> {sequentialForm.kelas || previewWarga.kelas || ""}
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "bumil" && (
+                            <div className="col-12 mt-2 pt-1 border-top">
+                              <strong>Usia Kehamilan:</strong> <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">{sequentialForm.usiaKehamilan || ""}</span>
+                            </div>
+                          )}
+                          {activeSubmenu === "nifas" && (
+                            <div className="col-12 mt-2 pt-1 border-top">
+                              <strong>Waktu Kunjungan:</strong> <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">{sequentialForm.waktuKunjunganNifas || ""}</span>
+                            </div>
+                          )}
+                          {["bayi-0-11", "balita-12-59", "apras"].includes(activeSubmenu) && (
+                            <div className="col-12 mt-2 pt-1 border-top">
+                              <strong>{activeSubmenu === "bayi-0-11" ? "Umur Bayi:" : activeSubmenu === "balita-12-59" ? "Umur Balita:" : "Umur Apras:"}</strong>{" "}
+                              <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">
+                                {(activeSubmenu === "bayi-0-11" ? sequentialForm.usiaBayi : activeSubmenu === "balita-12-59" ? sequentialForm.usiaBalita : sequentialForm.usiaApras) || ""}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* LANGKAH 2 */}
+                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
+                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
+                          <h6 className="fw-bold text-primary mb-0">Langkah 2: Skrining Penimbangan &amp; Pengukuran</h6>
+                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">Pengukuran Fisik</span>
+                        </div>
+                        <div className="row g-2 small">
+                          <div className="col-6">
+                            <strong>Berat Badan (BB):</strong> {sequentialForm.bb ? `${sequentialForm.bb} kg` : "-"}
+                          </div>
+                          {activeSubmenu !== "nifas" && (
+                            <div className="col-6">
+                              <strong>{["bayi-0-11", "balita-12-59"].includes(activeSubmenu) ? "Panjang / Tinggi Badan (PB/TB):" : "Tinggi Badan (TB):"}</strong> {sequentialForm.tb ? `${sequentialForm.tb} cm` : "-"}
+                            </div>
+                          )}
+                          {["bumil", "bayi-0-11", "balita-12-59", "apras", "dewasa", "lansia"].includes(activeSubmenu) && (
+                            <div className="col-6">
+                              <strong>Lingkar Lengan (LiLA):</strong> {sequentialForm.lila ? `${sequentialForm.lila} cm` : "-"}
+                            </div>
+                          )}
+                          {["usekrem-15-18", "dewasa", "lansia"].includes(activeSubmenu) && (
+                            <div className="col-6">
+                              <strong>Lingkar Perut (LP):</strong> {sequentialForm.lp ? `${sequentialForm.lp} cm` : "-"}
+                            </div>
+                          )}
+                          {["bayi-0-11", "balita-12-59"].includes(activeSubmenu) && (
+                            <div className="col-6">
+                              <strong>Lingkar Kepala (LK):</strong> {sequentialForm.lk ? `${sequentialForm.lk} cm` : "-"}
+                            </div>
+                          )}
+                          {["bumil", "nifas", "usekrem-15-18", "dewasa", "lansia"].includes(activeSubmenu) && (
+                            <div className="col-6">
+                              <strong>Tekanan Darah:</strong> {sequentialForm.tensiSistol && sequentialForm.tensiDiastol ? `${sequentialForm.tensiSistol}/${sequentialForm.tensiDiastol} mmHg` : "-"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* LANGKAH 3 */}
+                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
+                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
+                          <h6 className="fw-bold text-primary mb-0">Langkah 3: Plotting Evaluasi Otomatis</h6>
+                          <span className="badge bg-success-subtle text-success border border-success-subtle fw-semibold">Hasil Plotting Sistem</span>
+                        </div>
+                        <div className="row g-2 small">
+                          {["dewasa", "lansia"].includes(activeSubmenu) && (
+                            <>
+                              <div className="col-6">
+                                <strong>Plotting IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtDewasaStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Plotting LiLA:</strong> <span className="fw-semibold text-dark">{activeSubmenu === "lansia" ? plottingResult?.lilaLansiaStatus || "" : plottingResult?.lilaDewasaStatus || ""}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || ""}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Lingkar Perut:</strong> <span className="fw-semibold text-dark">{plottingResult?.lpPlottingStatus || ""}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "usekrem-15-18" && (
+                            <>
+                              <div className="col-6">
+                                <strong>Plotting IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtUsekremStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiRemajaStatus || ""}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Lingkar Perut:</strong> <span className="fw-semibold text-dark">{plottingResult?.lpPlottingStatus || ""}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "usekrem-6-14" && (
+                            <div className="col-12">
+                              <strong>Plotting IMT/U:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtUsekremStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                            </div>
+                          )}
+
+                          {activeSubmenu === "apras" && (
+                            <>
+                              <div className="col-6">
+                                <strong>Plotting IMT/U:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtAprasStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Plotting LiLA:</strong> <span className="fw-semibold text-dark">{plottingResult?.lilaAprasStatus || ""}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {["bayi-0-11", "balita-12-59"].includes(activeSubmenu) && (
+                            <>
+                              <div className="col-6">
+                                <strong>BB / Usia (BB/U):</strong> <span className="fw-semibold text-dark">{plottingResult?.bbUStatus || ""}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>PB/TB / Usia:</strong> <span className="fw-semibold text-dark">{plottingResult?.pbUStatus || ""}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>BB / PB (TB):</strong> <span className="fw-semibold text-dark">{plottingResult?.bbPbStatus || ""}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Lingkar Kepala:</strong> <span className="fw-semibold text-dark">{plottingResult?.lkStatus || ""}</span>
+                              </div>
+                              <div className="col-12">
+                                <strong>Status LiLA:</strong> <span className="fw-semibold text-dark">{plottingResult?.lilaBayiStatus || ""}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "bumil" && (
+                            <>
+                              <div className="col-6">
+                                <strong>Status IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Status LiLA:</strong> <span className="fw-semibold text-dark">{plottingResult?.lilaStatus || ""}</span>
+                              </div>
+                              <div className="col-12">
+                                <strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || ""}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "nifas" && (
+                            <>
+                              <div className="col-6">
+                                <strong>Status IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || ""}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* LANGKAH 4 */}
+                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
+                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
+                          <h6 className="fw-bold text-primary mb-0">Langkah 4: Skrining PTM, TBC &amp; Kesehatan</h6>
+                          <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-semibold">Pelayanan Kesehatan</span>
+                        </div>
+                        <div className="row g-2 small">
+                          {activeSubmenu === "lansia" && (
+                            <>
+                              <div className="col-6">
+                                <strong>Kadar Gula Darah:</strong> {gulaDarahEval}
+                              </div>
+                              <div className="col-6">
+                                <strong>Kadar Kolesterol:</strong> {kolesterolEval}
+                              </div>
+                              <div className="col-12">
+                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcAdultGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcAdultGejala.text}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || ""} • Kiri: {sequentialForm.mataKiri || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || ""} • Kiri: {sequentialForm.telingaKiri || ""}
+                              </div>
+                              <div className="col-12 pt-2 border-top">
+                                <strong>C.1 Skrining PPOK (PUMA):</strong> <span className={`badge ${pumaEvaluation.isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success"} px-2 py-1 ms-1`}>{pumaEvaluation.text}</span>
+                              </div>
+                              <div className="col-12">
+                                <strong>C.2 Skor AKS (Barthel):</strong>{" "}
+                                <span className="fw-semibold text-dark">
+                                  {currentAks.total}/20 ({currentAks.kategori})
+                                </span>
+                              </div>
+                              <div className="col-12">
+                                <strong>C.3 Status SKILAS:</strong> <span className="fw-semibold text-dark">{currentSkilas.statusText}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "dewasa" && (
+                            <>
+                              <div className="col-6">
+                                <strong>Kadar Gula Darah:</strong> {gulaDarahEval}
+                              </div>
+                              <div className="col-6">
+                                <strong>Kadar Kolesterol:</strong> {kolesterolEval}
+                              </div>
+                              <div className="col-6">
+                                <strong>Alat Kontrasepsi:</strong> {sequentialForm.alatKontrasepsi || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcAdultGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcAdultGejala.text}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || ""} • Kiri: {sequentialForm.mataKiri || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || ""} • Kiri: {sequentialForm.telingaKiri || ""}
+                              </div>
+                              <div className="col-12 pt-2 border-top">
+                                <strong>C.1 Skrining PPOK (PUMA):</strong> <span className={`badge ${pumaEvaluation.isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success"} px-2 py-1 ms-1`}>{pumaEvaluation.text}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && (
+                            <>
+                              <div className="col-12">
+                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Skrining Penglihatan:</strong> Kanan: {sequentialForm.mataKanan || ""} • Kiri: {sequentialForm.mataKiri || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Skrining Pendengaran:</strong> Kanan: {sequentialForm.telingaKanan || ""} • Kiri: {sequentialForm.telingaKiri || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Skrining Jiwa:</strong> {sequentialForm.skriningJiwa || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Skrining Anemia / Periksa Hb:</strong> {sequentialForm.periksaHb || ""}
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "apras" && (
+                            <>
+                              <div className="col-12">
+                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Pemberian Obat Cacing:</strong> {sequentialForm.obatCacing || ""}
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "balita-12-59" && (
+                            <>
+                              <div className="col-12">
+                                <strong>Imunisasi:</strong>
+                                <div className="table-responsive mt-2">
+                                  <table className="table table-sm align-middle mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th>Jenis</th>
+                                        <th>Status</th>
+                                        <th>Tanggal</th>
+                                        <th>Tempat</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {activeImunisasiRows.map((row) => (
+                                        <tr key={row.jenis_imunisasi}>
+                                          <td>{row.jenis_imunisasi}</td>
+                                          <td>{row.is_diberikan ? "Diberikan" : "Belum diberikan"}</td>
+                                          <td>{row.is_diberikan ? row.tanggal_imunisasi || "-" : "-"}</td>
+                                          <td>{row.is_diberikan ? row.tempat || "-" : "-"}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                              <div className="col-6">
+                                <strong>Pemberian MP-ASI:</strong> {sequentialForm.mpAsi || ""}
+                              </div>
+                              <div className="col-12">
+                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>PMT Pemulihan:</strong> {sequentialForm.pmtPemulihan || ""} (Dihabiskan: {sequentialForm.pmtHabis || ""})
+                              </div>
+                              <div className="col-6">
+                                <strong>Kapsul Vitamin A:</strong> {sequentialForm.vitA || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Obat Cacing:</strong> {sequentialForm.obatCacing || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Mengikuti Kelas Ibu Balita:</strong> {sequentialForm.ikutKelasBalita || ""}
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "bayi-0-11" && (
+                            <>
+                              <div className="col-12">
+                                <strong>Imunisasi:</strong>
+                                <div className="table-responsive mt-2">
+                                  <table className="table table-sm align-middle mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th>Jenis</th>
+                                        <th>Status</th>
+                                        <th>Tanggal</th>
+                                        <th>Tempat</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {activeImunisasiRows.map((row) => (
+                                        <tr key={row.jenis_imunisasi}>
+                                          <td>{row.jenis_imunisasi}</td>
+                                          <td>{row.is_diberikan ? "Diberikan" : "Belum diberikan"}</td>
+                                          <td>{row.is_diberikan ? row.tanggal_imunisasi || "-" : "-"}</td>
+                                          <td>{row.is_diberikan ? row.tempat || "-" : "-"}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                              <div className="col-6">
+                                <strong>Pemberian ASI Eksklusif:</strong> {sequentialForm.asiEksklusif || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Pemberian MP-ASI:</strong> {sequentialForm.mpAsi || ""}
+                              </div>
+                              <div className="col-12">
+                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>PMT Pemulihan:</strong> {sequentialForm.pmtPemulihan || ""} (Dihabiskan: {sequentialForm.pmtHabis || ""})
+                              </div>
+                              <div className="col-6">
+                                <strong>Kapsul Vitamin A:</strong> {sequentialForm.vitA || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Mengikuti Kelas Ibu Balita:</strong> {sequentialForm.ikutKelasBalita || ""}
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "bumil" && (
+                            <>
+                              <div className="col-12">
+                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Pemberian TTD:</strong> {sequentialForm.pemberianTtd || sequentialForm.jumlahTtd || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Rutin Minum TTD:</strong> {sequentialForm.rutinTtd || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Komposisi MT Bumil:</strong> {sequentialForm.komposisiMtBumil || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Rutin Konsumsi MT:</strong> {sequentialForm.rutinMtBumil || ""}
+                              </div>
+                            </>
+                          )}
+
+                          {activeSubmenu === "nifas" && (
+                            <>
+                              <div className="col-12">
+                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
+                              </div>
+                              <div className="col-6">
+                                <strong>Pemberian Vitamin A:</strong> {sequentialForm.jumlahVitA || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Rutin Minum Vitamin A:</strong> {sequentialForm.rutinVitA || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Pelayanan KB Pasca Persalinan:</strong> {sequentialForm.kbPascaPersalinan || ""}
+                              </div>
+                              <div className="col-6">
+                                <strong>Menjaga Kondisi ASI / Menyusui:</strong> {sequentialForm.menyusui || ""}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* LANGKAH 5 */}
+                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
+                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
+                          <h6 className="fw-bold text-primary mb-0">Langkah 5: Penyuluhan &amp; Rujukan</h6>
+                          <span className="badge bg-secondary-subtle text-secondary border fw-semibold">Tindak Lanjut</span>
+                        </div>
+                        <div className="row g-2 small">
+                          <div className="col-12">
+                            <strong>Topik Penyuluhan:</strong> {sequentialForm.topikPenyuluhan || ""}
+                          </div>
+                          <div className="col-6">
+                            <strong>Mengikuti Kelas Posyandu:</strong> {sequentialForm.mengikutiKelas || ""}
+                          </div>
+                          <div className="col-6">
+                            <strong>Status Rujukan:</strong> <span className="badge bg-light text-dark border fw-semibold">{sequentialForm.statusRujukan || ""}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="modal-footer bg-white p-3 px-4 justify-content-between">
+                <button type="button" className="btn btn-outline-secondary btn-sm px-4 rounded-3" onClick={() => setShowSequentialPreviewModal(false)}>
+                  &larr; Edit Data
+                </button>
+                <button type="button" className="btn btn-dark-custom btn-sm px-4 rounded-3 text-white fw-bold" style={{ backgroundColor: "#2b2e4a" }} onClick={handleSaveSequentialAll}>
+                  ✓ Konfirmasi &amp; Simpan Pemeriksaan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
