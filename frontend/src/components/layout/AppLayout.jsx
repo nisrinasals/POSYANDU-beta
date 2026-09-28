@@ -259,7 +259,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                   }}
                 >
                   <FileSpreadsheet size={18} />
-                  <span>{isDinkesStaf ? "Rekapitulasi Pelaporan" : "Rekapitulasi Wilayah"}</span>
+                  <span>{isDinkesStaf ? "Rekapitulasi Pelaporan" : "Rekapitulasi Pemeriksaan"}</span>
                 </a>
 
                 {/* 6. Profil Pengguna / Instansi Dinkes */}
@@ -568,7 +568,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                     (activeSubmenu === "staf" ? "Verifikasi Staf Dinas Kesehatan" : activeSubmenu === "kelola" ? "Kelola Akun Faskes & Staf Terdaftar" : "Verifikasi Akun Puskesmas")}
                   {(activeMenu === "jadwal-monitoring" || activeMenu === "jadwal") && "Jadwal Posyandu Se-Kota"}
                   {activeMenu === "data-sasaran" && "Data Sasaran Wilayah Kota"}
-                  {activeMenu === "laporan-ekspor" && (isDinkesStaf ? "Rekapitulasi Pelaporan" : "Rekapitulasi Pelaporan Kota")}
+                  {activeMenu === "laporan-ekspor" && (isDinkesStaf ? "Rekapitulasi Pelaporan" : "Rekapitulasi Pemeriksaan")}
                   {activeMenu === "profil-pengguna" && (isDinkesStaf ? "Profil Pengguna Staf" : "Profil Pengguna")}
                 </>
               ) : isPuskesmas ? (
@@ -606,7 +606,10 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                         : "Kelola persetujuan pendaftaran akun Puskesmas.")}
                   {(activeMenu === "jadwal-monitoring" || activeMenu === "jadwal") && "Monitoring agenda buka dan operasional Posyandu se-Kota"}
                   {activeMenu === "data-sasaran" && "Monitoring cakupan data sasaran seluruh siklus hidup lintas Puskesmas dan Posyandu se-Kota"}
-                  {activeMenu === "laporan-ekspor" && (isDinkesStaf ? "Rekapitulasi formulir register bulanan dan unduh berkas agregat Excel (.xlsx)" : "Rekapitulasi dan ekspor data agregat kesehatan masyarakat tingkat Kota")}
+                  {activeMenu === "laporan-ekspor" &&
+                    (isDinkesStaf
+                      ? "Rekapitulasi formulir register bulanan dan unduh berkas agregat Excel (.xlsx)"
+                      : "Daftar sasaran yang sudah diperiksa, filter Posyandu, dan detail hasil pemeriksaan se-Kota")}
                   {activeMenu === "profil-pengguna" && "Informasi akun dan manajemen profil pengguna"}
                 </>
               ) : isPuskesmas ? (

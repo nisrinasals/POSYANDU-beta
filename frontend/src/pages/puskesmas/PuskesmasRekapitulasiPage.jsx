@@ -2,21 +2,16 @@ import React, { useState, useMemo } from "react";
 import { Download, Search, Users, CheckCircle, Clock, AlertTriangle, Filter, Calendar, Eye, FileText, Printer } from "lucide-react";
 import DetailRekapModal, { resolve5StepDetails } from "../../components/pemeriksaan/DetailRekapModal";
 import ExportRekapModal from "../../components/pemeriksaan/ExportRekapModal";
+import { formatAgeFromMonths, formatDateId } from "../../utils/dataMappers";
 
-const formatAge = (birthDate, fallback = "") => {
-  if (fallback && String(fallback).trim() && String(fallback).trim() !== "-") return fallback;
-  if (!birthDate) return "-";
+const getAgeInMonths = (birthDate, referenceDate = new Date()) => {
+  if (!birthDate) return null;
   const birth = new Date(birthDate);
-  if (Number.isNaN(birth.getTime())) return "-";
-  const now = new Date();
-  let months = (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
-  if (now.getDate() < birth.getDate()) months -= 1;
-  if (months < 0) return "-";
-  const years = Math.floor(months / 12);
-  const remainingMonths = months % 12;
-  if (years > 0 && remainingMonths > 0) return `${years} th ${remainingMonths} bln`;
-  if (years > 0) return `${years} th`;
-  return `${months} bln`;
+  const reference = new Date(referenceDate);
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime())) return null;
+  let months = (reference.getFullYear() - birth.getFullYear()) * 12 + reference.getMonth() - birth.getMonth();
+  if (reference.getDate() < birth.getDate()) months -= 1;
+  return months < 0 ? null : months;
 };
 
 export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], globalPemeriksaanData = {}, onNavigate, user, userRole = "puskesmas" }) {
@@ -27,7 +22,6 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
   // Filter starts from all backend data; user can narrow it with month/year selectors.
   const [selectedMonthNum, setSelectedMonthNum] = useState("Semua");
   const [selectedYear, setSelectedYear] = useState("Semua");
-
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPosyandu, setSelectedPosyandu] = useState("Semua Posyandu");
   const [selectedCategory, setSelectedCategory] = useState("Semua Kategori (Semua Siklus)");
@@ -58,20 +52,10 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
           kategori: s.kategori || "",
           subKategori: s.subKategori || "",
           subText:
+            formatAgeFromMonths(exam?.usia_bulan, s.subKategori || s.kategori) ||
+            formatAgeFromMonths(getAgeInMonths(s.tglLahir, exam?.tanggal || new Date()), s.subKategori || s.kategori) ||
             s.usia ||
-            (() => {
-              if (!s.tglLahir) return "";
-              const birth = new Date(s.tglLahir);
-              const now = new Date();
-              if (Number.isNaN(birth.getTime()) || birth > now) return "";
-              let months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
-              if (now.getDate() < birth.getDate()) months -= 1;
-              months = Math.max(0, months);
-              if (months < 24) return `${months} bln`;
-              const years = Math.floor(months / 12);
-              const remainder = months % 12;
-              return remainder ? `${years} th ${remainder} bln` : `${years} th`;
-            })(),
+            "",
           tglLahir: s.tglLahir || "",
           gender: s.gender || "",
           posyandu: s.posyandu || "",
@@ -121,11 +105,9 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
 
           if (parts.length === 3) {
             if (parts[0].length === 4) {
-              // YYYY-MM-DD
               itemYear = parts[0];
               itemMonth = parts[1].padStart(2, "0");
             } else {
-              // DD-MM-YYYY
               itemMonth = parts[1].padStart(2, "0");
               itemYear = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
             }
@@ -155,7 +137,7 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
   return (
     <div className="container-fluid p-0">
       {/* Export Action & Filter Bar */}
-      <div className="d-flex justify-content-end mb-3">
+      <div className="d-flex justify-content-end gap-2 mb-3">
         <button
           className="btn btn-sm px-3 py-2 fw-semibold d-flex align-items-center gap-2 rounded-3 shadow-xs text-white"
           style={{ backgroundColor: themeColor }}
@@ -308,7 +290,7 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
                       <div className="fw-semibold text-dark mb-0">{row.kategori}</div>
                     </td>
                     <td className="text-dark fw-medium text-nowrap">{row.subText || row.usia || "-"}</td>
-                    <td className="text-secondary small text-nowrap">{row.tglPeriksa}</td>
+                    <td className="text-secondary small text-nowrap">{formatDateId(row.tglPeriksa)}</td>
                     <td className="pe-4 text-center text-nowrap">
                       <div className="d-flex align-items-center justify-content-center gap-1.5">
                         <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => handleOpenDetail(row)} title="Lihat Detail Hasil 5 Langkah">

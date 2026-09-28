@@ -3,6 +3,7 @@ import { Download, Search, Users, CheckCircle, Clock, AlertTriangle, Filter, Cal
 import { pemeriksaanService } from "../../services";
 import DetailRekapModal, { resolve5StepDetails } from "../../components/pemeriksaan/DetailRekapModal";
 import ExportRekapModal from "../../components/pemeriksaan/ExportRekapModal";
+import { formatAgeFromMonths, formatDateId } from "../../utils/dataMappers";
 
 export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData }) {
   const [selectedMonthNum, setSelectedMonthNum] = useState("Semua");
@@ -27,7 +28,7 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
     return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
   };
 
-  const getAgeText = (birthDate, referenceDate = new Date()) => {
+  const getAgeText = (birthDate, referenceDate = new Date(), category = "") => {
     const birthDateOnly = getDateOnly(birthDate);
     const referenceDateOnly = getDateOnly(referenceDate);
     if (!birthDateOnly || !referenceDateOnly) return "";
@@ -41,11 +42,7 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
     if (reference.getUTCDate() < birth.getUTCDate()) months -= 1;
     if (months < 0) return "";
 
-    const years = Math.floor(months / 12);
-    const remainingMonths = months % 12;
-
-    if (years <= 0) return `${remainingMonths} bulan`;
-    return `${years} tahun${remainingMonths ? ` ${remainingMonths} bulan` : ""}`;
+    return formatAgeFromMonths(months, category);
   };
 
   const allRekapList = useMemo(() => {
@@ -66,7 +63,7 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
           nik: s.nik || "",
           kategori: s.kategori || "",
           subKategori: s.subKategori || "",
-          subText: s.usia || getAgeText(s.tglLahir, exam?.tanggal || new Date()),
+          subText: formatAgeFromMonths(exam?.usia_bulan, s.subKategori || s.kategori) || getAgeText(s.tglLahir, exam?.tanggal || new Date(), s.subKategori || s.kategori) || s.usia || "",
           tglLahir: s.tglLahir || "",
           gender: s.gender || "",
           keteranganKeluarga: s.keteranganIbuSuami || s.namaIbu || s.namaAyah || "",
@@ -292,7 +289,7 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
                       <div className="fw-semibold text-dark mb-0">{row.kategori}</div>
                     </td>
                     <td className="text-dark fw-medium text-nowrap">{row.subText || row.usia || "-"}</td>
-                    <td className="text-secondary small text-nowrap">{row.tglPeriksa}</td>
+                    <td className="text-secondary small text-nowrap">{formatDateId(row.tglPeriksa)}</td>
                     <td className="pe-4 text-center text-nowrap">
                       <div className="d-flex align-items-center justify-content-center gap-2">
                         <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => handleOpenDetail(row)} title="Lihat Detail Hasil 5 Langkah">

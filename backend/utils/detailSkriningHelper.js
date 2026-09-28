@@ -255,6 +255,7 @@ const SKEMA_SKRINING = {
         has_sedih_tertekan_putus_asa: false,
         has_kurang_minat_kesenangan: false,
       },
+      is_rujukan_skilas: false,
       is_imunisasi_covid19: false,
     },
   },
@@ -286,10 +287,10 @@ const formatDetailSkrining = (kategoriSasaran, inputSkrining = {}, isTahunan = f
   const baseline = mergeWithSchema(schemaDefault, existingSkrining || {});
   const formatted = mergeWithSchema(baseline, inputSkrining);
 
-  if (["dewasa", "lansia"].includes(kategoriSasaran)) {
+  if (["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriSasaran)) {
     formatted.is_skrining_tahunan = Boolean(isTahunan);
 
-    if (!isTahunan) {
+    if (!isTahunan && ["dewasa", "lansia"].includes(kategoriSasaran)) {
       delete formatted.skrining_tahunan;
     }
   }
@@ -310,9 +311,14 @@ const validateDetailSkrining = (kategoriSasaran, inputSkrining) => {
 
   const screeningInput = { ...inputSkrining };
   if (Object.prototype.hasOwnProperty.call(screeningInput, "is_skrining_tahunan")) {
-    if (!["dewasa", "lansia"].includes(kategoriSasaran)) return "is_skrining_tahunan hanya berlaku untuk kategori dewasa atau lansia.";
+    if (!["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriSasaran)) return "is_skrining_tahunan hanya berlaku untuk kategori tahunan.";
     if (typeof screeningInput.is_skrining_tahunan !== "boolean") return "is_skrining_tahunan harus berupa boolean.";
     delete screeningInput.is_skrining_tahunan;
+  }
+  if (Object.prototype.hasOwnProperty.call(screeningInput, "is_skrining_6_bulanan")) {
+    if (!["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriSasaran)) return "is_skrining_6_bulanan hanya berlaku untuk kategori berkala.";
+    if (typeof screeningInput.is_skrining_6_bulanan !== "boolean") return "is_skrining_6_bulanan harus berupa boolean.";
+    delete screeningInput.is_skrining_6_bulanan;
   }
 
   const validateNode = (nodeSchema, nodeInput, path) => {
@@ -322,7 +328,7 @@ const validateDetailSkrining = (kategoriSasaran, inputSkrining) => {
       if (!Object.prototype.hasOwnProperty.call(nodeSchema, key)) return `${path}.${key} tidak dikenali.`;
       if (key === "status_risiko_puma" && !["risiko_rendah", "risiko_tinggi", "ambigu_skor_6"].includes(value)) return `${path}.${key} tidak valid.`;
       if (key === "status_aks" && !["mandiri", "ketergantungan_ringan", "ketergantungan_sedang", "ketergantungan_berat", "ketergantungan_total"].includes(value)) return `${path}.${key} tidak valid.`;
-      if (["is_rujukan_aks", "is_tbc_terindikasi", "is_rujukan_jiwa"].includes(key) && typeof value !== "boolean") return `${path}.${key} memiliki tipe data tidak valid.`;
+      if (["is_rujukan_aks", "is_tbc_terindikasi", "is_rujukan_jiwa", "is_rujukan_skilas"].includes(key) && typeof value !== "boolean") return `${path}.${key} memiliki tipe data tidak valid.`;
       if (key === "kode_aks" && !["M", "R", "S", "B", "T"].includes(value)) return `${path}.${key} tidak valid.`;
       if (key === "status_tbc" && !["risiko", "rujukan", "tidak_terindikasi"].includes(value)) return `${path}.${key} tidak valid.`;
       const expected = nodeSchema[key];

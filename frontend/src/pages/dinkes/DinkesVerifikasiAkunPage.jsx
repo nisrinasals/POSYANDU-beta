@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Search, Filter, Check, X, Clock, UserCheck, UserX, UserCog, RefreshCw, Building2, Shield, CheckCircle2, PowerOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNotification } from "../../context/NotificationContext";
 import { userService } from "../../services";
+import { formatDateId } from "../../utils/dataMappers";
 
 export default function DinkesVerifikasiAkunPage({
   activeSubmenu = "puskesmas",
@@ -60,7 +61,7 @@ export default function DinkesVerifikasiAkunPage({
               telepon: u.no_telepon || u.telepon || "",
               bidangJabatan: u.jabatan || u.bidangJabatan || "",
               jabatan: u.jabatan || "",
-              tglDaftar: u.createdAt ? new Date(u.createdAt).toLocaleDateString("id-ID") : "",
+              tglDaftar: formatDateId(u.createdAt),
               status: u.status === "pending_approval" ? "pending" : u.status || "",
             };
             if (role.includes("puskesmas")) {

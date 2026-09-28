@@ -2,6 +2,8 @@
 
 const assert = require("assert");
 const test = require("node:test");
+const ExcelJS = require("exceljs");
+const { Op } = require("sequelize");
 const { Pemeriksaan, KunjunganPosyandu, SesiPosyandu, Rujukan, AuditLog } = require("../models");
 const controller = require("../controllers/pemeriksaanController");
 const { evaluasiBBU, STANDAR_PLOT } = require("../utils/plotHelper");
@@ -14,6 +16,7 @@ const recentSessionDate = new Date(Date.now() - 2 * 86400000).toISOString().slic
 const response = () => ({
   statusCode: 200,
   body: null,
+  headers: {},
   status(code) {
     this.statusCode = code;
     return this;
@@ -21,6 +24,12 @@ const response = () => ({
   json(body) {
     this.body = body;
     return this;
+  },
+  setHeader(key, value) {
+    this.headers[key] = value;
+  },
+  end() {
+    this.ended = true;
   },
 });
 
@@ -35,6 +44,142 @@ const invoke = async (handler, req) => {
   if (error) throw error;
   return res;
 };
+
+test("monthly examination statistics returns aggregate month counts without resident data", async () => {
+  const originalFindAll = Pemeriksaan.findAll;
+  let queryOptions;
+  try {
+    Pemeriksaan.findAll = async (options) => {
+      queryOptions = options;
+      return [
+        { month: "2026-07", count: "4" },
+        { month: "2026-08", count: "7" },
+      ];
+    };
+
+    const result = await invoke(controller.getPemeriksaanStatistikBulanan, request({}, { role: "puskesmas", puskesmas_id: 9 }));
+    assert.strictEqual(result.statusCode, 200);
+    assert.deepStrictEqual(result.body.data.monthly, [
+      { month: "2026-07", count: 4 },
+      { month: "2026-08", count: 7 },
+    ]);
+    assert.deepStrictEqual(result.body.data.years, ["2026"]);
+    assert.deepStrictEqual(Object.keys(result.body.data.monthly[0]), ["month", "count"]);
+    assert.deepStrictEqual(queryOptions.include[0].include[0].include[0].where, { puskesmas_id: 9 });
+  } finally {
+    Pemeriksaan.findAll = originalFindAll;
+  }
+});
+
+test("rekap preview returns backend aggregate rows and applies Puskesmas scope", async () => {
+  const originalFindAll = Pemeriksaan.findAll;
+  let queryOptions;
+  try {
+    Pemeriksaan.findAll = async (options) => {
+      queryOptions = options;
+      return [
+        {
+          tanggal: "2026-09-05",
+          kategori_sasaran: "busui",
+          topik_penyuluhan: "Gizi ibu",
+          is_perlu_rujukan: false,
+          detail_skrining: {
+            pelayanan_kesehatan: {
+              is_kb_pasca_persalinan: true,
+              is_vit_a_given: true,
+            },
+          },
+          kunjungan: { warga: { profileKehamilan: [], imunisasi: [] } },
+        },
+      ];
+    };
+
+    const result = await invoke(controller.getRekapitulasiPemeriksaan, {
+      query: { template_rekap: "bumil_nifas_menyusui" },
+      user: { role: "puskesmas", puskesmas_id: 9 },
+    });
+
+    assert.strictEqual(result.statusCode, 200);
+    assert.deepStrictEqual(queryOptions.where.kategori_sasaran[Op.in], ["bumil", "busui"]);
+    assert.deepStrictEqual(queryOptions.include[0].include[1].include[0].where, { puskesmas_id: 9 });
+    assert.strictEqual(result.body.data.rows[0].bulan_tahun, "2026-09");
+    assert.strictEqual(result.body.data.rows[0].jumlah_ibu_nifas_menyusui, 1);
+    assert.strictEqual(result.body.data.rows[0].ibu_nifas_menyusui_kb_ya, 1);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(result.body.data.rows[0], "nik"), false);
+  } finally {
+    Pemeriksaan.findAll = originalFindAll;
+  }
+});
+
+test("selected rekap template filters source categories and exports only its worksheet", async () => {
+  const originalFindAll = Pemeriksaan.findAll;
+  const originalWorkbook = ExcelJS.Workbook;
+  let queryOptions;
+  const worksheetNames = [];
+  const worksheets = [];
+
+  class WorkbookStub {
+    constructor() {
+      this.xlsx = { write: async () => {} };
+    }
+
+    addWorksheet(name) {
+      worksheetNames.push(name);
+      const worksheet = {
+        name,
+        rows: [],
+        merges: [],
+        addRow(values) {
+          const row = {
+            values,
+            cells: [],
+            getCell(index) {
+              if (!this.cells[index]) this.cells[index] = {};
+              return this.cells[index];
+            },
+          };
+          this.rows.push(row);
+          return row;
+        },
+        getRow(index) {
+          return this.rows[index - 1] || {};
+        },
+        mergeCells(...range) {
+          this.merges.push(range);
+        },
+      };
+      worksheets.push(worksheet);
+      return worksheet;
+    }
+  }
+
+  try {
+    Pemeriksaan.findAll = async (options) => {
+      queryOptions = options;
+      return [];
+    };
+    ExcelJS.Workbook = WorkbookStub;
+
+    const result = await invoke(controller.exportPemeriksaanExcel, {
+      query: { template_rekap: "usia_sekolah_remaja", start_date: "2026-01-01", end_date: "2026-12-31" },
+      user: { role: "dinkes" },
+    });
+
+    assert.strictEqual(result.statusCode, 200);
+    assert.deepStrictEqual(queryOptions.where.kategori_sasaran[Op.in], ["uskrem_6_14", "uskrem_15_18"]);
+    assert.deepStrictEqual(worksheetNames, ["usia_sekolah_remaja"]);
+    assert.match(worksheets[0].rows[0].values[0], /REKAPITULASI HASIL PEMERIKSAAN/);
+    assert.strictEqual(worksheets[0].rows[6].cells[2].value, "Jumlah Sasaran");
+    assert.strictEqual(worksheets[0].rows.length, 20);
+    assert.strictEqual(worksheets[0].rows[8].values[0], "Januari 2026");
+    assert.strictEqual(worksheets[0].rows[19].values[0], "Desember 2026");
+    assert.ok(worksheets[0].merges.some(([startRow, startCol, endRow, endCol]) => startRow === 7 && startCol === 1 && endRow === 8 && endCol === 1));
+    assert.strictEqual(result.ended, true);
+  } finally {
+    Pemeriksaan.findAll = originalFindAll;
+    ExcelJS.Workbook = originalWorkbook;
+  }
+});
 
 const makeKunjungan = (status = "langkah_1", session = { tanggal_pelaksanaan: recentSessionDate, status: "open", posyandu }) => ({
   id: 10,

@@ -1,5 +1,6 @@
 import React from "react";
 import { User, Activity, Baby, ShieldCheck, HeartPulse } from "lucide-react";
+import { formatDateId } from "../../utils/dataMappers";
 
 export default function DetailSasaranModal({ show = true, onHide, onClose, selectedSasaran, citizen, theme = null, themeColor = null, roleTitle = null, onEdit = null }) {
   if (show === false) return null;
@@ -89,7 +90,7 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                     <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
                       Tanggal Lahir
                     </div>
-                    <div className="fw-bold text-dark">{target.tglLahir || ""}</div>
+                    <div className="fw-bold text-dark">{formatDateId(target.tglLahir)}</div>
                   </div>
                 </div>
 
@@ -183,31 +184,15 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                       <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
                         HPHT (Hari Pertama Haid Terakhir)
                       </div>
-                      <div className="fw-bold text-dark">{target.hpht || target.ibuHamilDetail?.obstetri?.hpht || ""}</div>
+                      <div className="fw-bold text-dark">{formatDateId(target.hpht || target.ibuHamilDetail?.obstetri?.hpht)}</div>
                     </div>
                   </div>
                   <div className="col-12 col-md-6">
                     <div className="p-3 bg-light rounded-3 h-100">
                       <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                        Taksiran Persalinan (HPL)
+                        HPL
                       </div>
-                      <div className="fw-bold text-dark">{target.hpl || target.ibuHamilDetail?.obstetri?.taksiranPersalinan || ""}</div>
-                    </div>
-                  </div>
-                  <div className="col-12 col-md-6">
-                    <div className="p-3 bg-light rounded-3 h-100">
-                      <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                        BB Sebelum Hamil
-                      </div>
-                      <div className="fw-bold text-dark">{target.bb ? (String(target.bb).includes("kg") ? target.bb : `${target.bb} kg`) : "-"}</div>
-                    </div>
-                  </div>
-                  <div className="col-12 col-md-6">
-                    <div className="p-3 bg-light rounded-3 h-100">
-                      <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                        Tinggi Badan (TB)
-                      </div>
-                      <div className="fw-bold text-dark">{target.tb ? (String(target.tb).includes("cm") ? target.tb : `${target.tb} cm`) : "-"}</div>
+                      <div className="fw-bold text-dark">{formatDateId(target.hpl || target.ibuHamilDetail?.obstetri?.taksiranPersalinan)}</div>
                     </div>
                   </div>
                   <div className="col-12 col-md-6">
@@ -234,13 +219,23 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                       <div className="fw-bold text-dark">{target.jarakAnak || target.ibuHamilDetail?.obstetri?.jarakKehamilan || ""}</div>
                     </div>
                   </div>
-                  {target.statusPersalinan && (
+                  {target.tglPersalinan && (
                     <div className="col-12 col-md-6">
                       <div className="p-3 bg-light rounded-3 h-100">
                         <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                          Status Persalinan
+                          Tanggal Persalinan
                         </div>
-                        <div className="fw-bold text-dark">{target.statusPersalinan}</div>
+                        <div className="fw-bold text-dark">{formatDateId(target.tglPersalinan)}</div>
+                      </div>
+                    </div>
+                  )}
+                  {target.caraPersalinan && (
+                    <div className="col-12 col-md-6">
+                      <div className="p-3 bg-light rounded-3 h-100">
+                        <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                          Cara Persalinan
+                        </div>
+                        <div className="fw-bold text-dark">{target.caraPersalinan === "dengan_tindakan" ? "Tindakan" : "Normal"}</div>
                       </div>
                     </div>
                   )}
@@ -269,7 +264,15 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                       <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
                         Tanggal Persalinan
                       </div>
-                      <div className="fw-bold text-dark">{target.tglPersalinan || ""}</div>
+                      <div className="fw-bold text-dark">{formatDateId(target.tglPersalinan)}</div>
+                    </div>
+                  </div>
+                  <div className="col-12 col-md-6">
+                    <div className="p-3 bg-light rounded-3 h-100">
+                      <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                        Cara Persalinan
+                      </div>
+                      <div className="fw-bold text-dark">{target.caraPersalinan === "dengan_tindakan" ? "Tindakan" : target.caraPersalinan === "normal" ? "Normal" : ""}</div>
                     </div>
                   </div>
                 </div>

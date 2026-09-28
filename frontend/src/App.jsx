@@ -190,7 +190,8 @@ export default function App() {
     // =======================================================
     const isDinkesRole = ["dinkes", "dinkesAdmin", "dinkes-staf", "dinkes-admin"].includes(currentBackendRole);
 
-    const canAccessPersonalData = !isDinkesRole;
+    const isDinkesAdminRole = ["dinkesAdmin", "dinkes-admin"].includes(currentBackendRole);
+    const canAccessPersonalData = !isDinkesRole || isDinkesAdminRole;
     const isPuskesmasRole = ["puskesmas", "puskesmasAdmin", "puskesmas-admin", "puskesmas-staf", "puskesmas-user"].includes(currentBackendRole);
 
     if (!canAccessPersonalData) {
@@ -238,8 +239,13 @@ export default function App() {
             const wId = p.kunjungan?.warga_id || p.warga_id || p.sasaranId || p.kunjungan?.warga?.id || p.warga?.id;
 
             if (wId) {
-              backendPemMap[wId] = p;
-              backendPemMap[String(wId)] = p;
+              const residentKey = String(wId);
+              const existing = backendPemMap[residentKey];
+              const existingDate = String(existing?.tanggal || "").slice(0, 10);
+              const recordDate = String(p.tanggal || "").slice(0, 10);
+              if (!existing || recordDate > existingDate || (recordDate === existingDate && Number(p.id) > Number(existing.id))) {
+                backendPemMap[residentKey] = p;
+              }
             }
 
             if (p.id) {
@@ -247,19 +253,14 @@ export default function App() {
             }
           });
 
-          setGlobalPemeriksaanData((prev) => ({
-            ...prev,
-            ...backendPemMap,
-          }));
+          setGlobalPemeriksaanData(backendPemMap);
         } else if (resPem?.data && typeof resPem.data === "object" && !Array.isArray(resPem.data)) {
-          setGlobalPemeriksaanData((prev) => ({
-            ...prev,
-            ...resPem.data,
-          }));
+          setGlobalPemeriksaanData(resPem.data);
         }
       }
     } catch (err) {
       console.info("Backend Pemeriksaan API offline.");
+      if (canAccessPersonalData) setGlobalPemeriksaanData({});
     }
 
     // =======================================================
@@ -551,7 +552,7 @@ export default function App() {
             globalPemeriksaanData={globalPemeriksaanData}
             globalStatistikSasaran={globalStatistikSasaran}
             isGlobalStatistikLoading={isGlobalStatistikLoading}
-            privacyMode
+            privacyMode={!isDinkesAdmin}
             onNavigate={handleNavigate}
             initialCategoryFilter={categoryFilterParam}
             setCategoryFilterParam={setCategoryFilterParam}
@@ -561,7 +562,18 @@ export default function App() {
 
         {(activeMenu === "jadwal" || activeMenu === "jadwal-monitoring") && <DinkesJadwalMonitoringPage globalJadwalList={globalJadwalList} onRefreshData={fetchBackendData} />}
 
-        {activeMenu === "laporan-ekspor" && <RekapTemplateExcelView userRole="dinkes-staf" user={user} />}
+        {activeMenu === "laporan-ekspor" &&
+          (isDinkesAdmin ? (
+            <PuskesmasRekapitulasiPage
+              globalSasaranList={globalSasaranList}
+              globalPemeriksaanData={globalPemeriksaanData}
+              onNavigate={handleNavigate}
+              user={user}
+              userRole="dinkes-admin"
+            />
+          ) : (
+            <RekapTemplateExcelView userRole="dinkes-staf" user={user} />
+          ))}
 
         {activeMenu === "profil-pengguna" && (
           <ProfilPenggunaPage

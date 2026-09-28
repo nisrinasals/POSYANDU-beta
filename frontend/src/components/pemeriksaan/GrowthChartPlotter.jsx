@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { Chart, registerables } from "chart.js";
 
 import { Activity, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { formatDateId } from "../../utils/dataMappers";
 
 Chart.register(...registerables);
 
@@ -871,7 +872,7 @@ const GrowthChart = ({ indicator, plottingData, standard, result, config, gender
                 if (datasetLabel === "Riwayat Pemeriksaan" || datasetLabel === "Pemeriksaan" || datasetLabel === "Pemeriksaan Sekarang") {
                   const zscore = toNumber(raw?.zscore);
 
-                  const tanggal = raw?.tanggal ? new Date(raw.tanggal).toLocaleDateString("id-ID") : "-";
+                  const tanggal = formatDateId(raw?.tanggal) || "-";
 
                   return [`${config.xLabel}: ${raw.x ?? "-"}`, `${config.yLabel}: ${raw.y ?? "-"}`, `Z-Score: ${Number.isFinite(zscore) ? zscore.toFixed(2) : "-"} SD`, `Tanggal: ${tanggal}`];
                 }
@@ -1208,7 +1209,7 @@ const MeasurementResultTable = ({ rows }) => {
                 <td>
                   <span className={`badge rounded-pill ${row.risk ? "bg-danger-subtle text-danger" : "bg-success-subtle text-success"}`}>{row.category}</span>
                 </td>
-                <td>{row.code}</td>
+                <td>{row.code === "R" && row.category === "Risiko" ? "R (Risiko)" : row.code}</td>
                 <td>{row.batas}</td>
               </tr>
             ))}

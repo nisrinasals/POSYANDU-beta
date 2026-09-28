@@ -63,8 +63,8 @@ const STANDAR_PLOT = {
       {
         nama: "Tekanan Darah",
         items: [
-          { kategori: "Normal", batas: "< 130/85", kode: "N", is_merah: false },
-          { kategori: "Risiko", batas: "≥ 130/85", kode: "R", is_merah: true },
+          { kategori: "Normal", batas: "Sistol <130 dan diastol <85 mmHg", kode: "N", is_merah: false },
+          { kategori: "Risiko", batas: "Sistol ≥130 atau diastol ≥85 mmHg", kode: "R", is_merah: true },
         ],
       },
     ],
@@ -89,8 +89,8 @@ const STANDAR_PLOT = {
       {
         nama: "Tekanan Darah",
         items: [
-          { kategori: "Normal", batas: "< 130/85", kode: "N", is_merah: false },
-          { kategori: "Risiko", batas: "≥ 130/85", kode: "R", is_merah: true },
+          { kategori: "Normal", batas: "Sistol <130 dan diastol <85 mmHg", kode: "N", is_merah: false },
+          { kategori: "Risiko", batas: "Sistol ≥130 atau diastol ≥85 mmHg", kode: "R", is_merah: true },
         ],
       },
     ],
@@ -498,8 +498,8 @@ const evaluasiTekananDarah = (sistole, diastole, kelompokSasaran) => {
   if (!sistole || !diastole) return null;
   if (["bumil", "busui"].includes(kelompokSasaran))
     return sistole < 130 && diastole < 85
-      ? { indikator: "Tekanan Darah", kategori: "Normal", kode: "N", batas: "< 130/85", is_merah: false }
-      : { indikator: "Tekanan Darah", kategori: "Risiko", kode: "R", batas: "≥ 130/85", is_merah: true };
+      ? { indikator: "Tekanan Darah", kategori: "Normal", kode: "N", batas: "Sistol <130 dan diastol <85 mmHg", is_merah: false }
+      : { indikator: "Tekanan Darah", kategori: "Risiko", kode: "R", batas: "Sistol ≥130 atau diastol ≥85 mmHg", is_merah: true };
   if (["uskrem_15_18", "dewasa"].includes(kelompokSasaran)) {
     if (sistole > 140 && diastole < 90) return { indikator: "Tekanan Darah", kategori: "Hipertensi sistolik terisolasi", kode: "HST", batas: ">140/<90", is_merah: true };
     if (sistole >= 180 || diastole >= 110) return { indikator: "Tekanan Darah", kategori: "Hipertensi tingkat 3", kode: "Ht 3", batas: ">180/110", is_merah: true };

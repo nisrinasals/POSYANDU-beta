@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Search, Eye, Filter, Info, ChevronLeft, ChevronRight, Building2, X } from "lucide-react";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
+import { formatDateId } from "../../utils/dataMappers";
 
 export default function DinkesDataSasaranPage({
   globalSasaranList = [],
@@ -281,7 +282,7 @@ export default function DinkesDataSasaranPage({
                         {item.nik || ""}
                       </div>
                     </td>
-                    <td className="text-center text-secondary fw-medium text-nowrap">{item.tglLahir || item.tanggalLahir || ""}</td>
+                    <td className="text-center text-secondary fw-medium text-nowrap">{formatDateId(item.tglLahir || item.tanggalLahir)}</td>
                     <td>
                       <div className="fw-semibold text-dark mb-0">{item.kategori}</div>
                     </td>

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Calendar, MapPin, Plus, Search, ChevronLeft, ChevronRight, X, Eye, Info, FileText, CheckCircle2 } from "lucide-react";
 import { useNotification } from "../../context/NotificationContext";
 import { sesiService } from "../../services";
-import { mapBackendSesiToFrontend } from "../../utils/dataMappers";
+import { formatDateId, mapBackendSesiToFrontend } from "../../utils/dataMappers";
 
 export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwalList, user, onRefreshData }) {
   const { showWarning, showSuccess } = useNotification();
@@ -146,20 +146,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
   };
 
   const formatTanggalIndo = (dateStr) => {
-    if (!dateStr) return "";
-
-    try {
-      const d = new Date(dateStr);
-
-      return d.toLocaleDateString("id-ID", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      });
-    } catch {
-      return dateStr;
-    }
+    return formatDateId(dateStr);
   };
 
   const handleSaveJadwal = async (e) => {
@@ -617,7 +604,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
                               Hari / Tanggal
                             </td>
 
-                            <td className="py-1 fw-bold text-dark">: {selectedJadwal.tanggalFormatted}</td>
+                            <td className="py-1 fw-bold text-dark">: {formatDateId(selectedJadwal.tanggalFormatted || selectedJadwal.tanggal)}</td>
                           </tr>
 
                           <tr>

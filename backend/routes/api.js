@@ -117,7 +117,9 @@ api.delete("/kunjungan/:id", personalAuthenticated, validator.kunjungan.idOnly, 
 // ======================================================
 
 api.get("/pemeriksaan", personalAuthenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.getAllPemeriksaan);
+api.get("/pemeriksaan/rekapitulasi", authenticated, validator.pemeriksaan.rekapFilters, validateResult, pemeriksaanController.getRekapitulasiPemeriksaan);
 api.get("/pemeriksaan/export", authenticated, validator.pemeriksaan.listFilters, validateResult, pemeriksaanController.exportPemeriksaanExcel);
+api.get("/pemeriksaan/statistik-bulanan", authenticated, pemeriksaanController.getPemeriksaanStatistikBulanan);
 api.get("/pemeriksaan/:id/step-3", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getStep3Pemeriksaan);
 api.get("/pemeriksaan/:id/screening-history", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getScreeningHistory);
 api.get("/pemeriksaan/:id", personalAuthenticated, validator.pemeriksaan.idOnly, validateResult, pemeriksaanController.getPemeriksaanById);

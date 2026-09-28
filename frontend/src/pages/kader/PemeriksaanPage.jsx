@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Stethoscope, ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, Info, RefreshCw, User, Users, Search, UserCheck, UserX, Plus, ChevronRight, Clock, Calendar } from "lucide-react";
 import { kategoriPemeriksaan } from "../../data/kategoriPemeriksaan";
 import { useNotification } from "../../context/NotificationContext";
@@ -8,6 +8,7 @@ import ImunisasiTableHistory from "../../components/pemeriksaan/ImunisasiTableHi
 import { mapFlatScreeningToBackend } from "../../utils/screeningPayload";
 import { pemeriksaanService, kunjunganService, wargaService, sesiService, imunisasiService } from "../../services";
 import { emptyImunisasiRows, mergeImunisasiRows } from "../../data/imunisasi";
+import { formatDateId } from "../../utils/dataMappers";
 
 // Hitung umur dalam bulan untuk menentukan apakah layanan ASI eksklusif (0-6 bulan) ditampilkan.
 const getAgeInMonths = (warga, referenceDate = new Date()) => {
@@ -144,6 +145,7 @@ export const evaluateSkilas = (form = {}) => {
   const skilasFields = [
     form.skilasOrientasi,
     form.skilasUlangKata,
+    form.skilasMobilisasi,
     form.skilasTesKursi,
     form.skilasBbTurun,
     form.skilasNafsuMakan,
@@ -161,6 +163,7 @@ export const evaluateSkilas = (form = {}) => {
   const issues = [];
   if (form.skilasOrientasi === "Tidak") issues.push("Orientasi waktu & tempat");
   if (form.skilasUlangKata === "Tidak") issues.push("Mengulang 3 kata");
+  if (form.skilasMobilisasi === "Ya") issues.push("Keterbatasan mobilisasi");
   if (form.skilasTesKursi === "Tidak") issues.push("Tes berdiri dari kursi");
   if (form.skilasBbTurun === "Ya") issues.push("BB turun >3kg / baju longgar");
   if (form.skilasNafsuMakan === "Ya") issues.push("Hilang nafsu makan");
@@ -193,17 +196,23 @@ export const calculateJiwa = (form = {}) => {
   const q4 = form.jiwaQ4 !== "" && form.jiwaQ4 !== undefined && form.jiwaQ4 !== null ? Number(form.jiwaQ4) : 0;
   const total = q1 + q2 + q3 + q4;
 
-  const isRisiko = total >= 6;
-  const kategori = isRisiko ? "Risiko Masalah Kesehatan Jiwa (≥ 6: Perlu Konseling/Rujukan)" : "Normal / Sehat Jiwa (< 6)";
+  const group1 = q1 + q2;
+  const group2 = q3 + q4;
+  const isRisiko = group1 >= 3 || group2 >= 3;
+  const kategori = isRisiko ? "Risiko Masalah Kesehatan Jiwa (kelompok skor ≥ 3)" : "Normal / Sehat Jiwa";
 
   return {
     total,
+    group1,
+    group2,
     kategori,
     isRisiko,
     isAnswered: true,
     bulan: form.jiwaBulan || "",
   };
 };
+
+const hasAnswer = (value) => value === false || value === 0 || (typeof value === "string" ? value.trim() !== "" : value !== null && value !== undefined);
 
 // Komponen Radio Button Interaktif untuk opsi Ya / Tidak (atau Sudah / Belum)
 export function YesNoRadio({ name, value, onChange, className = "", yesLabel = "Ya", noLabel = "Tidak", yesValue = "Ya", noValue = "Tidak" }) {
@@ -244,6 +253,57 @@ export function YesNoCard({ label, name, value, onChange, className = "", yesLab
   );
 }
 
+function PeriodicScreeningPanel({ id, title, description, due, loading, checked, lastCompletedDate, onToggle, children }) {
+  if (!due || loading) return null;
+
+  const lastCompletedLabel = lastCompletedDate
+    ? formatDateId(lastCompletedDate)
+    : "Belum ada riwayat";
+
+  return (
+    <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+      <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div>
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <span className="badge bg-primary-subtle text-primary fw-bold px-2.5 py-1 rounded-pill">Berkala 1x / 6 Bulan</span>
+            <h5 className="fw-bold text-dark mb-0">{title}</h5>
+          </div>
+          <p className="text-muted small mb-0">{description}</p>
+        </div>
+        <div className="d-flex align-items-center gap-2 bg-light p-2 px-3 rounded-4 border">
+          <div className="form-check form-switch mb-0 d-flex align-items-center gap-2">
+            <input className="form-check-input" type="checkbox" role="switch" id={id} checked={Boolean(checked)} onChange={(event) => onToggle(event.target.checked)} />
+            <label className="form-check-label fw-bold text-dark small cursor-pointer" htmlFor={id}>
+              {checked ? "Lakukan Skrining" : "Tidak Dilakukan"}
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-3 rounded-3 bg-light border d-flex align-items-center gap-2 mt-3">
+        <Clock size={18} className={`flex-shrink-0 ${lastCompletedDate ? "text-success" : "text-secondary"}`} />
+        <div>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <span className="fw-bold text-dark small">Riwayat Skrining 6 Bulanan:</span>
+            <span className={`badge ${lastCompletedDate ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary"} rounded-pill px-2.5 py-1 small fw-bold`}>{lastCompletedLabel}</span>
+          </div>
+          <div className="text-muted small mt-0.5">{lastCompletedDate ? "Skrining berikutnya dapat dilakukan setelah enam bulan." : "Belum ada riwayat skrining 6 bulanan tercatat."}</div>
+        </div>
+      </div>
+
+      {!checked && (
+        <div className="alert alert-primary-subtle border-0 rounded-3 mt-3 mb-0 d-flex align-items-center gap-2 py-2.5 small">
+          <Info size={17} className="text-primary flex-shrink-0" />
+          <span>Aktifkan skrining untuk mengisi pemeriksaan penglihatan dan pendengaran.</span>
+        </div>
+      )}
+      <div hidden={!checked} className="mt-3 pt-3 border-top">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData, activePemeriksaanWargaId, onRefreshData }) {
   const getLocalDateOnly = () => {
     const now = new Date();
@@ -251,36 +311,42 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     return new Date(localMs).toISOString().slice(0, 10);
   };
 
-  const getTodaySessionForWarga = async (warga) => {
+  const getLocalDateOffset = (days) => {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    const localMs = date.getTime() - date.getTimezoneOffset() * 60 * 1000;
+    return new Date(localMs).toISOString().slice(0, 10);
+  };
+
+  const getSessionForWarga = async (warga, targetDate = getLocalDateOnly()) => {
     const posyanduId = warga?._raw?.posyandu_id || warga?.posyandu_id;
     if (!posyanduId) {
       throw new Error("Warga belum memiliki Posyandu pada backend.");
     }
 
-    const today = getLocalDateOnly();
     const sesiRes = await sesiService.getSesiList({
       page: 1,
       limit: 100,
       posyandu_id: Number(posyanduId),
-      tanggal: today,
+      tanggal: targetDate,
     });
     const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : Array.isArray(sesiRes?.data?.items) ? sesiRes.data.items : [];
 
-    const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === today);
+    const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === targetDate);
     if (!session?.id) {
-      throw new Error("Tidak ada sesi Posyandu untuk hari ini. Buat atau buka sesi Posyandu terlebih dahulu.");
+      throw new Error(`Tidak ada sesi Posyandu pada ${targetDate}. Pilih tanggal sesi yang tersedia.`);
     }
 
     return session;
   };
 
-  const ensureKunjunganId = async (warga) => {
+  const ensureKunjunganId = async (warga, targetDate = getLocalDateOnly()) => {
     if (!warga?.id) throw new Error("Warga pemeriksaan tidak valid.");
 
-    // Selalu cari kunjungan pada SESI HARI INI terlebih dahulu.
+    // Cari kunjungan pada sesi tanggal yang dipilih terlebih dahulu.
     // Jangan memakai /antrean-hari-ini karena endpoint tersebut hanya
     // mengembalikan antrean pemeriksaan yang belum selesai.
-    const session = await getTodaySessionForWarga(warga);
+    const session = await getSessionForWarga(warga, targetDate);
 
     const visitRes = await kunjunganService.getKunjunganList({
       page: 1,
@@ -298,11 +364,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       sesi_posyandu_id: Number(session.id),
     });
 
-    if (!createdRes?.data?.id) {
+    const createdKunjunganId = createdRes?.data?.kunjungan_id || createdRes?.data?.id || createdRes?.kunjungan_id || createdRes?.id;
+    if (!createdKunjunganId) {
       throw new Error("Backend tidak mengembalikan ID kunjungan.");
     }
 
-    return createdRes.data.id;
+    return createdKunjunganId;
   };
 
   const { showSuccess, showWarning } = useNotification();
@@ -313,6 +380,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   // 2. Active Step State (1, 2, 3, 4, 5)
   const [activeStep, setActiveStep] = useState(1);
+  const [presensiTanggal, setPresensiTanggal] = useState(getLocalDateOnly);
+
+  useEffect(() => {
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const timer = window.setTimeout(() => setPresensiTanggal(getLocalDateOnly()), nextMidnight.getTime() - now.getTime() + 1000);
+    return () => window.clearTimeout(timer);
+  }, [presensiTanggal]);
 
   // 3. Preview Modal State for Mode Bertahap
   const [showSequentialPreviewModal, setShowSequentialPreviewModal] = useState(false);
@@ -359,6 +434,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   // Presensi Kehadiran Langkah 1 (Status Kehadiran Hari Ini: { [wargaId]: true/false })
   const [kehadiranWarga, setKehadiranWarga] = useState({});
   const [backendRegisteredWarga, setBackendRegisteredWarga] = useState({});
+  const [presensiSesiAktif, setPresensiSesiAktif] = useState(null);
+  const [presensiSesiLoading, setPresensiSesiLoading] = useState(true);
+  const presensiSesiKeyRef = useRef("");
 
   // Keterangan Waktu Kunjungan Langkah 1 (Presensi): Minggu (Bumil) / Bulan (Nifas, Bayi, Balita, Apras)
   // Format: { [wargaId]: string }
@@ -434,13 +512,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     let cancelled = false;
 
     const loadBackendTodayStatus = async () => {
+      if (activeWargaList.length && !cancelled) setPresensiSesiLoading(true);
       try {
         if (!activeWargaList.length) {
           if (!cancelled) {
-            setBackendStep2CompletedWarga({});
-            setBackendStep4CompletedWarga({});
-            setBackendStep5CompletedWarga({});
-            setBackendRegisteredWarga({});
+            setPresensiSesiAktif(null);
+            setPresensiSesiLoading(false);
           }
           return;
         }
@@ -457,18 +534,17 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         const visitGroups = await Promise.all(
           posyanduIds.map(async (posyanduId) => {
             try {
-              const today = getLocalDateOnly();
               const sesiRes = await sesiService.getSesiList({
                 page: 1,
                 limit: 100,
                 posyandu_id: posyanduId,
-                tanggal: today,
+                tanggal: presensiTanggal,
               });
 
               const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : Array.isArray(sesiRes?.data?.items) ? sesiRes.data.items : [];
-              const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === today);
+              const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === presensiTanggal);
 
-              if (!session?.id) return [];
+              if (!session?.id) return { posyanduId, session: null, visits: [] };
 
               const visitRes = await kunjunganService.getKunjunganList({
                 page: 1,
@@ -476,15 +552,21 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                 sesi_posyandu_id: Number(session.id),
               });
 
-              return Array.isArray(visitRes?.data) ? visitRes.data : Array.isArray(visitRes?.data?.items) ? visitRes.data.items : [];
+              return {
+                posyanduId,
+                session,
+                visits: Array.isArray(visitRes?.data) ? visitRes.data : Array.isArray(visitRes?.data?.items) ? visitRes.data.items : [],
+              };
             } catch (error) {
               console.error(`Gagal mengambil kunjungan sesi Posyandu ${posyanduId}:`, error);
-              return [];
+              return { posyanduId, session: null, visits: [] };
             }
           }),
         );
 
-        const visits = visitGroups.flat();
+        const sessionKey = visitGroups.map(({ posyanduId, session }) => `${posyanduId}:${session?.id || presensiTanggal}`).join("|") || presensiTanggal;
+        const sessionsToday = visitGroups.map((group) => group.session).filter(Boolean);
+        const visits = visitGroups.flatMap((group) => group.visits);
         const completedStep2 = {};
         const completedStep4 = {};
         const completedStep5 = {};
@@ -520,22 +602,34 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         });
 
         if (!cancelled) {
-          setBackendStep2CompletedWarga(completedStep2);
-          setBackendStep4CompletedWarga(completedStep4);
-          setBackendStep5CompletedWarga(completedStep5);
-          setBackendRegisteredWarga(registeredWarga);
-          setKunjunganIdByWarga((prev) => ({ ...prev, ...kunjunganIds }));
+          const sessionChanged = presensiSesiKeyRef.current !== sessionKey;
+          presensiSesiKeyRef.current = sessionKey;
+          setPresensiSesiAktif(sessionsToday[0] || null);
+          setPresensiSesiLoading(false);
 
-          setKehadiranWarga((prev) => {
-            const next = { ...prev };
-            Object.keys(registeredWarga).forEach((id) => {
-              next[id] = true;
-            });
-            return next;
-          });
+          if (sessionChanged) {
+            setCompletedSteps({});
+            setStepDataByWarga({});
+            setPemeriksaanByWarga({});
+            setBackendPlottingByWarga({});
+            setKehadiranWarga(Object.fromEntries(Object.keys(registeredWarga).map((id) => [id, true])));
+            setBackendRegisteredWarga(registeredWarga);
+            setKunjunganIdByWarga(kunjunganIds);
+            setBackendStep2CompletedWarga(completedStep2);
+            setBackendStep4CompletedWarga(completedStep4);
+            setBackendStep5CompletedWarga(completedStep5);
+          } else {
+            setKehadiranWarga((prev) => ({ ...prev, ...Object.fromEntries(Object.keys(registeredWarga).map((id) => [id, true])) }));
+            setBackendRegisteredWarga((prev) => ({ ...prev, ...registeredWarga }));
+            setKunjunganIdByWarga((prev) => ({ ...prev, ...kunjunganIds }));
+            setBackendStep2CompletedWarga((prev) => ({ ...prev, ...completedStep2 }));
+            setBackendStep4CompletedWarga((prev) => ({ ...prev, ...completedStep4 }));
+            setBackendStep5CompletedWarga((prev) => ({ ...prev, ...completedStep5 }));
+          }
         }
       } catch (error) {
         console.error("Gagal mengambil status presensi hari ini:", error);
+        if (!cancelled) setPresensiSesiLoading(false);
       }
     };
 
@@ -544,7 +638,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     return () => {
       cancelled = true;
     };
-  }, [activeSubmenu, activeWargaList]);
+  }, [activeSubmenu, activeWargaList, presensiTanggal]);
 
   useEffect(() => {
     if (availableWargaStep2.length > 0) {
@@ -758,16 +852,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     }
 
     let parsedYear = null;
-    let formattedDisplay = String(rawDate);
-
-    if (String(rawDate).includes("-")) {
-      const parts = String(rawDate).split("-");
-      if (parts[0].length === 4) {
-        parsedYear = parseInt(parts[0], 10);
-        formattedDisplay = `${parts[2]}-${parts[1]}-${parts[0]}`;
-      } else if (parts[2].length === 4) {
-        parsedYear = parseInt(parts[2], 10);
-      }
+    const formattedDisplay = formatDateId(rawDate);
+    const isoDateMatch = String(rawDate).match(/^(\d{4})-\d{2}-\d{2}/);
+    const dayFirstDateMatch = String(rawDate).match(/^\d{1,2}[/-]\d{1,2}[/-](\d{4})$/);
+    if (isoDateMatch) parsedYear = Number(isoDateMatch[1]);
+    else if (dayFirstDateMatch) parsedYear = Number(dayFirstDateMatch[1]);
+    else {
+      const parsedDate = new Date(rawDate);
+      if (!Number.isNaN(parsedDate.getTime())) parsedYear = parsedDate.getFullYear();
     }
 
     const currentYear = new Date().getFullYear();
@@ -819,6 +911,66 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     return getRiwayatSkriningTahunanInfo(activeCitizenStep4, activeExamDataStep4);
   }, [activeCitizenStep4, activeExamDataStep4]);
 
+  const [periodicScreeningInfo, setPeriodicScreeningInfo] = useState({ loading: true, lastSixMonthDate: "", lastAnnualDate: "" });
+
+  useEffect(() => {
+    if (!activeCitizenStep4?.id) {
+      setPeriodicScreeningInfo({ loading: false, lastSixMonthDate: "", lastAnnualDate: "" });
+      return undefined;
+    }
+
+    let cancelled = false;
+    setPeriodicScreeningInfo((previous) => ({ ...previous, loading: true }));
+    pemeriksaanService
+      .getAllPemeriksaan({ warga_id: Number(activeCitizenStep4.id) })
+      .then((response) => {
+        const records = Array.isArray(response?.data) ? response.data : [];
+        const hasSixMonthData = (detail) => detail?.is_skrining_6_bulanan === true;
+        const hasAnnualData = (detail) =>
+          detail?.is_skrining_tahunan === true ||
+          detail?.pemeriksaan_tahunan_remaja_putri?.is_skrining_jiwa === true ||
+          detail?.pemeriksaan_tahunan_remaja_putri?.is_periksa_hb === true;
+        const getDate = (record) => String(record?.tanggal || record?.kunjungan?.sesiPosyandu?.tanggal_pelaksanaan || "").slice(0, 10);
+        const datedRecords = records
+          .filter((record) => record?.step4_completed_at && getDate(record))
+          .sort((left, right) => getDate(right).localeCompare(getDate(left)));
+        const lastSixMonthRecord = datedRecords.find((record) => hasSixMonthData(record.detail_skrining));
+        const lastAnnualRecord = datedRecords.find((record) => hasAnnualData(record.detail_skrining));
+
+        if (!cancelled) {
+          setPeriodicScreeningInfo({
+            loading: false,
+            lastSixMonthDate: lastSixMonthRecord ? getDate(lastSixMonthRecord) : "",
+            lastAnnualDate: lastAnnualRecord ? getDate(lastAnnualRecord) : "",
+          });
+        }
+      })
+      .catch((error) => {
+        console.warn("Gagal memuat riwayat skrining berkala:", error);
+        if (!cancelled) setPeriodicScreeningInfo({ loading: false, lastSixMonthDate: "", lastAnnualDate: "" });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCitizenStep4?.id]);
+
+  const sixMonthScreeningDue = useMemo(() => {
+    if (periodicScreeningInfo.loading || !periodicScreeningInfo.lastSixMonthDate) return !periodicScreeningInfo.loading;
+    const referenceDate = new Date(`${presensiTanggal}T00:00:00Z`);
+    const dayOfMonth = referenceDate.getUTCDate();
+    referenceDate.setUTCDate(1);
+    referenceDate.setUTCMonth(referenceDate.getUTCMonth() - 6);
+    const lastDayOfMonth = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth() + 1, 0)).getUTCDate();
+    referenceDate.setUTCDate(Math.min(dayOfMonth, lastDayOfMonth));
+    return periodicScreeningInfo.lastSixMonthDate <= referenceDate.toISOString().slice(0, 10);
+  }, [periodicScreeningInfo, presensiTanggal]);
+
+  const annualScreeningDue = useMemo(() => {
+    if (!periodicScreeningInfo.lastAnnualDate) return true;
+    return periodicScreeningInfo.lastAnnualDate.slice(0, 4) < presensiTanggal.slice(0, 4);
+  }, [periodicScreeningInfo.lastAnnualDate, presensiTanggal]);
+
   // Helper render riwayat pemeriksaan sebelumnya (ditiadakan sesuai masukan kader)
   const renderRiwayatPemeriksaanTerakhir = () => null;
 
@@ -849,6 +1001,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   const [langkah4Form, setLangkah4Form] = useState({
     isSkriningTahunan: false,
+    isSkrining6Bulanan: false,
     batukTbc: "",
     demamTbc: "",
     bbTurunTbc: "",
@@ -914,6 +1067,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     // C3. Pemeriksaan Tahunan SKILAS - Lansia
     skilasOrientasi: "",
     skilasUlangKata: "",
+    skilasMobilisasi: "",
     skilasTesKursi: "",
     skilasBbTurun: "",
     skilasNafsuMakan: "",
@@ -930,6 +1084,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     topikPenyuluhan: "",
     mengikutiKelas: "",
     statusRujukan: "",
+    alasanRujukan: "",
   });
 
   const [imunisasiRowsByWarga, setImunisasiRowsByWarga] = useState({});
@@ -967,6 +1122,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   const [sequentialForm, setSequentialForm] = useState({
     isSkriningTahunan: false,
+    isSkrining6Bulanan: false,
     nik: "",
     nama: "",
     tglLahir: "",
@@ -1054,6 +1210,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     // C3. Pemeriksaan Tahunan SKILAS - Lansia
     skilasOrientasi: "",
     skilasUlangKata: "",
+    skilasMobilisasi: "",
     skilasTesKursi: "",
     skilasBbTurun: "",
     skilasNafsuMakan: "",
@@ -1067,6 +1224,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     topikPenyuluhan: "",
     mengikutiKelas: "",
     statusRujukan: "",
+    alasanRujukan: "",
   });
 
   // Helper setter/getter untuk field Langkah 4 (mendukung kedua mode)
@@ -1109,13 +1267,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     }
   };
 
-  const isRemajaPerempuan =
-    String(activeCitizenStep4?.gender || "")
-      .trim()
-      .toLowerCase() === "perempuan" ||
-    String(activeCitizenStep4?.gender || "")
-      .trim()
-      .toUpperCase() === "P";
+  const activeCitizenGender = activeCitizenStep4?.gender || activeCitizenStep4?._raw?.jenis_kelamin || activeCitizenStep4?.jenis_kelamin || "";
+  const isRemajaPerempuan = ["perempuan", "p", "wanita", "female"].includes(String(activeCitizenGender).trim().toLowerCase());
 
   const getLangkah4Value = (field) => {
     const src = examinationMode === "per-step" ? langkah4Form : sequentialForm;
@@ -1176,9 +1329,11 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       (l4.pumaJk !== undefined && l4.pumaJk !== "") ||
       (l4.skriningJiwa && l4.skriningJiwa !== ""),
     );
+    const hasSixMonthData = backendDetail?.is_skrining_6_bulanan === true || l4.isSkrining6Bulanan === true;
 
     setLangkah4Form({
       isSkriningTahunan: hasAnnualData,
+      isSkrining6Bulanan: hasSixMonthData,
       batukTbc: l4.batukTbc || "",
       demamTbc: l4.demamTbc || "",
       bbTurunTbc: l4.bbTurunTbc || "",
@@ -1238,6 +1393,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       // C3. SKILAS - Lansia
       skilasOrientasi: l4.skilasOrientasi || "",
       skilasUlangKata: l4.skilasUlangKata || "",
+      skilasMobilisasi: l4.skilasMobilisasi || "",
       skilasTesKursi: l4.skilasTesKursi || "",
       skilasBbTurun: l4.skilasBbTurun || "",
       skilasNafsuMakan: l4.skilasNafsuMakan || "",
@@ -1254,10 +1410,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       topikPenyuluhan: l5.topikPenyuluhan || "",
       mengikutiKelas: l5.mengikutiKelas || "",
       statusRujukan: l5.statusRujukan || "",
+      alasanRujukan: l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || "",
     });
 
     setSequentialForm({
       isSkriningTahunan: hasAnnualData,
+      isSkrining6Bulanan: hasSixMonthData,
       nik: currentSelectedWarga.nik || l1.nik || "",
       nama: currentSelectedWarga.nama || l1.nama || "",
       tglLahir: currentSelectedWarga.tglLahir || l1.tglLahir || "",
@@ -1339,6 +1497,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       // C3. SKILAS - Lansia
       skilasOrientasi: l4.skilasOrientasi || "",
       skilasUlangKata: l4.skilasUlangKata || "",
+      skilasMobilisasi: l4.skilasMobilisasi || "",
       skilasTesKursi: l4.skilasTesKursi || "",
       skilasBbTurun: l4.skilasBbTurun || "",
       skilasNafsuMakan: l4.skilasNafsuMakan || "",
@@ -1352,8 +1511,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       topikPenyuluhan: l5.topikPenyuluhan || "",
       mengikutiKelas: l5.mengikutiKelas || "",
       statusRujukan: l5.statusRujukan || "",
+      alasanRujukan: l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || "",
     });
-  }, [currentSelectedWarga, currentExamData, backendPlottingByWarga, activeSubmenu, currentCategory.label]);
+  }, [currentSelectedWarga, currentExamData, activeSubmenu, currentCategory.label]);
 
   // Kalkulasi reaktif skor AKS, hasil SKILAS, dan Skrining Jiwa
   const currentAks = useMemo(() => {
@@ -1405,7 +1565,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       } else if (submenu === "apras") {
         if (!data?.tb || !String(data.tb).trim()) missing.push("Tinggi Badan (TB)");
         if (!data?.lila || !String(data.lila).trim()) missing.push("Lingkar Lengan Atas (LiLA)");
-      } else if (submenu === "usekrem-6-14") {
+      } else if (["usekrem-6-14", "usekrem-15-18"].includes(submenu)) {
         if (!data?.tb || !String(data.tb).trim()) missing.push("Tinggi Badan (TB)");
       } else if (submenu === "usekrem-15-18") {
         if (!data?.tb || !String(data.tb).trim()) missing.push("Tinggi Badan (TB)");
@@ -1443,37 +1603,37 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
     if (step === 4) {
       if (["bayi-0-11", "balita-12-59", "apras"].includes(submenu)) {
-        if (!data?.batukTbc && !data?.batukBesarTbc) missing.push("Gejala Batuk TBC");
-        if (!data?.demamTbc) missing.push("Gejala Demam TBC");
-        if (!data?.bbTurunTbc) missing.push("Gejala BB Turun TBC");
-        if (!data?.lesuTbc) missing.push("Gejala Lesu TBC");
+        if (!hasAnswer(data?.batukTbc) && !hasAnswer(data?.batukBesarTbc)) missing.push("Gejala Batuk TBC");
+        if (!hasAnswer(data?.demamTbc)) missing.push("Gejala Demam TBC");
+        if (!hasAnswer(data?.bbTurunTbc)) missing.push("Gejala BB Turun TBC");
+        if (!hasAnswer(data?.lesuTbc)) missing.push("Gejala Lesu TBC");
       } else if (["bumil", "nifas"].includes(submenu)) {
-        if (!data?.batukTbc && !data?.batukBesarTbc) missing.push("Gejala Batuk TBC");
-        if (!data?.demamTbc) missing.push("Gejala Demam TBC");
-        if (!data?.bbTurunTbc) missing.push("Gejala BB Turun TBC");
-        if (!data?.kontakTbc) missing.push("Kontak Erat Pasien TBC");
+        if (!hasAnswer(data?.batukTbc) && !hasAnswer(data?.batukBesarTbc)) missing.push("Gejala Batuk TBC");
+        if (!hasAnswer(data?.demamTbc)) missing.push("Gejala Demam TBC");
+        if (!hasAnswer(data?.bbTurunTbc)) missing.push("Gejala BB Turun TBC");
+        if (!hasAnswer(data?.kontakTbc)) missing.push("Kontak Erat Pasien TBC");
       } else if (submenu === "usekrem-6-14") {
-        if (!data?.batukTbc && !data?.batukBesarTbc) missing.push("Gejala Batuk TBC");
-        if (!data?.demamTbc) missing.push("Gejala Demam TBC");
-        if (!data?.bbTurunTbc) missing.push("Gejala BB Turun TBC");
-        if (!data?.lesuTbc) missing.push("Gejala Lesu TBC");
+        if (!hasAnswer(data?.batukTbc) && !hasAnswer(data?.batukBesarTbc)) missing.push("Gejala Batuk TBC");
+        if (!hasAnswer(data?.demamTbc)) missing.push("Gejala Demam TBC");
+        if (!hasAnswer(data?.bbTurunTbc)) missing.push("Gejala BB Turun TBC");
+        if (!hasAnswer(data?.lesuTbc)) missing.push("Gejala Lesu TBC");
       } else {
-        if (!data?.batukBesarTbc && !data?.batukTbc) missing.push("Batuk Berdahak ≥ 2 Minggu");
-        if (!data?.nafsuMakanTbc) missing.push("Penurunan Nafsu Makan");
-        if (!data?.bbMenurunTbc) missing.push("BB Menurun Tanpa Sebab");
-        if (!data?.lemahLesuTbc) missing.push("Tubuh Lemas / Lesu");
-        if (!data?.berkeringatMalamTbc) missing.push("Berkeringat Malam");
-        if (!data?.batukDarahTbc) missing.push("Batuk Berdarah");
-        if (!data?.sesakNafasTbc) missing.push("Sesak Napas");
+        if (!hasAnswer(data?.batukBesarTbc) && !hasAnswer(data?.batukTbc)) missing.push("Batuk Berdahak ≥ 2 Minggu");
+        if (!hasAnswer(data?.nafsuMakanTbc)) missing.push("Penurunan Nafsu Makan");
+        if (!hasAnswer(data?.bbMenurunTbc)) missing.push("BB Menurun Tanpa Sebab");
+        if (!hasAnswer(data?.lemahLesuTbc)) missing.push("Tubuh Lemas / Lesu");
+        if (!hasAnswer(data?.berkeringatMalamTbc)) missing.push("Berkeringat Malam");
+        if (!hasAnswer(data?.batukDarahTbc)) missing.push("Batuk Berdarah");
+        if (!hasAnswer(data?.sesakNafasTbc)) missing.push("Sesak Napas");
       }
 
       if (submenu === "bumil") {
-        if (!data?.pemberianTtd && !data?.jumlahTtd) missing.push("Pemberian TTD");
-        if (!data?.rutinTtd) missing.push("Rutin Konsumsi TTD");
+        if (!hasAnswer(data?.pemberianTtd) && !hasAnswer(data?.jumlahTtd)) missing.push("Pemberian TTD");
+        if (!hasAnswer(data?.rutinTtd)) missing.push("Rutin Konsumsi TTD");
       } else if (submenu === "nifas") {
-        if (!data?.jumlahVitA && !data?.rutinVitA) missing.push("Pemberian Kapsul Vitamin A");
-        if (!data?.menyusui) missing.push("Status Menyusui");
-        if (!data?.kbPascaPersalinan) missing.push("KB Pasca Persalinan");
+        if (!hasAnswer(data?.jumlahVitA) && !hasAnswer(data?.rutinVitA)) missing.push("Pemberian Kapsul Vitamin A");
+        if (!hasAnswer(data?.menyusui)) missing.push("Status Menyusui");
+        if (!hasAnswer(data?.kbPascaPersalinan)) missing.push("KB Pasca Persalinan");
       } else if (submenu === "dewasa") {
         if (data?.isSkriningTahunan) {
           if (data?.jiwaQ1 === undefined || data?.jiwaQ1 === "") missing.push("Skrining Jiwa Pertanyaan 1");
@@ -1481,6 +1641,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
           if (data?.jiwaQ3 === undefined || data?.jiwaQ3 === "") missing.push("Skrining Jiwa Pertanyaan 3");
           if (data?.jiwaQ4 === undefined || data?.jiwaQ4 === "") missing.push("Skrining Jiwa Pertanyaan 4");
         }
+      } else if (["usekrem-6-14", "usekrem-15-18"].includes(submenu) && data?.isSkriningTahunan) {
+        if (!data?.skriningJiwa) missing.push("Status Skrining Kesehatan Jiwa");
+        if (isRemajaPerempuan && !data?.periksaHb) missing.push("Status Pemeriksaan Hb");
       }
     }
 
@@ -1494,6 +1657,15 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       if (!statusRujukan) {
         missing.push("Status Rujukan");
       }
+      if (statusRujukan === "Rujuk ke Puskesmas / Pustu" && !step5AutoReferral.perluRujuk && !String(data?.alasanRujukan || "").trim()) {
+        missing.push("Indikasi Rujukan");
+      }
+    }
+
+    if (step === 4 && data?.isSkrining6Bulanan && sixMonthScreeningDue && ["dewasa", "lansia", "usekrem-6-14", "usekrem-15-18"].includes(submenu)) {
+      for (const [field, label] of [["mataKanan", "Mata Kanan"], ["mataKiri", "Mata Kiri"], ["telingaKanan", "Telinga Kanan"], ["telingaKiri", "Telinga Kiri"]]) {
+        if (!hasAnswer(data?.[field])) missing.push(`Skrining 6 Bulanan ${label}`);
+      }
     }
 
     return {
@@ -1503,9 +1675,54 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     };
   };
 
-  const getBackendCategory = (submenu) => (submenu === "nifas" ? "busui" : submenu);
+  const getBackendCategory = (submenu) => ({
+    nifas: "busui",
+    "bayi-0-11": "bayi",
+    "balita-12-59": "balita",
+    "usekrem-6-14": "uskrem_6_14",
+    "usekrem-15-18": "uskrem_15_18",
+  }[submenu] || submenu);
 
   const getWargaForId = (id) => activeWargaList.find((w) => String(w.id) === String(id)) || null;
+
+  const fetchBackendPlottingForWarga = useCallback(async (wargaId, preferredExamId = null) => {
+    const targetId = String(wargaId || "");
+    const warga = getWargaForId(targetId);
+    if (!warga || !targetId) return null;
+
+    let examId = preferredExamId ?? globalPemeriksaanData?.[targetId]?.id ?? globalPemeriksaanData?.[warga.id]?.id ?? null;
+
+    if (!examId) {
+      try {
+        const session = await getSessionForWarga(warga, presensiTanggal);
+        const response = await pemeriksaanService.getAllPemeriksaan({
+          page: 1,
+          limit: 20,
+          warga_id: Number(warga.id),
+          sesi_posyandu_id: Number(session.id),
+        });
+        const items = Array.isArray(response?.data) ? response.data : Array.isArray(response?.data?.items) ? response.data.items : [];
+        examId = items[0]?.id ?? null;
+      } catch (error) {
+        console.warn("Gagal mencari pemeriksaan backend untuk plotting:", error);
+        return null;
+      }
+    }
+
+    if (!examId) return null;
+
+    try {
+      const res = await pemeriksaanService.getStep3Plotting(examId);
+      const data = res?.data || null;
+      if (data) {
+        setBackendPlottingByWarga((prev) => ({ ...prev, [targetId]: data }));
+      }
+      return data;
+    } catch (error) {
+      console.warn(`Gagal mengambil plotting untuk warga ${targetId}:`, error);
+      return null;
+    }
+  }, [globalPemeriksaanData, getWargaForId, presensiTanggal]);
 
   const saveCompleteExamination = async (formData, isFromSequential = false) => {
     const targetId = isFromSequential ? selectedWargaId : selectedWargaStep5;
@@ -1522,7 +1739,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     }
 
     try {
-      const kunjunganId = kunjunganIdByWarga[String(targetWarga.id)] || (await ensureKunjunganId(targetWarga));
+      const kunjunganId = kunjunganIdByWarga[String(targetWarga.id)] || (await ensureKunjunganId(targetWarga, presensiTanggal));
       setKunjunganIdByWarga((prev) => ({ ...prev, [String(targetWarga.id)]: kunjunganId }));
 
       const step2Res = await pemeriksaanService.saveStep2({
@@ -1547,8 +1764,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         kunjungan_id: Number(kunjunganId),
         detail_skrining: screeningPayload,
         is_skrining_tahunan: Boolean(formData.isSkriningTahunan),
+        is_skrining_6_bulanan: Boolean(formData.isSkrining6Bulanan) && ["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(getBackendCategory(activeSubmenu)),
       });
       if (!step4Res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+      setPeriodicScreeningInfo((previous) => ({
+        loading: false,
+        lastSixMonthDate: formData.isSkrining6Bulanan ? presensiTanggal : previous.lastSixMonthDate,
+        lastAnnualDate: formData.isSkriningTahunan ? presensiTanggal : previous.lastAnnualDate,
+      }));
       await saveImunisasiRows(targetWarga.id, imunisasiRowsByWarga[String(targetWarga.id)] || emptyImunisasiRows());
 
       const statusRujukan = String(formData.statusRujukan || "").trim();
@@ -1596,7 +1819,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       for (const id of hadirIds) {
         const w = getWargaForId(id);
         if (!w) continue;
-        const kunjunganId = await ensureKunjunganId(w);
+        const kunjunganId = await ensureKunjunganId(w, presensiTanggal);
         setKunjunganIdByWarga((prev) => ({ ...prev, [String(id)]: kunjunganId }));
         setBackendRegisteredWarga((prev) => ({ ...prev, [String(id)]: true }));
         setKehadiranWarga((prev) => ({ ...prev, [String(id)]: true }));
@@ -1679,7 +1902,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     }
     const warga = getWargaForId(selectedWargaStep2);
     try {
-      const kunjunganId = kunjunganIdByWarga[String(selectedWargaStep2)] || (await ensureKunjunganId(warga));
+      const kunjunganId = kunjunganIdByWarga[String(selectedWargaStep2)] || (await ensureKunjunganId(warga, presensiTanggal));
       const res = await pemeriksaanService.saveStep2({
         kunjungan_id: Number(kunjunganId),
         bb_kg: Number(langkah2Form.bb),
@@ -1705,11 +1928,33 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       const nextWarga = availableWargaStep2.find((item) => String(item.id) !== savedWargaId);
       setLangkah2Form({ bb: "", tb: "", lila: "", lk: "", lp: "", tensiSistol: "", tensiDiastol: "", gulaDarah: "" });
       setSelectedWargaStep2(nextWarga ? String(nextWarga.id) : "");
+      await fetchBackendPlottingForWarga(savedWargaId, res.data.id);
       showSuccess("Langkah 2 Tersimpan", `Pengukuran untuk "${warga?.nama || "Warga"}" berhasil disimpan ke database.`);
     } catch (err) {
       showWarning("Gagal Menyimpan Pengukuran", err?.message || "Pengukuran gagal disimpan ke backend.");
     }
   };
+
+  useEffect(() => {
+    if (examinationMode !== "per-step" || !selectedWargaStep3) return undefined;
+
+    const targetId = String(selectedWargaStep3);
+    if (backendPlottingByWarga[targetId]) return undefined;
+
+    let cancelled = false;
+
+    const hydrateStep3Plotting = async () => {
+      const plot = await fetchBackendPlottingForWarga(targetId);
+      if (cancelled || !plot) return;
+      setSelectedWargaStep3(targetId);
+    };
+
+    hydrateStep3Plotting();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [examinationMode, selectedWargaStep3, backendPlottingByWarga, fetchBackendPlottingForWarga]);
 
   const handleSaveLangkah3 = async (e) => {
     e.preventDefault();
@@ -1743,7 +1988,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     const targetId = String(selectedWargaStep4);
     const warga = getWargaForId(targetId);
     try {
-      const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga));
+      const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga, presensiTanggal));
       const screeningForm = ["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && !isRemajaPerempuan ? { ...langkah4Form, periksaHb: "" } : langkah4Form;
 
       const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), screeningForm);
@@ -1751,8 +1996,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         kunjungan_id: Number(kunjunganId),
         detail_skrining: screeningPayload,
         is_skrining_tahunan: Boolean(langkah4Form.isSkriningTahunan),
+        is_skrining_6_bulanan: Boolean(langkah4Form.isSkrining6Bulanan) && ["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(getBackendCategory(activeSubmenu)),
       });
       if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+      setPeriodicScreeningInfo((previous) => ({
+        loading: false,
+        lastSixMonthDate: langkah4Form.isSkrining6Bulanan ? presensiTanggal : previous.lastSixMonthDate,
+        lastAnnualDate: langkah4Form.isSkriningTahunan ? presensiTanggal : previous.lastAnnualDate,
+      }));
       await saveImunisasiRows(targetId, imunisasiRowsByWarga[targetId] || emptyImunisasiRows());
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
       setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
@@ -1779,11 +2030,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     const targetId = String(selectedWargaStep5);
     const warga = getWargaForId(targetId);
     try {
-      const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga));
+      const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga, presensiTanggal));
       const res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
         topik_penyuluhan: String(langkah5Form.topikPenyuluhan || "").trim(),
         is_perlu_rujukan: String(langkah5Form.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu",
+        alasan_rujukan: String(langkah5Form.alasanRujukan || "").trim() || undefined,
       });
       if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
 
@@ -1792,6 +2044,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         ...langkah5Form,
         topikPenyuluhan: res?.data?.topik_penyuluhan ?? langkah5Form.topikPenyuluhan ?? "",
         statusRujukan: savedRujukanStatus,
+        alasanRujukan: res?.referral_reasons?.manual || langkah5Form.alasanRujukan || "",
       };
 
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
@@ -1828,7 +2081,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       if (w) {
         setKehadiranWarga((prev) => ({ ...prev, [String(w.id)]: true }));
         try {
-          const kunjunganId = kunjunganIdByWarga[String(w.id)] || (await ensureKunjunganId(w));
+          const kunjunganId = kunjunganIdByWarga[String(w.id)] || (await ensureKunjunganId(w, presensiTanggal));
           setKunjunganIdByWarga((prev) => ({ ...prev, [String(w.id)]: kunjunganId }));
           setCompletedSteps((prev) => ({ ...prev, [String(w.id)]: { ...(prev[String(w.id)] || {}), step1: true } }));
         } catch (err) {
@@ -1847,7 +2100,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       }
       const w = getWargaForId(selectedWargaId);
       try {
-        const kunjunganId = kunjunganIdByWarga[String(selectedWargaId)] || (await ensureKunjunganId(w));
+        const kunjunganId = kunjunganIdByWarga[String(selectedWargaId)] || (await ensureKunjunganId(w, presensiTanggal));
         const res = await pemeriksaanService.saveStep2({
           kunjungan_id: Number(kunjunganId),
           bb_kg: Number(sequentialForm.bb),
@@ -1889,7 +2142,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         return;
       }
       try {
-        const kunjunganId = kunjunganIdByWarga[String(selectedWargaId)] || (await ensureKunjunganId(getWargaForId(selectedWargaId)));
+        const kunjunganId = kunjunganIdByWarga[String(selectedWargaId)] || (await ensureKunjunganId(getWargaForId(selectedWargaId), presensiTanggal));
         const screeningForm = ["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && !isRemajaPerempuan ? { ...sequentialForm, periksaHb: "" } : sequentialForm;
 
         const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), screeningForm);
@@ -1897,8 +2150,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
           kunjungan_id: Number(kunjunganId),
           detail_skrining: screeningPayload,
           is_skrining_tahunan: Boolean(sequentialForm.isSkriningTahunan),
+          is_skrining_6_bulanan: Boolean(sequentialForm.isSkrining6Bulanan) && ["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(getBackendCategory(activeSubmenu)),
         });
         if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+        setPeriodicScreeningInfo((previous) => ({
+          loading: false,
+          lastSixMonthDate: sequentialForm.isSkrining6Bulanan ? presensiTanggal : previous.lastSixMonthDate,
+          lastAnnualDate: sequentialForm.isSkriningTahunan ? presensiTanggal : previous.lastAnnualDate,
+        }));
         await saveImunisasiRows(selectedWargaId, imunisasiRowsByWarga[String(selectedWargaId)] || emptyImunisasiRows());
         setKunjunganIdByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: kunjunganId }));
         setPemeriksaanByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: res.data.id }));
@@ -1911,10 +2170,50 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     }
   };
 
-  const handleTriggerSequentialPreview = (e) => {
+  const hydrateSequentialStep2FromBackend = async () => {
+    const warga = getWargaForId(selectedWargaId);
+    if (!warga) return sequentialForm;
+
+    try {
+      const session = await getSessionForWarga(warga, presensiTanggal);
+      const response = await pemeriksaanService.getAllPemeriksaan({
+        page: 1,
+        limit: 100,
+        warga_id: Number(warga.id),
+        sesi_posyandu_id: Number(session.id),
+      });
+      const records = Array.isArray(response?.data) ? response.data : [];
+      const record = records.find((item) => Number(item?.kunjungan?.sesi_posyandu_id || item?.kunjungan?.sesiPosyandu?.id) === Number(session.id)) || records[0];
+      if (!record) return sequentialForm;
+
+      const backendMeasurements = {
+        bb: record.bb_kg,
+        tb: record.tb_cm,
+        lila: record.lila_cm,
+        lk: record.lingkar_kepala_cm,
+        lp: record.lingkar_perut_cm,
+        tensiSistol: record.td_sistole,
+        tensiDiastol: record.td_diastole,
+        gulaDarah: record.kadar_gula,
+      };
+      const hydratedForm = { ...sequentialForm };
+      Object.entries(backendMeasurements).forEach(([field, value]) => {
+        if (value !== undefined && value !== null && value !== "") hydratedForm[field] = String(value);
+      });
+      setSequentialForm(hydratedForm);
+      if (record.id) setPemeriksaanByWarga((prev) => ({ ...prev, [String(warga.id)]: record.id }));
+      return hydratedForm;
+    } catch (error) {
+      console.warn("Gagal memulihkan pengukuran sesi aktif dari backend:", error);
+      return sequentialForm;
+    }
+  };
+
+  const handleTriggerSequentialPreview = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    const formData = await hydrateSequentialStep2FromBackend();
     for (const s of [1, 2, 4, 5]) {
-      const val = validateStepData(s, sequentialForm, activeSubmenu);
+      const val = validateStepData(s, formData, activeSubmenu);
       if (!val.isValid) {
         showWarning(`Data Langkah ${s} Belum Lengkap`, val.errorMessage);
         setActiveStep(s);
@@ -1924,17 +2223,18 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     setShowSequentialPreviewModal(true);
   };
 
-  const handleSaveSequentialAll = (e) => {
+  const handleSaveSequentialAll = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    const formData = await hydrateSequentialStep2FromBackend();
     for (const s of [1, 2, 4, 5]) {
-      const val = validateStepData(s, sequentialForm, activeSubmenu);
+      const val = validateStepData(s, formData, activeSubmenu);
       if (!val.isValid) {
         showWarning(`Data Langkah ${s} Belum Lengkap`, val.errorMessage);
         setActiveStep(s);
         return;
       }
     }
-    saveCompleteExamination(sequentialForm, true);
+    saveCompleteExamination(formData, true);
   };
 
   const activeSourceDataL3 = useMemo(() => {
@@ -1957,7 +2257,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   }, [globalPemeriksaanData, activeStep5TargetId]);
 
   // Step 5 harus mengambil keputusan rujukan yang sudah tersimpan di backend
-  // untuk SESI HARI INI, bukan mengandalkan default state frontend.
+  // untuk sesi yang dipilih, bukan mengandalkan default state frontend.
   useEffect(() => {
     if (activeStep !== 5 || !activeStep5TargetId) return undefined;
 
@@ -1967,7 +2267,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         const warga = getWargaForId(activeStep5TargetId);
         if (!warga) return;
 
-        const session = await getTodaySessionForWarga(warga);
+        const session = await getSessionForWarga(warga, presensiTanggal);
         const response = await pemeriksaanService.getAllPemeriksaan({
           page: 1,
           limit: 10,
@@ -1978,6 +2278,13 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         const items = Array.isArray(response?.data) ? response.data : Array.isArray(response?.data?.items) ? response.data.items : [];
         const backendExam = items[0] || activeStep5BackendExam;
         if (!backendExam || cancelled) return;
+
+        if (backendExam.id) {
+          const plottingResponse = await pemeriksaanService.getStep3Plotting(backendExam.id);
+          if (!cancelled && plottingResponse?.data) {
+            setBackendPlottingByWarga((previous) => ({ ...previous, [String(activeStep5TargetId)]: plottingResponse.data }));
+          }
+        }
 
         const persistedRujukan = backendExam?.is_perlu_rujukan === true || Boolean(backendExam?.rujukan) ? "Rujuk ke Puskesmas / Pustu" : backendExam?.is_perlu_rujukan === false ? "Tidak Perlu Rujukan" : "";
         const persistedTopik = backendExam?.topik_penyuluhan ?? "";
@@ -2006,57 +2313,31 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     return () => {
       cancelled = true;
     };
-  }, [activeStep, examinationMode, activeStep5TargetId]);
+  }, [activeStep, examinationMode, activeStep5TargetId, presensiTanggal]);
 
-  // Auto-rujukan Step 5 dihitung sekali di scope komponen agar dapat dipakai
-  // secara konsisten baik pada mode per-step maupun sequential.
+  const activeStep5Plotting = useMemo(() => {
+    if (!activeStep5TargetId) return null;
+    return backendPlottingByWarga[String(activeStep5TargetId)] || null;
+  }, [backendPlottingByWarga, activeStep5TargetId]);
+
+  // Step 5 uses the current backend plot and its combined referral reasons.
   const step5AutoReferral = useMemo(() => {
-    const form4 = examinationMode === "per-step" ? langkah4Form : sequentialForm;
-
-    const tbcFields = ["batukTbc", "demamTbc", "bbTurunTbc", "kontakTbc", "lesuTbc", "batukBesarTbc", "nafsuMakanTbc", "bbMenurunTbc", "lemahLesuTbc", "berkeringatMalamTbc", "batukDarahTbc", "sesakNafasTbc"];
-    const tbcRisiko = tbcFields.some((field) => form4[field] === "Ya");
-
-    const pr = plottingResult;
-    const imtRisiko = Boolean(pr && pr.imtKey && pr.imtKey !== "normal");
-    const lilaRisiko = Boolean(
-      pr &&
-      (activeSubmenu === "lansia"
-        ? pr.lilaLansiaKey && pr.lilaLansiaKey !== "normal"
-        : activeSubmenu === "dewasa" || activeSubmenu === "bumil" || activeSubmenu === "nifas"
-          ? pr.lilaDewasaKey && pr.lilaDewasaKey !== "normal"
-          : ["bayi-0-11", "balita-12-59"].includes(activeSubmenu)
-            ? pr.lilaBayiKey && pr.lilaBayiKey !== "normal"
-            : activeSubmenu === "apras"
-              ? pr.lilaAprasKey && pr.lilaAprasKey !== "normal"
-              : false),
-    );
-    const tensiRisiko = Boolean(pr && pr.tensiAdultKey && pr.tensiAdultKey !== "normal");
-    const gulaRisiko = Boolean(pr?.isGulaRisiko);
-    const lpRisiko = Boolean(pr && pr.lpPlottingKey && pr.lpPlottingKey !== "normal");
-    const aksRisiko = activeSubmenu === "lansia" && Boolean(currentAks.perluRujuk);
-    const skilasRisiko = activeSubmenu === "lansia" && Boolean(currentSkilas.adaRisiko);
-
-    const reasons = [];
-    if (tbcRisiko) reasons.push("Gejala TBC Positif");
-    if (imtRisiko) reasons.push(`IMT: ${pr?.imtDewasaStatus || pr?.imtAprasStatus || pr?.imtUsekremStatus || pr?.imtStatus || "Berisiko"}`);
-    if (lilaRisiko) reasons.push("LiLA Berisiko / KEK");
-    if (tensiRisiko) reasons.push(`Tensi: ${pr?.tensiStatus || pr?.tensiRemajaStatus || "Berisiko"}`);
-    if (gulaRisiko) reasons.push("Gula Darah Risiko");
-    if (lpRisiko) reasons.push("Lingkar Perut Berisiko");
-    if (aksRisiko) reasons.push(`AKS: ${currentAks.kategori}`);
-    if (skilasRisiko) reasons.push(`SKILAS: ${currentSkilas.issues.join(", ")}`);
+    const plotting = activeStep5Plotting;
+    const plotResult = plotting?.hasil_plot || {};
+    const reasons = Array.isArray(plotting?.referral_reasons) ? plotting.referral_reasons : [];
+    const hasPlotRisk = Boolean(plotResult.is_perlu_rujukan || plotResult.status_plot === "merah" || Object.values(plotResult).some((item) => item?.is_merah === true));
 
     return {
-      perluRujuk: tbcRisiko || imtRisiko || lilaRisiko || tensiRisiko || gulaRisiko || lpRisiko || aksRisiko || skilasRisiko,
+      perluRujuk: reasons.length > 0 || hasPlotRisk,
       reasons,
     };
-  }, [examinationMode, langkah4Form, sequentialForm, plottingResult, activeSubmenu, currentAks, currentSkilas]);
+  }, [activeStep5Plotting]);
 
   // Sinkronisasi status rujukan hanya dari hasil backend plotting.
   useEffect(() => {
     if (activeStep !== 5) return;
 
-    const perluRujukan = Boolean(activeBackendPlotting?.hasil_plot?.is_perlu_rujukan || step5AutoReferral?.perluRujuk);
+    const perluRujukan = Boolean(activeStep5Plotting?.hasil_plot?.is_perlu_rujukan || step5AutoReferral?.perluRujuk);
 
     const effectiveStatus = perluRujukan ? "Rujuk ke Puskesmas / Pustu" : "Tidak Perlu Rujukan";
 
@@ -2079,7 +2360,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         };
       });
     }
-  }, [activeStep, activeBackendPlotting, examinationMode, step5AutoReferral]);
+  }, [activeStep, activeStep5Plotting, examinationMode, step5AutoReferral]);
 
   return (
     <div className="container-fluid p-0">
@@ -2105,6 +2386,15 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                 className={`btn btn-sm rounded-pill px-3 py-1.5 fw-semibold transition-all ${examinationMode === "per-step" ? "bg-white text-dark shadow-sm border" : "text-secondary border-0"}`}
                 style={{ fontSize: "0.825rem" }}
                 onClick={() => {
+                  const targetId = String(selectedWargaId || selectedWargaStep4 || "");
+                  setSelectedWargaStep2(targetId);
+                  setSelectedWargaStep3(targetId);
+                  setSelectedWargaStep4(targetId);
+                  setSelectedWargaStep5(targetId);
+                  setLangkah1Form((previous) => ({ ...previous, ...sequentialForm }));
+                  setLangkah2Form((previous) => ({ ...previous, ...sequentialForm }));
+                  setLangkah4Form((previous) => ({ ...previous, ...sequentialForm }));
+                  setLangkah5Form((previous) => ({ ...previous, ...sequentialForm }));
                   setExaminationMode("per-step");
                 }}
               >
@@ -2118,6 +2408,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                   fontSize: "0.825rem",
                 }}
                 onClick={() => {
+                  const targetId = String(selectedWargaStep4 || selectedWargaStep2 || selectedWargaStep3 || selectedWargaStep5 || selectedWargaId || "");
+                  if (targetId) setSelectedWargaId(targetId);
+                  setSequentialForm((previous) => ({ ...previous, ...langkah1Form, ...langkah2Form, ...langkah4Form, ...langkah5Form }));
                   setExaminationMode("sequential");
                 }}
               >
@@ -2208,6 +2501,40 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
               {/* Header Langkah 1 */}
               <div className="mb-4">
                 <h3 className="fw-bold text-dark mb-1">Pendaftaran &amp; Presensi Sasaran</h3>
+                    <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-3 mt-2 text-dark">
+                  <Calendar size={17} className="text-primary flex-shrink-0" />
+                  <div>
+                    <div className="small text-muted">Sesi Presensi</div>
+                    {presensiSesiLoading ? (
+                      <div className="small fw-semibold">Memuat sesi Posyandu...</div>
+                    ) : presensiSesiAktif ? (
+                      <div className="d-flex flex-wrap align-items-center gap-2">
+                        <span className="small fw-semibold">
+                          {formatDateId(presensiSesiAktif.tanggal_pelaksanaan)}
+                          {presensiSesiAktif.lokasi ? ` · ${presensiSesiAktif.lokasi}` : ""}
+                        </span>
+                        <span className={`badge ${presensiSesiAktif.status === "open" ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary"}`}>
+                          {presensiSesiAktif.status === "open" ? "Dibuka" : "Ditutup"}
+                        </span>
+                      </div>
+                      ) : (
+                      <div className="small fw-semibold text-danger">Belum ada sesi Posyandu pada tanggal ini</div>
+                    )}
+                  </div>
+                      <div>
+                        <label className="form-label small text-muted mb-1" htmlFor="presensi-session-date">Tanggal sesi (maksimal 7 hari)</label>
+                        <input
+                          id="presensi-session-date"
+                          type="date"
+                          className="form-control form-control-sm"
+                          min={getLocalDateOffset(-6)}
+                          max={getLocalDateOnly()}
+                          value={presensiTanggal}
+                          onChange={(event) => setPresensiTanggal(event.target.value)}
+                        />
+                      </div>
+                </div>
+                    <div className="small text-muted mt-2">Sesi berstatus Dibuka dapat diproses pada hari pelaksanaan sampai enam hari setelahnya. Sesi Ditutup tidak dapat diubah.</div>
               </div>
 
               {/* =================================================================== */}
@@ -2218,7 +2545,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                   <div>
                     <h5 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
                       <Users size={20} className="text-primary" />
-                      <span>Daftar Presensi Sasaran Hari Ini</span>
+                      <span>Daftar Presensi Sasaran</span>
                     </h5>
                   </div>
                   <div className="d-flex align-items-center gap-2">
@@ -2268,7 +2595,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                     <tbody>
                       {filteredSasaranLangkah1.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="text-center py-5 text-muted">
+                          <td colSpan={activeSubmenu === "bumil" || activeSubmenu === "nifas" ? 8 : 7} className="text-center py-5 text-muted">
                             {searchWargaQuery.trim() ? (
                               <div className="py-2">
                                 <div className="fw-semibold text-dark mb-1">Sasaran Tidak Ditemukan</div>
@@ -2297,7 +2624,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           const isAlreadyRegistered = backendRegisteredWarga[wId] === true;
                           const isHadir = presenceStatus === true;
                           const isTidakHadir = presenceStatus === false;
-                          const isBelumDatang = !isAlreadyRegistered && presenceStatus === undefined;
+                              const isBelumDatang = !isAlreadyRegistered && presenceStatus === undefined;
+                              const canMarkAttendance = presensiSesiAktif?.status === "open";
                           const isSelectedSequential = examinationMode === "sequential" && selectedWargaId === wId;
                           const rawTglLahir = warga.tglLahir || warga.tanggal_lahir || warga._raw?.tanggal_lahir || warga._raw?.tglLahir || "";
                           const displayTgl = rawTglLahir ? String(rawTglLahir).slice(0, 10) : "-";
@@ -2411,7 +2739,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                   </select>
                                   <div className="text-muted small d-flex align-items-center gap-1" style={{ fontSize: "0.74rem" }}>
                                     <span>Lahir Bayi:</span>
-                                    <span className="fw-semibold text-dark">{warga.tglPersalinan || warga.tglLahirBayi || ""}</span>
+                                    <span className="fw-semibold text-dark">{formatDateId(warga.tglPersalinan || warga.tglLahirBayi)}</span>
                                   </div>
                                 </td>
                               )}
@@ -2430,6 +2758,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                   >
                                     <UserCheck size={12} className="me-1" />
                                     Sudah Datang
+                                  </span>
+                                ) : !canMarkAttendance ? (
+                                  <span className="badge rounded-pill px-3 py-2 fw-semibold bg-secondary-subtle text-secondary border">
+                                    Sesi belum dibuka
                                   </span>
                                 ) : (
                                   <div className="d-flex flex-column align-items-center gap-1.5">
@@ -2542,12 +2874,13 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5"
                         style={{ backgroundColor: "#2b2e4a" }}
                         onClick={handleSavePresensiLangkah1}
+                        disabled={presensiSesiAktif?.status !== "open"}
                       >
                         <UserCheck size={16} />
                         <span>Simpan</span>
                       </button>
                     ) : (
-                      <button type="button" className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }} onClick={handleNextSequentialStep}>
+                      <button type="button" className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }} onClick={handleNextSequentialStep} disabled={presensiSesiAktif?.status !== "open"}>
                         <span>Lanjut ke Langkah 2</span>
                         <ArrowRight size={16} />
                       </button>
@@ -3039,8 +3372,16 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                   </div>
 
                   {/* B. Pemeriksaan 6 Bulan Sekali */}
-                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
-                    <h5 className="fw-bold text-dark mb-3">B. Pemeriksaan 6 Bulan Sekali</h5>
+                  <PeriodicScreeningPanel
+                    id={`screening-6-month-${activeSubmenu}`}
+                    title="B. Pemeriksaan 6 Bulan Sekali"
+                    description="Pemeriksaan penglihatan dan pendengaran yang dilakukan setiap enam bulan bila sudah jatuh tempo."
+                    due={sixMonthScreeningDue}
+                    loading={periodicScreeningInfo.loading}
+                    checked={getLangkah4Value("isSkrining6Bulanan")}
+                    lastCompletedDate={periodicScreeningInfo.lastSixMonthDate}
+                    onToggle={(checked) => updateLangkah4Value("isSkrining6Bulanan", checked)}
+                  >
 
                     <h6 className="fw-bold text-primary mb-2">Tes Penglihatan (Hitung Jari)</h6>
                     <div className="row g-3 mb-3">
@@ -3123,10 +3464,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         </select>
                       </div>
                     </div>
-                  </div>
+                  </PeriodicScreeningPanel>
 
                   {/* C. PEMERIKSAAN TAHUNAN */}
-                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                  <div hidden={!annualScreeningDue || periodicScreeningInfo.loading} className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
                     <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
                       <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
@@ -3189,7 +3530,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                     )}
                   </div>
 
-                  {Boolean(getLangkah4Value("isSkriningTahunan")) && (
+                  {Boolean(getLangkah4Value("isSkriningTahunan")) && annualScreeningDue && !periodicScreeningInfo.loading && (
                     <>
                       {/* C1. Skrining PPOK PUMA (Khusus Usia ≥ 40 Tahun / Lansia) */}
                       <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
@@ -3217,10 +3558,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               (np === "Ya" || np === 1 ? 1 : 0) +
                               (dh === "Ya" || dh === 1 ? 1 : 0) +
                               (bt === "Ya" || bt === 1 ? 1 : 0);
-                            const isRisiko = score >= 6;
+                            const isRisiko = score > 6;
+                            const statusText = score === 6 ? "Skor Ambigu" : isRisiko ? "Risiko Tinggi PPOK" : "Risiko Rendah PPOK";
+                            const badgeClass = score === 6 ? "bg-warning-subtle text-warning-emphasis" : isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success";
                             return (
-                              <span className={`badge ${isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success"} px-3 py-2 rounded-pill fw-bold`}>
-                                Skor PUMA: {score} ({isRisiko ? "Risiko Tinggi PPOK" : "Risiko Rendah PPOK"})
+                              <span className={`badge ${badgeClass} px-3 py-2 rounded-pill fw-bold`}>
+                                Skor PUMA: {score} ({statusText})
                               </span>
                             );
                           })()}
@@ -3309,7 +3652,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       </div>
 
                       {/* C2. SKRINING KESEHATAN JIWA (DEWASA) SESUAI FORMAT BUKU KIA / KEMENKES */}
-                      {(activeSubmenu === "dewasa" || activeSubmenu === "lansia" || activeSubmenu === "usekrem-6-14" || activeSubmenu === "usekrem-15-18") && (
+                      {activeSubmenu === "dewasa" && (
                         <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
                           <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 pb-2 border-bottom gap-2">
                             <div>
@@ -3840,6 +4183,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                     </td>
                                   </tr>
                                   <tr>
+                                    <td className="px-3 py-2 small text-dark ps-4">&bull; Ada keterbatasan mobilisasi</td>
+                                    <td className="px-3 py-2">
+                                      <YesNoRadio name={`skilasMobilisasi_${examinationMode}`} value={getLangkah4Value("skilasMobilisasi")} onChange={(val) => updateLangkah4Value("skilasMobilisasi", val)} />
+                                    </td>
+                                  </tr>
+                                  <tr>
                                     <td className="px-3 py-2 small text-dark ps-4">&bull; Tes berdiri dari kursi</td>
                                     <td className="px-3 py-2">
                                       <YesNoRadio name={`skilasTesKursi_${examinationMode}`} value={getLangkah4Value("skilasTesKursi")} onChange={(val) => updateLangkah4Value("skilasTesKursi", val)} />
@@ -4010,48 +4359,35 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                     <h5 className="fw-bold text-dark mb-3">Skrining Gejala TBC</h5>
 
                     <div className="row g-3">
-                      <div className="col-12 col-md-6">
-                        <YesNoCard label="Batuk > 2 minggu" name={`batukBesarTbc_u1518_${examinationMode}`} value={getLangkah4Value("batukBesarTbc")} onChange={(val) => updateLangkah4Value("batukBesarTbc", val)} />
-                      </div>
-
-                      <div className="col-12 mt-2">
-                        <div className="p-2 px-3 rounded-2 bg-light fw-bold text-dark small border-start border-primary border-3">Batuk &lt; 2 minggu dengan tambahan:</div>
+                      <div className="col-md-6">
+                        <YesNoCard label="Batuk ≥ 2 minggu" name={`batukTbc_u1518_${examinationMode}`} value={getLangkah4Value("batukTbc")} onChange={(val) => updateLangkah4Value("batukTbc", val)} />
                       </div>
 
                       <div className="col-md-6">
-                        <YesNoCard label="a. Nafsu makan menurun" name={`nafsuMakanTbc_u1518_${examinationMode}`} value={getLangkah4Value("nafsuMakanTbc")} onChange={(val) => updateLangkah4Value("nafsuMakanTbc", val)} />
+                        <YesNoCard label="Demam hilang timbul &gt; 2 minggu" name={`demamTbc_u1518_${examinationMode}`} value={getLangkah4Value("demamTbc")} onChange={(val) => updateLangkah4Value("demamTbc", val)} />
                       </div>
 
                       <div className="col-md-6">
-                        <YesNoCard label="b. Berat badan menurun" name={`bbMenurunTbc_u1518_${examinationMode}`} value={getLangkah4Value("bbMenurunTbc")} onChange={(val) => updateLangkah4Value("bbMenurunTbc", val)} />
+                        <YesNoCard label="Berat badan turun/tidak naik dalam 2 bulan" name={`bbTurunTbc_u1518_${examinationMode}`} value={getLangkah4Value("bbTurunTbc")} onChange={(val) => updateLangkah4Value("bbTurunTbc", val)} />
                       </div>
 
                       <div className="col-md-6">
-                        <YesNoCard label="c. Lemah, letih, lesu" name={`lemahLesuTbc_u1518_${examinationMode}`} value={getLangkah4Value("lemahLesuTbc")} onChange={(val) => updateLangkah4Value("lemahLesuTbc", val)} />
-                      </div>
-
-                      <div className="col-md-6">
-                        <YesNoCard
-                          label="d. Berkeringat malam hari tanpa kegiatan fisik"
-                          name={`berkeringatMalamTbc_u1518_${examinationMode}`}
-                          value={getLangkah4Value("berkeringatMalamTbc")}
-                          onChange={(val) => updateLangkah4Value("berkeringatMalamTbc", val)}
-                        />
-                      </div>
-
-                      <div className="col-md-6">
-                        <YesNoCard label="e. Batuk darah" name={`batukDarahTbc_u1518_${examinationMode}`} value={getLangkah4Value("batukDarahTbc")} onChange={(val) => updateLangkah4Value("batukDarahTbc", val)} />
-                      </div>
-
-                      <div className="col-md-6">
-                        <YesNoCard label="f. Sesak nafas" name={`sesakNafasTbc_u1518_${examinationMode}`} value={getLangkah4Value("sesakNafasTbc")} onChange={(val) => updateLangkah4Value("sesakNafasTbc", val)} />
+                        <YesNoCard label="Lesu / malaise" name={`lesuTbc_u1518_${examinationMode}`} value={getLangkah4Value("lesuTbc")} onChange={(val) => updateLangkah4Value("lesuTbc", val)} />
                       </div>
                     </div>
                   </div>
 
                   {/* B. Pemeriksaan 6 Bulan Sekali */}
-                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
-                    <h5 className="fw-bold text-dark mb-3">B. Pemeriksaan 6 Bulan Sekali</h5>
+                  <PeriodicScreeningPanel
+                    id={`screening-6-month-${activeSubmenu}`}
+                    title="B. Pemeriksaan 6 Bulan Sekali"
+                    description="Pemeriksaan penglihatan dan pendengaran yang dilakukan setiap enam bulan bila sudah jatuh tempo."
+                    due={sixMonthScreeningDue}
+                    loading={periodicScreeningInfo.loading}
+                    checked={getLangkah4Value("isSkrining6Bulanan")}
+                    lastCompletedDate={periodicScreeningInfo.lastSixMonthDate}
+                    onToggle={(checked) => updateLangkah4Value("isSkrining6Bulanan", checked)}
+                  >
 
                     <h6 className="fw-bold text-primary mb-2">Tes Penglihatan (Hitung Jari)</h6>
                     <div className="row g-3 mb-3">
@@ -4134,10 +4470,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         </select>
                       </div>
                     </div>
-                  </div>
+                  </PeriodicScreeningPanel>
 
                   {/* C. Skrining Remaja */}
-                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                  <div hidden={!annualScreeningDue || periodicScreeningInfo.loading} className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
                     <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
                       <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
@@ -4216,7 +4552,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                             <option value="Belum">Belum</option>
                           </select>
                         </div>
-
                         {isRemajaPerempuan && (
                           <div className="col-md-6">
                             <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
@@ -4274,8 +4609,16 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                   </div>
 
                   {/* B. Pemeriksaan 6 Bulan Sekali */}
-                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
-                    <h5 className="fw-bold text-dark mb-3">B. Pemeriksaan 6 Bulan Sekali</h5>
+                  <PeriodicScreeningPanel
+                    id={`screening-6-month-${activeSubmenu}`}
+                    title="B. Pemeriksaan 6 Bulan Sekali"
+                    description="Pemeriksaan penglihatan dan pendengaran yang dilakukan setiap enam bulan bila sudah jatuh tempo."
+                    due={sixMonthScreeningDue}
+                    loading={periodicScreeningInfo.loading}
+                    checked={getLangkah4Value("isSkrining6Bulanan")}
+                    lastCompletedDate={periodicScreeningInfo.lastSixMonthDate}
+                    onToggle={(checked) => updateLangkah4Value("isSkrining6Bulanan", checked)}
+                  >
 
                     <h6 className="fw-bold text-primary mb-2">Tes Penglihatan (Hitung Jari)</h6>
                     <div className="row g-3 mb-3">
@@ -4358,10 +4701,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         </select>
                       </div>
                     </div>
-                  </div>
+                  </PeriodicScreeningPanel>
 
                   {/* C. Skrining Remaja */}
-                  <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
+                  <div hidden={!annualScreeningDue || periodicScreeningInfo.loading} className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "16px" }}>
                     <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
                       <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
@@ -4441,7 +4784,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                             <option value="Belum">Belum</option>
                           </select>
                         </div>
-
                         {isRemajaPerempuan && (
                           <div className="col-md-6">
                             <label className="form-label fw-semibold text-dark small mb-1">Periksa Hb</label>
@@ -4562,7 +4904,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           {/* 2. Konsumsi PMT habis: Terbuka secara konsisten di dalam slot PMT tanpa menggeser kartu lain */}
                           {getLangkah4Value("pmtPemulihan") === "Ya" && (
                             <div className="mt-3 pt-3 border-top d-flex align-items-center justify-content-between gap-3">
-                              <span className="small fw-semibold text-primary mb-0">&bull; Konsumsi PMT habis?</span>
+                              <span className="small fw-semibold text-primary mb-0">&bull; Apakah PMT lokal yang diberikan dihabiskan?</span>
                               <div className="d-flex align-items-center gap-4 flex-shrink-0">
                                 <label className="d-flex align-items-center gap-2 cursor-pointer small fw-medium text-dark mb-0" style={{ cursor: "pointer" }}>
                                   <input
@@ -4932,52 +5274,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
           {/* ========================================================================= */}
           {activeStep === 5 &&
             (() => {
-              // ======= AUTO-RUJUKAN LOGIC =======
-              // Hitung apakah ada indikasi rujukan berdasarkan skrining & plotting
-              const form5 = examinationMode === "per-step" ? langkah5Form : sequentialForm;
-              const form4 = examinationMode === "per-step" ? langkah4Form : sequentialForm;
-
-              // 1. TBC Skrining: jika salah satu jawaban 'Ya' => risiko TBC
-              const tbcFields = ["batukTbc", "demamTbc", "bbTurunTbc", "kontakTbc", "lesuTbc", "batukBesarTbc", "nafsuMakanTbc", "bbMenurunTbc", "lemahLesuTbc", "berkeringatMalamTbc", "batukDarahTbc", "sesakNafasTbc"];
-              const tbcRisiko = tbcFields.some((f) => form4[f] === "Ya");
-
-              // 2. Plotting hasil pengukuran
-              const pr = plottingResult;
-              const imtRisiko = pr && pr.imtKey !== "normal";
-              const lilaRisiko =
-                pr &&
-                (activeSubmenu === "lansia"
-                  ? pr.lilaLansiaKey !== "normal"
-                  : activeSubmenu === "dewasa" || activeSubmenu === "bumil" || activeSubmenu === "nifas"
-                    ? pr.lilaDewasaKey !== "normal"
-                    : ["bayi-0-11", "balita-12-59"].includes(activeSubmenu)
-                      ? pr.lilaBayiKey !== "normal"
-                      : activeSubmenu === "apras"
-                        ? pr.lilaAprasKey !== "normal"
-                        : false);
-              const tensiRisiko = pr && pr.tensiAdultKey !== "normal";
-              const gulaRisiko = pr && pr.isGulaRisiko;
-              const lpRisiko = pr && pr.lpPlottingKey !== "normal";
-
-              // 3. Lansia: AKS dan SKILAS
-              const aksRisiko = activeSubmenu === "lansia" && currentAks.perluRujuk;
-              const skilasRisiko = activeSubmenu === "lansia" && currentSkilas.adaRisiko;
-
-              // Gabungan: apakah perlu dirujuk berdasarkan skrining
-
-              // Daftar alasan rujukan untuk ditampilkan
-              const alasanRujukan = [];
-              if (tbcRisiko) alasanRujukan.push("Gejala TBC Positif");
-              if (imtRisiko) alasanRujukan.push(`IMT: ${pr?.imtDewasaStatus || pr?.imtAprasStatus || pr?.imtUsekremStatus || pr?.imtStatus}`);
-              if (lilaRisiko) alasanRujukan.push("LiLA Berisiko / KEK");
-              if (tensiRisiko) alasanRujukan.push(`Tensi: ${pr?.tensiStatus || pr?.tensiRemajaStatus}`);
-              if (gulaRisiko) alasanRujukan.push("Gula Darah Risiko");
-              if (lpRisiko) alasanRujukan.push("Lingkar Perut Berisiko");
-              if (aksRisiko) alasanRujukan.push(`AKS: ${currentAks.kategori}`);
-              if (skilasRisiko) alasanRujukan.push(`SKILAS: ${currentSkilas.issues.join(", ")}`);
-
-              // Auto-set: gunakan nilai terkomputasi langsung (tidak setState di dalam render)
-              // State rujukan tetap bisa diupdate melalui useEffect atau onChange
               const backendPersistedRujukan = activeStep5BackendExam?.is_perlu_rujukan === true || Boolean(activeStep5BackendExam?.rujukan);
               const effectiveRujukan = step5AutoReferral.perluRujuk || backendPersistedRujukan ? "Rujuk ke Puskesmas / Pustu" : examinationMode === "per-step" ? langkah5Form.statusRujukan : sequentialForm.statusRujukan;
 
@@ -4998,7 +5294,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           onChange={(e) => {
                             const wId = e.target.value;
                             setSelectedWargaStep5(wId);
-                            setLangkah5Form({ topikPenyuluhan: "", mengikutiKelas: "", statusRujukan: "" });
+                            setLangkah5Form({ topikPenyuluhan: "", mengikutiKelas: "", statusRujukan: "", alasanRujukan: "" });
                           }}
                         >
                           {availableWargaStep5.length === 0 ? (
@@ -5021,6 +5317,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       <span className="small">
                         Belum ada sasaran <strong>{currentCategory.label}</strong> yang ditandai <strong>Datang</strong> pada Langkah 1. Silakan cari dan tandai kehadiran di <strong>Langkah 1 (Presensi)</strong> terlebih dahulu.
                       </span>
+                      <button type="button" className="btn btn-sm btn-outline-dark d-inline-flex align-items-center gap-1.5 ms-auto" onClick={() => setActiveStep(1)}>
+                        <ArrowLeft size={14} />
+                        Ke Langkah 1
+                      </button>
                     </div>
                   )}
 
@@ -5064,11 +5364,50 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       </select>
                       <div className="form-text text-muted">Rujuk puskesmas atau pustu bila ada indikasi medis hasil pemeriksaan dan skrining.</div>
                     </div>
+
+                    {step5AutoReferral.reasons.length > 0 && (
+                      <div className="col-12">
+                        <div className="border border-warning-subtle rounded-3 bg-light p-3">
+                          <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <div className="fw-semibold small text-dark">Indikasi rujukan otomatis</div>
+                            <span className="badge bg-danger-subtle text-danger">Rujuk ke Puskesmas / Pustu</span>
+                          </div>
+                          <ul className="small text-secondary mb-0 mt-2 ps-3">
+                            {step5AutoReferral.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {effectiveRujukan === "Rujuk ke Puskesmas / Pustu" && (
+                      <div className="col-12">
+                        <label className="form-label fw-bold text-dark small mb-1" htmlFor="referral-reason">
+                          {step5AutoReferral.perluRujuk ? "Indikasi tambahan dari kader (opsional)" : "Indikasi Rujukan dari Kader*"}
+                        </label>
+                        <textarea
+                          id="referral-reason"
+                          rows="2"
+                          maxLength={1000}
+                          className="form-control form-control-custom bg-white border-0 py-3"
+                          placeholder="Tuliskan indikasi rujukan manual jika tidak muncul dari skrining otomatis"
+                          value={examinationMode === "per-step" ? langkah5Form.alasanRujukan || "" : sequentialForm.alasanRujukan || ""}
+                          onChange={(event) => {
+                            if (examinationMode === "per-step") {
+                              setLangkah5Form((previous) => ({ ...previous, alasanRujukan: event.target.value }));
+                            } else {
+                              setSequentialForm((previous) => ({ ...previous, alasanRujukan: event.target.value }));
+                            }
+                          }}
+                          required={!step5AutoReferral.perluRujuk}
+                        />
+                        <div className="form-text text-muted"></div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="d-flex justify-content-end pt-3 gap-2">
                     {examinationMode === "per-step" ? (
-                      <button type="submit" className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }}>
+                      <button type="submit" disabled={!selectedWargaStep5} className="btn btn-dark-custom btn-sm px-4 py-2 rounded-3 text-white fw-medium d-inline-flex align-items-center gap-1.5" style={{ backgroundColor: "#2b2e4a" }}>
                         <span>Simpan</span>
                       </button>
                     ) : (
@@ -5137,10 +5476,11 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       (np === "Ya" || np === 1 ? 1 : 0) +
                       (dh === "Ya" || dh === 1 ? 1 : 0) +
                       (bt === "Ya" || bt === 1 ? 1 : 0);
-                    const isRisiko = score >= 6;
+                    const isRisiko = score > 6;
+                    const statusText = score === 6 ? "Skor Ambigu" : isRisiko ? "Risiko Tinggi PPOK" : "Risiko Rendah PPOK";
                     return {
                       score,
-                      text: `${score} (${isRisiko ? "Risiko Tinggi PPOK" : "Risiko Rendah PPOK"})`,
+                      text: `${score} (${statusText})`,
                       isRisiko,
                     };
                   })();
@@ -5220,7 +5560,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                             <strong>Nama Lengkap:</strong> {sequentialForm.nama || previewWarga.nama || ""}
                           </div>
                           <div className="col-6">
-                            <strong>Tanggal Lahir:</strong> {sequentialForm.tglLahir || previewWarga.tglLahir || ""}
+                            <strong>Tanggal Lahir:</strong> {formatDateId(sequentialForm.tglLahir || previewWarga.tglLahir)}
                           </div>
                           <div className="col-6">
                             <strong>Jenis Kelamin:</strong> {["bumil", "nifas"].includes(activeSubmenu) ? "Perempuan" : sequentialForm.gender || previewWarga.gender || ""}
@@ -5524,7 +5864,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         <tr key={row.jenis_imunisasi}>
                                           <td>{row.jenis_imunisasi}</td>
                                           <td>{row.is_diberikan ? "Diberikan" : "Belum diberikan"}</td>
-                                          <td>{row.is_diberikan ? row.tanggal_imunisasi || "-" : "-"}</td>
+                                          <td>{row.is_diberikan ? formatDateId(row.tanggal_imunisasi) || "-" : "-"}</td>
                                           <td>{row.is_diberikan ? row.tempat || "-" : "-"}</td>
                                         </tr>
                                       ))}
@@ -5572,7 +5912,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         <tr key={row.jenis_imunisasi}>
                                           <td>{row.jenis_imunisasi}</td>
                                           <td>{row.is_diberikan ? "Diberikan" : "Belum diberikan"}</td>
-                                          <td>{row.is_diberikan ? row.tanggal_imunisasi || "-" : "-"}</td>
+                                          <td>{row.is_diberikan ? formatDateId(row.tanggal_imunisasi) || "-" : "-"}</td>
                                           <td>{row.is_diberikan ? row.tempat || "-" : "-"}</td>
                                         </tr>
                                       ))}

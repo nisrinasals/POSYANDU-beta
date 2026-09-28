@@ -3,6 +3,7 @@ import { Search, Filter, Eye, Info, ChevronLeft, ChevronRight, User, Calendar, H
 import { Modal, Button } from "react-bootstrap";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
 import ExportSasaranButton from "../../components/sasaran/ExportSasaranButton";
+import { formatDateId } from "../../utils/dataMappers";
 
 export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globalPemeriksaanData = {}, onNavigate, initialCategoryFilter, setCategoryFilterParam, user, userRole = "puskesmas" }) {
   const isDinkes = userRole === "dinkes" || user?.roleType?.includes("dinkes");
@@ -235,7 +236,7 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
                         {item.nik}
                       </div>
                     </td>
-                    <td className="text-center text-secondary fw-medium text-nowrap">{item.tglLahir}</td>
+                    <td className="text-center text-secondary fw-medium text-nowrap">{formatDateId(item.tglLahir)}</td>
                     <td>
                       <div className="fw-semibold text-dark mb-0">{item.kategori}</div>
                     </td>
@@ -247,7 +248,7 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
                         {item.rw ? `Wilayah ${item.rw}` : ""}
                       </div>
                     </td>
-                    <td className="text-center text-secondary fw-medium">{item.tglPeriksa}</td>
+                    <td className="text-center text-secondary fw-medium">{formatDateId(item.tglPeriksa)}</td>
                     <td className="pe-4 text-center text-nowrap">
                       <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => handleOpenDetail(item)} title="Lihat Detail Sasaran">
                         <Eye size={14} />

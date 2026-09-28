@@ -1082,6 +1082,18 @@ Mengikuti `validator.pemeriksaan.listFilters`.
 
 Mengembalikan daftar pemeriksaan sesuai filter dan pagination controller.
 
+## GET /pemeriksaan/statistik-bulanan
+
+Mengembalikan jumlah rekaman pemeriksaan per bulan dan tahun yang tersedia tanpa data identitas warga. Hasil dibatasi otomatis sesuai scope Posyandu/Puskesmas akun.
+
+## GET /pemeriksaan/rekapitulasi
+
+### Query
+
+`template_rekap` wajib diisi dengan salah satu template: `bumil_nifas_menyusui`, `bayi_balita_apras`, `usia_sekolah_remaja`, atau `dewasa_lansia`. `start_date` dan `end_date` dapat digunakan untuk membatasi periode.
+
+Mengembalikan kolom template dan baris agregat bulanan sesuai scope Posyandu/Puskesmas akun, tanpa identitas warga.
+
 ## GET /pemeriksaan/:id
 
 Mengembalikan detail pemeriksaan.
@@ -1127,13 +1139,15 @@ Berhasil mengisi Step 2 menghasilkan `step2_completed_at`.
 
 Menyimpan screening sesuai kategori sasaran.
 
-Screening tahunan untuk `dewasa`/`lansia` memiliki gate tahunan. Jika sudah ada pada tahun yang sama:
+Screening tahunan untuk `dewasa`, `lansia`, dan kategori remaja memiliki gate tahunan. Jika sudah ada pada tahun yang sama:
 
 ```text
 409 — Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut.
 ```
 
 Berhasil mengisi Step 4 menghasilkan `step4_completed_at`.
+
+Kirim `is_skrining_6_bulanan: true` jika pemeriksaan penglihatan dan pendengaran 6-bulanan benar-benar dilakukan. Backend menolak pengulangan sebelum enam bulan kalender berlalu (`409`) dan menyimpan marker ini bersama `detail_skrining`; pengisian skrining lain tidak menandai pemeriksaan 6-bulanan.
 
 ## POST /pemeriksaan/step-5
 
@@ -1188,6 +1202,8 @@ Route ini memakai authentication umum dan digunakan untuk rekap.
 ### Query
 
 Mengikuti `validator.pemeriksaan.listFilters`.
+
+Gunakan `template_rekap` (`bumil_nifas_menyusui`, `bayi_balita_apras`, `usia_sekolah_remaja`, atau `dewasa_lansia`) untuk mengekspor satu template. Tanpa parameter tersebut, workbook memuat semua template.
 
 Untuk role Dinkes, controller membatasi akses personal/search dan menghasilkan rekap agregat.
 
@@ -1460,7 +1476,9 @@ hasil plot dengan is_merah
 | PATCH  | `/kunjungan/:id/status-langkah`      | Personal        |
 | DELETE | `/kunjungan/:id`                     | Personal        |
 | GET    | `/pemeriksaan`                       | Personal        |
+| GET    | `/pemeriksaan/rekapitulasi`          | Authenticated   |
 | GET    | `/pemeriksaan/export`                | Authenticated   |
+| GET    | `/pemeriksaan/statistik-bulanan`     | Authenticated   |
 | GET    | `/pemeriksaan/:id/step-3`            | Personal        |
 | GET    | `/pemeriksaan/:id/screening-history` | Personal        |
 | GET    | `/pemeriksaan/:id`                   | Personal        |
@@ -1476,4 +1494,4 @@ hasil plot dengan is_merah
 | GET    | `/screening-config`                  | Dinkes Admin/SA |
 | PUT    | `/screening-config/:id`              | Dinkes Admin/SA |
 
-**Total: 65 endpoint** pada `/api`. Health check `GET /health` berada di luar router API.
+**Total: 68 endpoint** pada `/api`. Health check `GET /health` berada di luar router API.

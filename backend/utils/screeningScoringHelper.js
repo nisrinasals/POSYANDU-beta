@@ -161,6 +161,25 @@ const calculateJiwa = (input) => {
   };
 };
 
+const calculateSkilas = (input) => {
+  const detail = input || {};
+  const riskFields = [
+    detail.kognitif_dan_mobilisasi?.has_kendala_orientasi_waktu_tempat,
+    detail.kognitif_dan_mobilisasi?.has_kendala_ulang_3_kata,
+    detail.kognitif_dan_mobilisasi?.has_keterbatasan_mobilisasi,
+    detail.kognitif_dan_mobilisasi?.has_kendala_tes_berdiri_kursi,
+    detail.malnutrisi?.has_bb_turun_3kg_3_bulan,
+    detail.malnutrisi?.has_hilang_nafsu_makan,
+    detail.malnutrisi?.is_lila_kurang_21cm,
+    detail.gangguan_penglihatan?.has_masalah_mata,
+    detail.gangguan_penglihatan?.has_kendala_tes_melihat,
+    detail.gangguan_pendengaran?.has_kendala_tes_berbisik,
+    detail.gejala_depresi?.has_sedih_tertekan_putus_asa,
+    detail.gejala_depresi?.has_kurang_minat_kesenangan,
+  ];
+  return { is_rujukan_skilas: riskFields.some((value) => value === true) };
+};
+
 const finalizeScreeningScores = (category, detail, warga, options = {}) => {
   if (!detail) return { detail, errors: [] };
   const result = { detail: { ...detail }, errors: [] };
@@ -194,7 +213,7 @@ const finalizeScreeningScores = (category, detail, warga, options = {}) => {
       else result.detail.aks_aktifitas_harian = { ...aks, ...calculated.scores, total_skor_aks: calculated.total_skor_aks, status_aks: calculated.status_aks, kode_aks: calculated.kode_aks, is_rujukan_aks: calculated.is_rujukan_aks };
     }
     const skilas = detail.skilas;
-    if (skilas && options.skilasProvided !== false) result.detail.skilas = { ...skilas };
+    if (skilas && options.skilasProvided !== false) result.detail.skilas = { ...skilas, ...calculateSkilas(skilas) };
   }
 
   const jiwa = detail.skrining_kesehatan_jiwa;
@@ -220,4 +239,4 @@ const finalizeScreeningScores = (category, detail, warga, options = {}) => {
   return result;
 };
 
-module.exports = { PUMA_COMPONENTS, AKS_COMPONENTS, calculateAgeYears, calculatePuma, calculateAks, calculateTbc, calculateJiwa, isJiwaEligible, finalizeScreeningScores };
+module.exports = { PUMA_COMPONENTS, AKS_COMPONENTS, calculateAgeYears, calculatePuma, calculateAks, calculateTbc, calculateJiwa, calculateSkilas, isJiwaEligible, finalizeScreeningScores };

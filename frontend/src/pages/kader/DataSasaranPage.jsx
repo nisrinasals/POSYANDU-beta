@@ -33,6 +33,44 @@ import { validateNik, formatNikInput, validatePhone, formatPhoneInput, validateB
 import { useNotification } from "../../context/NotificationContext";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
 import ExportSasaranButton from "../../components/sasaran/ExportSasaranButton";
+import { formatDateId } from "../../utils/dataMappers";
+
+const HEALTH_HISTORY_FIELDS = [
+  { label: "Hipertensi", key: "hipertensi" },
+  { label: "DM", key: "DM" },
+  { label: "Stroke", key: "stroke" },
+  { label: "Jantung", key: "jantung" },
+  { label: "Asma", key: "asma" },
+];
+
+const mapHealthHistoryToBackend = (selected = []) => {
+  if (!Array.isArray(selected) || selected.length === 0) return {};
+  return Object.fromEntries(HEALTH_HISTORY_FIELDS.map(({ label, key }) => [key, selected.includes(label)]));
+};
+
+const mapRiskBehaviorToBackend = (values = {}) => {
+  const mappings = [
+    ["merokok", "merokok"],
+    ["tinggiGula", "konsumsi_tinggi_gula"],
+    ["tinggiGaram", "konsumsi_tinggi_garam"],
+    ["tinggiLemak", "konsumsi_tinggi_lemak"],
+  ];
+  return Object.fromEntries(mappings.filter(([formKey]) => ["Ya", "Tidak"].includes(values?.[formKey])).map(([formKey, backendKey]) => [backendKey, values[formKey] === "Ya"]));
+};
+
+const getProfilKesehatanPayload = (form, categoryId) => {
+  const isUsekrem = ["usekrem-6-14", "usekrem-15-18"].includes(categoryId);
+  const isAdultOrLansia = ["dewasa", "lansia"].includes(categoryId);
+  if (!isUsekrem && !isAdultOrLansia) return undefined;
+
+  return {
+    riwayat_keluarga: mapHealthHistoryToBackend(form.riwayatKeluarga),
+    riwayat_diri: mapHealthHistoryToBackend(isAdultOrLansia ? form.riwayatDiriSendiri : form.perilakuBerisikoUsekrem),
+    ...(isAdultOrLansia ? { perilaku_berisiko: mapRiskBehaviorToBackend(form.perilakuBerisikoDewasa) } : {}),
+  };
+};
+
+const getJarakAnakBulan = (value) => ({ "< 2 Thn": 12, "2 - 5 Thn": 36, "> 5 Thn": 72 })[value] ?? null;
 
 export default function DataSasaranPage({
   globalSasaranList: sasaranList = [],
@@ -122,7 +160,7 @@ export default function DataSasaranPage({
     hpht: "",
     hpl: "",
     anakKe: "",
-    jarakAnak: "",
+    jarakAnak: "Anak Pertama",
     tglPersalinan: "",
     statusPersalinan: "",
     caraPersalinan: "",
@@ -336,7 +374,7 @@ export default function DataSasaranPage({
       hpht: "",
       hpl: "",
       anakKe: "",
-      jarakAnak: "",
+      jarakAnak: "Anak Pertama",
       tglPersalinan: "",
       statusPersalinan: "",
       caraPersalinan: "",
@@ -462,6 +500,10 @@ export default function DataSasaranPage({
       showWarning("Validasi Nifas/Menyusui", "Tanggal persalinan wajib diisi untuk sasaran Nifas/Menyusui.");
       return;
     }
+    if (katId === "nifas" && !categoryForm.caraPersalinan) {
+      showWarning("Validasi Nifas/Menyusui", "Cara persalinan wajib dipilih.");
+      return;
+    }
 
     const isUsekrem = ["usekrem-6-14", "usekrem-15-18"].some((k) => katId.includes(k));
     const isDewasaOrLansia = ["dewasa", "lansia"].some((k) => katId.includes(k));
@@ -512,6 +554,9 @@ export default function DataSasaranPage({
       nama_ayah: isDewasaOrLansia ? null : categoryForm.namaAyah || null,
       ...(statusPernikahanBackend ? { status_perkawinan: statusPernikahanBackend } : {}),
       pekerjaan: isChild ? null : categoryForm.pekerjaan || null,
+      ...(categoryForm.bbl ? { bb_lahir_kg: Number(categoryForm.bbl) } : {}),
+      ...(categoryForm.pbl ? { tb_lahir_cm: Number(categoryForm.pbl) } : {}),
+      ...(getProfilKesehatanPayload(categoryForm, katId) ? { profil_kesehatan: getProfilKesehatanPayload(categoryForm, katId) } : {}),
     };
 
     // Cek apakah NIK ini sudah ada di database / sasaranList
@@ -535,8 +580,9 @@ export default function DataSasaranPage({
           ...(categoryForm.hpl ? { hpl: categoryForm.hpl } : {}),
           ...(categoryForm.namaAyah || categoryForm.namaSuami ? { nama_suami: categoryForm.namaAyah || categoryForm.namaSuami } : {}),
           ...(categoryForm.anakKe ? { anak_ke: parseInt(categoryForm.anakKe, 10) } : {}),
-          ...(categoryForm.jarakAnak ? { jarak_anak_sebelum_bulan: parseInt(categoryForm.jarakAnak, 10) } : {}),
+          ...(getJarakAnakBulan(categoryForm.jarakAnak) ? { jarak_anak_sebelum_bulan: getJarakAnakBulan(categoryForm.jarakAnak) } : {}),
           ...(categoryForm.tglPersalinan ? { tanggal_persalinan: categoryForm.tglPersalinan } : {}),
+          ...(categoryForm.caraPersalinan ? { cara_persalinan: categoryForm.caraPersalinan } : {}),
           status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
           is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
         };
@@ -583,21 +629,18 @@ export default function DataSasaranPage({
 
       // Jika klaster bumil / nifas, buat juga profil kehamilannya
       if (katId === "bumil" || katId === "nifas") {
-        try {
-          await kehamilanService.createKehamilan({
-            warga_id: parseInt(createdItem.id, 10),
-            ...(categoryForm.hpht ? { hpht: categoryForm.hpht } : {}),
-            ...(categoryForm.hpl ? { hpl: categoryForm.hpl } : {}),
-            ...(categoryForm.namaAyah || categoryForm.namaSuami ? { nama_suami: categoryForm.namaAyah || categoryForm.namaSuami } : {}),
-            ...(categoryForm.anakKe ? { anak_ke: parseInt(categoryForm.anakKe, 10) } : {}),
-            ...(categoryForm.jarakAnak ? { jarak_anak_sebelum_bulan: parseInt(categoryForm.jarakAnak, 10) } : {}),
-            ...(categoryForm.tglPersalinan ? { tanggal_persalinan: categoryForm.tglPersalinan } : {}),
-            status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
-            is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
-          });
-        } catch (e2) {
-          console.error("Fallback update kehamilan error:", e2);
-        }
+        await kehamilanService.createKehamilan({
+          warga_id: parseInt(createdItem.id, 10),
+          ...(categoryForm.hpht ? { hpht: categoryForm.hpht } : {}),
+          ...(categoryForm.hpl ? { hpl: categoryForm.hpl } : {}),
+          ...(categoryForm.namaAyah || categoryForm.namaSuami ? { nama_suami: categoryForm.namaAyah || categoryForm.namaSuami } : {}),
+          ...(categoryForm.anakKe ? { anak_ke: parseInt(categoryForm.anakKe, 10) } : {}),
+          ...(getJarakAnakBulan(categoryForm.jarakAnak) ? { jarak_anak_sebelum_bulan: getJarakAnakBulan(categoryForm.jarakAnak) } : {}),
+          ...(categoryForm.tglPersalinan ? { tanggal_persalinan: categoryForm.tglPersalinan } : {}),
+          ...(categoryForm.caraPersalinan ? { cara_persalinan: categoryForm.caraPersalinan } : {}),
+          status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
+          is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
+        });
       }
 
       setSasaranList([createdItem, ...sasaranList.filter((s) => s.nik !== createdItem.nik)]);
@@ -617,9 +660,10 @@ export default function DataSasaranPage({
               ...(categoryForm.hpht ? { hpht: categoryForm.hpht } : {}),
               hpl: categoryForm.hpl || null,
               tanggal_persalinan: categoryForm.tglPersalinan || null,
+              cara_persalinan: categoryForm.caraPersalinan || null,
               nama_suami: categoryForm.namaAyah || categoryForm.namaSuami || null,
               anak_ke: categoryForm.anakKe ? parseInt(categoryForm.anakKe, 10) : 1,
-              jarak_anak_sebelum_bulan: categoryForm.jarakAnak ? parseInt(categoryForm.jarakAnak, 10) : null,
+              jarak_anak_sebelum_bulan: getJarakAnakBulan(categoryForm.jarakAnak),
               status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
               is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
             });
@@ -628,8 +672,10 @@ export default function DataSasaranPage({
             onRefreshData?.();
             return;
           }
-        } catch (e2) {
-          console.error("Fallback update kehamilan error:", e2);
+        } catch (fallbackError) {
+          console.error("Fallback update kehamilan error:", fallbackError);
+          showWarning("Gagal Menyimpan Profil Kehamilan", fallbackError?.message || "Warga ditemukan, tetapi profil kehamilannya belum berhasil disimpan.");
+          return;
         }
       }
 
@@ -781,16 +827,70 @@ export default function DataSasaranPage({
     }
 
     if (selectedSasaran?.id) {
+      const isBumil = selectedSasaran.kategori?.toLowerCase().includes("bumil");
+      const isNifas = selectedSasaran.kategori?.toLowerCase().includes("nifas");
+      if (isBumil && selectedSasaran.tglPersalinan && !selectedSasaran.caraPersalinan) {
+        showWarning("Validasi Persalinan", "Cara persalinan wajib dipilih saat tanggal persalinan diisi.");
+        return;
+      }
+      if (isBumil && selectedSasaran.tglPersalinan && !selectedSasaran.statusMenyusui) {
+        showWarning("Validasi Menyusui", "Silakan pilih status menyusui setelah tanggal persalinan diisi.");
+        return;
+      }
+      if (isNifas && !selectedSasaran.tglPersalinan) {
+        showWarning("Validasi Nifas/Menyusui", "Tanggal persalinan wajib diisi.");
+        return;
+      }
+      if (isNifas && !selectedSasaran.caraPersalinan) {
+        showWarning("Validasi Nifas/Menyusui", "Cara persalinan wajib dipilih.");
+        return;
+      }
+      if ((isBumil || isNifas) && !selectedSasaran.profileKehamilanId) {
+        showWarning("Profil Kehamilan Tidak Ditemukan", "Data kehamilan/persalinan tidak dapat disimpan karena profil kehamilan sasaran tidak ditemukan.");
+        return;
+      }
       try {
+        const genderBackend = selectedSasaran.gender === "Perempuan" || selectedSasaran.gender === "P" ? "P" : selectedSasaran.gender === "Laki-laki" || selectedSasaran.gender === "L" ? "L" : undefined;
+        const maritalStatus = selectedSasaran.statusPernikahan === "Menikah" || selectedSasaran.statusPernikahan === "menikah" ? "menikah" : selectedSasaran.statusPernikahan ? "tidak_menikah" : undefined;
+        const isAdultOrLansia = ["dewasa", "lansia"].some((category) => (selectedSasaran.kategori || "").toLowerCase().includes(category));
+        const isUsekrem = ["usekrem-6-14", "usekrem-15-18"].some((category) => (selectedSasaran.subKategori || "").includes(category));
+        const profilKesehatan = getProfilKesehatanPayload(selectedSasaran, isAdultOrLansia ? (selectedSasaran.kategori.toLowerCase().includes("lansia") ? "lansia" : "dewasa") : isUsekrem ? selectedSasaran.subKategori : "");
         const updatePayload = {
           nik: selectedSasaran.nik,
           nama_lengkap: selectedSasaran.nama,
           alamat: selectedSasaran.alamat,
-          telepon: selectedSasaran.noHp,
+          telepon: selectedSasaran.noHp || "",
+          ...(genderBackend ? { jenis_kelamin: genderBackend } : {}),
+          ...(selectedSasaran.tglLahir ? { tanggal_lahir: selectedSasaran.tglLahir } : {}),
+          ...(selectedSasaran.namaIbu !== undefined ? { nama_ibu: selectedSasaran.namaIbu || "" } : {}),
+          ...(selectedSasaran.namaAyah !== undefined ? { nama_ayah: selectedSasaran.namaAyah || "" } : {}),
+          ...(maritalStatus ? { status_perkawinan: maritalStatus } : {}),
+          ...(selectedSasaran.pekerjaan !== undefined ? { pekerjaan: selectedSasaran.pekerjaan || "" } : {}),
+          ...(selectedSasaran.bbl !== undefined && selectedSasaran.bbl !== "" ? { bb_lahir_kg: Number(selectedSasaran.bbl) } : {}),
+          ...(selectedSasaran.pbl !== undefined && selectedSasaran.pbl !== "" ? { tb_lahir_cm: Number(selectedSasaran.pbl) } : {}),
+          ...(profilKesehatan ? { profil_kesehatan: profilKesehatan } : {}),
           ...(selectedSasaran.status ? { status_domisili: selectedSasaran.status.toLowerCase() === "non-aktif" ? "pindah" : selectedSasaran.status.toLowerCase() } : {}),
         };
         await wargaService.updateWarga(selectedSasaran.id, updatePayload);
-        setSasaranList(sasaranList.map((item) => (item.id === selectedSasaran.id ? selectedSasaran : item)));
+        if (isBumil || isNifas) {
+          const menyusui = selectedSasaran.statusMenyusui === "Masih Menyusui";
+          const kehamilanPayload = {
+            ...(selectedSasaran.namaSuami || selectedSasaran.namaAyah ? { nama_suami: selectedSasaran.namaSuami || selectedSasaran.namaAyah } : {}),
+            ...(selectedSasaran.hpht ? { hpht: selectedSasaran.hpht } : {}),
+            ...(selectedSasaran.hpl ? { hpl: selectedSasaran.hpl } : {}),
+            ...(selectedSasaran.anakKe ? { anak_ke: Number(selectedSasaran.anakKe) } : {}),
+            ...(getJarakAnakBulan(selectedSasaran.jarakAnak) ? { jarak_anak_sebelum_bulan: getJarakAnakBulan(selectedSasaran.jarakAnak) } : {}),
+            ...(selectedSasaran.tglPersalinan ? { tanggal_persalinan: selectedSasaran.tglPersalinan } : {}),
+            ...(selectedSasaran.caraPersalinan ? { cara_persalinan: selectedSasaran.caraPersalinan } : {}),
+            ...(isBumil && selectedSasaran.tglPersalinan ? { status_kehamilan: "nifas", is_menyusui: menyusui } : {}),
+            ...(isNifas ? { status_kehamilan: menyusui ? "menyusui" : "nifas", is_menyusui: menyusui } : {}),
+          };
+          await kehamilanService.updateKehamilan(selectedSasaran.profileKehamilanId, kehamilanPayload);
+        }
+
+        const detailRes = await wargaService.getWargaById(selectedSasaran.id);
+        const refreshedWarga = mapBackendWargaToFrontend(detailRes?.data || detailRes);
+        setSasaranList((prev) => (prev || []).map((item) => (String(item.id) === String(selectedSasaran.id) ? refreshedWarga : item)));
         setShowEditModal(false);
         showSuccess("Pembaruan Berhasil", `Data sasaran "${selectedSasaran?.nama || "Warga"}" berhasil diperbarui di database.`);
         onRefreshData?.();
@@ -798,6 +898,18 @@ export default function DataSasaranPage({
         console.error("Backend edit warga error:", err);
         showWarning("Gagal Memperbarui Sasaran", err.message || "Gagal memperbarui data di server.");
       }
+    }
+  };
+
+  const handleOpenSasaranRecord = async (item, modalType) => {
+    try {
+      const response = await wargaService.getWargaById(item.id);
+      const freshRecord = mapBackendWargaToFrontend(response?.data || response);
+      setSelectedSasaran(freshRecord || item);
+      if (modalType === "detail") setShowDetailModal(true);
+      else setShowEditModal(true);
+    } catch (error) {
+      showWarning("Gagal Memuat Data Sasaran", error?.message || "Detail sasaran tidak dapat diambil dari backend.");
     }
   };
 
@@ -906,7 +1018,7 @@ export default function DataSasaranPage({
                         {item.nik}
                       </div>
                     </td>
-                    <td className="text-center text-secondary small text-nowrap">{item.tglLahir}</td>
+                    <td className="text-center text-secondary small text-nowrap">{formatDateId(item.tglLahir)}</td>
                     <td>
                       <div className="fw-semibold text-dark mb-0">{item.kategori}</div>
                     </td>
@@ -925,10 +1037,7 @@ export default function DataSasaranPage({
                         <button
                           className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none"
                           title="Lihat Detail Sasaran"
-                          onClick={() => {
-                            setSelectedSasaran(item);
-                            setShowDetailModal(true);
-                          }}
+                          onClick={() => handleOpenSasaranRecord(item, "detail")}
                         >
                           <Eye size={14} />
                           <span>Detail</span>
@@ -936,10 +1045,7 @@ export default function DataSasaranPage({
                         <button
                           className="btn btn-sm btn-outline-pink d-inline-flex align-items-center gap-1.5 shadow-none"
                           title="Edit Data Sasaran"
-                          onClick={() => {
-                            setSelectedSasaran(item);
-                            setShowEditModal(true);
-                          }}
+                          onClick={() => handleOpenSasaranRecord(item, "edit")}
                         >
                           <Edit size={14} />
                           <span>Edit</span>
@@ -1111,24 +1217,6 @@ export default function DataSasaranPage({
                       <input type="date" className="form-control form-control-custom" value={categoryForm.hpl} onChange={(e) => setCategoryForm({ ...categoryForm, hpl: e.target.value })} />
                     </div>
 
-                    <div className="mb-3">
-                      <div className="row g-2">
-                        <div className="col-6">
-                          <label className="form-label fw-medium small mb-1">BB Sebelum Hamil</label>
-                          <div className="input-group">
-                            <input type="number" step="0.1" className="form-control form-control-custom" placeholder="50.0" value={categoryForm.bb} onChange={(e) => setCategoryForm({ ...categoryForm, bb: e.target.value })} />
-                            <span className="input-group-text bg-white border text-muted small">kg</span>
-                          </div>
-                        </div>
-                        <div className="col-6">
-                          <label className="form-label fw-medium small mb-1">Tinggi Badan (TB)</label>
-                          <div className="input-group">
-                            <input type="number" step="0.1" className="form-control form-control-custom" placeholder="155.0" value={categoryForm.tb} onChange={(e) => setCategoryForm({ ...categoryForm, tb: e.target.value })} />
-                            <span className="input-group-text bg-white border text-muted small">cm</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
                   {/* Kolom Kanan */}
@@ -1346,6 +1434,17 @@ export default function DataSasaranPage({
                       </div>
                     )}
 
+                    {selectedCategory.id === "nifas" && (
+                      <div className="mb-3">
+                        <label className="form-label fw-bold text-primary small mb-1">Cara Persalinan</label>
+                        <select className="form-select form-select-custom border-primary" value={categoryForm.caraPersalinan} onChange={(e) => setCategoryForm({ ...categoryForm, caraPersalinan: e.target.value })} required>
+                          <option value="">Pilih cara persalinan</option>
+                          <option value="normal">Normal</option>
+                          <option value="dengan_tindakan">Tindakan</option>
+                        </select>
+                      </div>
+                    )}
+
                     {/* KHUSUS NIFAS / MENYUSUI: STATUS MENYUSUI */}
                     {selectedCategory.id === "nifas" && (
                       <div className="mb-3">
@@ -1452,8 +1551,6 @@ export default function DataSasaranPage({
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
-                                { key: "Kanker", label: "f. Kanker" },
-                                { key: "Kolesterol Tinggi", label: "g. Kolesterol Tinggi" },
                               ].map(({ key, label }) => {
                                 const isSelected = categoryForm.riwayatKeluarga?.includes(key);
                                 return (
@@ -1514,8 +1611,6 @@ export default function DataSasaranPage({
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
-                                { key: "Kanker", label: "f. Kanker" },
-                                { key: "Kolesterol Tinggi", label: "g. Kolesterol Tinggi" },
                               ].map(({ key, label }) => {
                                 const isSelected = categoryForm.perilakuBerisikoUsekrem?.includes(key);
                                 return (
@@ -2125,38 +2220,6 @@ export default function DataSasaranPage({
                       <label className="form-label fw-medium small mb-1">HPL</label>
                       <input type="date" className="form-control form-control-custom" value={selectedSasaran.hpl || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpl: e.target.value })} />
                     </div>
-                    <div className="mb-3">
-                      <div className="row g-2">
-                        <div className="col-6">
-                          <label className="form-label fw-medium small mb-1">BB Sblm Hamil</label>
-                          <div className="input-group">
-                            <input
-                              type="number"
-                              step="0.1"
-                              className="form-control form-control-custom"
-                              placeholder="50.0"
-                              value={selectedSasaran.bb ? String(selectedSasaran.bb).replace(/[^0-9.]/g, "") : ""}
-                              onChange={(e) => setSelectedSasaran({ ...selectedSasaran, bb: e.target.value })}
-                            />
-                            <span className="input-group-text bg-white border text-muted small">kg</span>
-                          </div>
-                        </div>
-                        <div className="col-6">
-                          <label className="form-label fw-medium small mb-1">Tinggi Badan (TB)</label>
-                          <div className="input-group">
-                            <input
-                              type="number"
-                              step="0.1"
-                              className="form-control form-control-custom"
-                              placeholder="155.0"
-                              value={selectedSasaran.tb ? String(selectedSasaran.tb).replace(/[^0-9.]/g, "") : ""}
-                              onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tb: e.target.value })}
-                            />
-                            <span className="input-group-text bg-white border text-muted small">cm</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
                   {/* Kolom Kanan */}
@@ -2191,6 +2254,24 @@ export default function DataSasaranPage({
                       <label className="form-label fw-medium small mb-1">Tanggal Persalinan</label>
                       <input type="date" className="form-control form-control-custom" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} />
                     </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-medium small mb-1">Cara Persalinan</label>
+                      <select className="form-select form-select-custom" value={selectedSasaran.caraPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, caraPersalinan: e.target.value })}>
+                        <option value="">Pilih cara persalinan</option>
+                        <option value="normal">Normal</option>
+                        <option value="dengan_tindakan">Tindakan</option>
+                      </select>
+                    </div>
+                    {selectedSasaran.tglPersalinan && (
+                      <div className="mb-3">
+                        <label className="form-label fw-medium small mb-1">Status Menyusui</label>
+                        <select className="form-select form-select-custom" value={selectedSasaran.statusMenyusui || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, statusMenyusui: e.target.value })}>
+                          <option value="">Pilih status menyusui</option>
+                          <option value="Masih Menyusui">Masih Menyusui</option>
+                          <option value="Sudah Tidak Menyusui">Sudah Tidak Menyusui</option>
+                        </select>
+                      </div>
+                    )}
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Status Sasaran</label>
                       <select className="form-select form-select-custom" value={selectedSasaran.status || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, status: e.target.value })}>
@@ -2371,13 +2452,27 @@ export default function DataSasaranPage({
 
                     {/* KHUSUS NIFAS / MENYUSUI: DITAMBAHKAN SATU FIELD STATUS MENYUSUI */}
                     {selectedSasaran.kategori?.toLowerCase().includes("nifas") && (
-                      <div className="mb-3">
-                        <label className="form-label fw-bold text-primary small mb-1">Status Menyusui</label>
-                        <select className="form-select form-select-custom border-primary" value={selectedSasaran.statusMenyusui || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, statusMenyusui: e.target.value })}>
-                          <option value="Masih Menyusui">Masih Menyusui</option>
-                          <option value="Sudah Tidak Menyusui">Sudah Tidak Menyusui</option>
-                        </select>
-                      </div>
+                      <>
+                        <div className="mb-3">
+                          <label className="form-label fw-bold text-primary small mb-1">Tanggal Persalinan</label>
+                          <input type="date" className="form-control form-control-custom border-primary" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} required />
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label fw-bold text-primary small mb-1">Cara Persalinan</label>
+                          <select className="form-select form-select-custom border-primary" value={selectedSasaran.caraPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, caraPersalinan: e.target.value })} required>
+                            <option value="">Pilih cara persalinan</option>
+                            <option value="normal">Normal</option>
+                            <option value="dengan_tindakan">Tindakan</option>
+                          </select>
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label fw-bold text-primary small mb-1">Status Menyusui</label>
+                          <select className="form-select form-select-custom border-primary" value={selectedSasaran.statusMenyusui || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, statusMenyusui: e.target.value })}>
+                            <option value="Masih Menyusui">Masih Menyusui</option>
+                            <option value="Sudah Tidak Menyusui">Sudah Tidak Menyusui</option>
+                          </select>
+                        </div>
+                      </>
                     )}
 
                     <div className="mb-3">
@@ -2474,8 +2569,6 @@ export default function DataSasaranPage({
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
-                                { key: "Kanker", label: "f. Kanker" },
-                                { key: "Kolesterol Tinggi", label: "g. Kolesterol Tinggi" },
                               ].map(({ key, label }) => {
                                 const isSelected = (selectedSasaran.riwayatKeluarga || []).includes(key);
                                 return (
@@ -2536,8 +2629,6 @@ export default function DataSasaranPage({
                                 { key: "Stroke", label: "c. Stroke" },
                                 { key: "Jantung", label: "d. Jantung" },
                                 { key: "Asma", label: "e. Asma" },
-                                { key: "Kanker", label: "f. Kanker" },
-                                { key: "Kolesterol Tinggi", label: "g. Kolesterol Tinggi" },
                               ].map(({ key, label }) => {
                                 const isSelected = (Array.isArray(selectedSasaran.perilakuBerisiko) ? selectedSasaran.perilakuBerisiko : []).includes(key);
                                 return (

@@ -4,6 +4,7 @@ const TRIGGER_REASONS = {
   is_tbc_terindikasi: "Indikasi dari skrining TBC",
   is_rujukan_jiwa: "Indikasi dari skrining kesehatan jiwa",
   is_rujukan_aks: "Indikasi dari skrining aktivitas kehidupan sehari-hari",
+  is_rujukan_skilas: "Indikasi dari skrining SKILAS",
 };
 
 const getScreeningReferralReasons = (detail = {}) => {

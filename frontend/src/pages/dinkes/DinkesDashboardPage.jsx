@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { userService, posyanduService } from "../../services";
+import { userService, posyanduService, pemeriksaanService } from "../../services";
 import { Building2, Users, Layers, Calendar, FileSpreadsheet, UserCheck, ChevronRight, TrendingUp, Download, Activity } from "lucide-react";
 
 export default function DinkesDashboardPage({ onNavigate, user, globalStatistikSasaran = {}, isGlobalStatistikLoading = false }) {
@@ -8,6 +8,9 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
   const [activeTooltip, setActiveTooltip] = useState(null);
   const [pendingAccountCount, setPendingAccountCount] = useState(0);
   const [registryStats, setRegistryStats] = useState({ posyandu: 0, puskesmas: 0 });
+  const [monthlyExaminations, setMonthlyExaminations] = useState([]);
+  const [monthlyStatsLoading, setMonthlyStatsLoading] = useState(true);
+  const [monthlyStatsError, setMonthlyStatsError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +41,31 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
     return () => {
       cancelled = true;
     };
+  }, [user?.roleType]);
+
+  useEffect(() => {
+    let cancelled = false;
+    pemeriksaanService
+      .getMonthlyStatistics()
+      .then((response) => {
+        if (cancelled) return;
+        const rows = response?.data?.monthly;
+        setMonthlyExaminations(Array.isArray(rows) ? rows : []);
+        setMonthlyStatsError(false);
+      })
+      .catch((error) => {
+        console.error("Gagal mengambil statistik pemeriksaan agregat dari backend:", error);
+        if (cancelled) return;
+        setMonthlyExaminations([]);
+        setMonthlyStatsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setMonthlyStatsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Dynamic calculations based only on backend data.
@@ -49,33 +77,35 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
   const cityChartData = useMemo(() => {
     const now = new Date();
     const points = [];
-    const countForMonth = () => 0;
+    const monthlyCounts = new Map(monthlyExaminations.map((item) => [item.month, Number(item.count) || 0]));
+    const countForMonth = (date) => {
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      return monthlyCounts.get(month) || 0;
+    };
 
     if (periodeGrafik === "6bulan") {
       for (let offset = 5; offset >= 0; offset -= 1) {
         const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-        const count = countForMonth(d.getFullYear(), d.getMonth());
+        const count = countForMonth(d);
         points.push({
           periode: d.toLocaleDateString("id-ID", { month: "short" }),
           pemeriksaan: count,
-          kunjungan: count,
         });
       }
     } else {
       const year = Number(periodeGrafik);
       for (let month = 0; month < 12; month += 1) {
-        const count = countForMonth(year, month);
+        const count = countForMonth(new Date(year, month, 1));
         points.push({
           periode: new Date(year, month, 1).toLocaleDateString("id-ID", { month: "short" }),
           pemeriksaan: count,
-          kunjungan: count,
         });
       }
     }
     return points;
-  }, [periodeGrafik]);
+  }, [periodeGrafik, monthlyExaminations]);
 
-  const availableYears = useMemo(() => [...new Set([])].sort((a, b) => Number(b) - Number(a)), []);
+  const availableYears = useMemo(() => [...new Set(monthlyExaminations.map((item) => item.month.slice(0, 4)))].sort((a, b) => Number(b) - Number(a)), [monthlyExaminations]);
 
   // SVG Scaler calculations for full-width curved spline area chart
   const maxVal = Math.max(1, ...cityChartData.map((d) => d.pemeriksaan));
@@ -230,7 +260,7 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
               <span>Grafik Pemantauan &amp; Perkembangan Layanan Kesehatan Se-Kota</span>
             </h5>
             <p className="text-muted small mb-0" style={{ fontSize: "0.825rem" }}>
-              Statistik aggregate sasaran berasal dari backend. Rekap pemeriksaan diunduh melalui endpoint export backend.
+              Grafik menampilkan jumlah pemeriksaan per bulan dari agregasi backend tanpa identitas warga.
             </p>
           </div>
 
@@ -239,7 +269,7 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
             <div className="d-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border">
               <span className="d-inline-block rounded-circle" style={{ width: "10px", height: "10px", backgroundColor: themeColor }}></span>
               <span className="text-dark fw-semibold small" style={{ fontSize: "0.78rem" }}>
-                Skrining Warga (Spline Area)
+                Rekaman Pemeriksaan
               </span>
             </div>
 
@@ -344,15 +374,11 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
                 }}
               >
                 <div className="fw-bold border-bottom pb-1 mb-1.5 text-dark">Periode: {activeTooltip.periode}</div>
-                <div className="d-flex align-items-center justify-content-between gap-2 text-muted mb-0.5">
-                  <span>Skrining:</span>
-                  <strong className="text-dark" style={{ color: themeColor }}>
-                    {activeTooltip.pemeriksaan.toLocaleString("id-ID")} Jiwa
-                  </strong>
-                </div>
                 <div className="d-flex align-items-center justify-content-between gap-2 text-muted">
-                  <span>Sesi Posyandu:</span>
-                  <strong style={{ color: "#0284c7" }}>{activeTooltip.kunjungan} Sesi Aktif</strong>
+                  <span>Pemeriksaan:</span>
+                  <strong className="text-dark" style={{ color: themeColor }}>
+                    {activeTooltip.pemeriksaan.toLocaleString("id-ID")}
+                  </strong>
                 </div>
               </div>
             )}
@@ -362,7 +388,15 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
         {/* Footer Summary Bar */}
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 pt-3 border-top mt-2">
           <div className="text-muted small" style={{ fontSize: "0.825rem" }}>
-            <span>Data jumlah pemeriksaan aggregate untuk grafik belum disediakan oleh endpoint backend.</span>
+            <span>
+              {monthlyStatsLoading
+                ? "Memuat agregasi pemeriksaan dari backend..."
+                : monthlyStatsError
+                  ? "Statistik agregat tidak dapat dimuat. Silakan muat ulang halaman."
+                  : monthlyExaminations.length === 0
+                    ? "Belum ada data pemeriksaan yang tercatat di backend."
+                    : "Sumber data: agregasi pemeriksaan backend; identitas warga tidak disertakan."}
+            </span>
           </div>
           <button
             className="btn btn-sm btn-light border text-dark fw-bold d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 align-self-start align-self-sm-auto shadow-none"

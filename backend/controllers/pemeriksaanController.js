@@ -1,5 +1,5 @@
 const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan, Rujukan, Imunisasi } = require("../models");
-const { Op } = require("sequelize");
+const { Op, fn, col } = require("sequelize");
 const ExcelJS = require("exceljs");
 const { tentukanKategoriAktif, tentukanPeriodePemeriksaan, getLatestPregnancyProfile, hitungUmur } = require("../utils/kategoriHelper");
 const { formatDetailSkrining, validateDetailSkrining } = require("../utils/detailSkriningHelper");
@@ -13,7 +13,7 @@ const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../u
 const { calculateGrowthZScores } = require("../utils/growthZScoreHelper");
 const { calculatePregnancyAge, validateHphtAgainstDate } = require("../utils/pregnancyHelper");
 const { getScreeningEligibility, validateIrreversibleAsi } = require("../utils/screeningEligibilityHelper");
-const { checkSudahSkriningTahunan, getPreviousAnnualScreening } = require("../utils/skriningChecker");
+const { checkSudahSkriningTahunan, checkSudahSkrining6Bulanan, getPreviousAnnualScreening } = require("../utils/skriningChecker");
 const { getScreeningConfig } = require("../utils/screeningConfig");
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
@@ -27,6 +27,59 @@ const MEASUREMENT_LIMITS = {
   td_sistole: 300,
   td_diastole: 300,
   kadar_gula: 9999,
+};
+const REKAP_TITLES = {
+  bumil_nifas_menyusui: "Ibu Hamil, Nifas & Menyusui",
+  bayi_balita_apras: "Bayi, Balita & Anak Pra-Sekolah",
+  usia_sekolah_remaja: "Anak Usia Sekolah & Remaja (6-18 Tahun)",
+  dewasa_lansia: "Usia Dewasa & Lansia",
+};
+const REKAP_MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+const getRekapColumnGroup = (key) => {
+  if (key.startsWith("jumlah_")) return "Jumlah Sasaran";
+  if (key.includes("datang")) return "Kehadiran";
+  if (key.startsWith("dirujuk") || key === "dirujuk") return "Sasaran Dirujuk";
+  if (key.includes("edukasi")) return "Edukasi";
+  if (["ttd", "pmt", "kelas", "vitamin", "imunisasi", "asi", "mpasi", "obat_cacing"].some((term) => key.includes(term))) return "Intervensi";
+  return "Hasil Pengukuran / Pemeriksaan";
+};
+
+const getExportMonthPeriods = (records, startDate, endDate) => {
+  const parseMonth = (value) => {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})/);
+    return match ? Number(match[1]) * 12 + Number(match[2]) - 1 : null;
+  };
+
+  let firstMonth = parseMonth(startDate);
+  let lastMonth = parseMonth(endDate);
+  if (firstMonth === null || lastMonth === null) {
+    const months = records
+      .map((record) => {
+        const periodMatch = String(record.bulan_tahun || "").match(/^(\d{4})-(\d{2})$/);
+        if (periodMatch) return Number(periodMatch[1]) * 12 + Number(periodMatch[2]) - 1;
+        const date = new Date(record.tanggal);
+        return Number.isNaN(date.getTime()) ? null : date.getFullYear() * 12 + date.getMonth();
+      })
+      .filter((month) => month !== null);
+    if (months.length) {
+      const years = [...new Set(months.map((month) => Math.floor(month / 12)))];
+      firstMonth = Math.min(...years) * 12;
+      lastMonth = (Math.max(...years) + 1) * 12 - 1;
+    } else {
+      const currentYear = new Date().getFullYear();
+      firstMonth = currentYear * 12;
+      lastMonth = firstMonth + 11;
+    }
+  }
+
+  const periods = [];
+  for (let month = firstMonth; month <= lastMonth; month += 1) {
+    const year = Math.floor(month / 12);
+    const monthNumber = (month % 12) + 1;
+    periods.push({ key: `${year}-${String(monthNumber).padStart(2, "0")}`, label: `${REKAP_MONTHS[monthNumber - 1]} ${year}` });
+  }
+  return periods;
 };
 
 const getMeasurementError = (payload) => {
@@ -235,9 +288,130 @@ const getAllPemeriksaan = async (req, res, next) => {
   }
 };
 
+const getPemeriksaanStatistikBulanan = async (req, res, next) => {
+  try {
+    const monthExpression = fn("to_char", fn("date_trunc", "month", col("Pemeriksaan.tanggal")), "YYYY-MM");
+    const rows = await Pemeriksaan.findAll({
+      attributes: [
+        [monthExpression, "month"],
+        [fn("COUNT", col("Pemeriksaan.id")), "count"],
+      ],
+      include: [
+        {
+          model: KunjunganPosyandu,
+          as: "kunjungan",
+          attributes: [],
+          required: true,
+          include: [
+            {
+              model: SesiPosyandu,
+              as: "sesiPosyandu",
+              attributes: [],
+              required: true,
+              include: [getPosyanduInclude(req.user, { attributes: [] })],
+            },
+          ],
+        },
+      ],
+      group: [monthExpression],
+      order: [[monthExpression, "ASC"]],
+      raw: true,
+    });
+
+    const monthly = rows
+      .map((row) => {
+        const month = String(row.month || "");
+        if (!/^\d{4}-\d{2}$/.test(month)) return null;
+        return {
+          month,
+          count: Number(row.count) || 0,
+        };
+      })
+      .filter(Boolean);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        monthly,
+        years: [...new Set(monthly.map((item) => item.month.slice(0, 4)))].sort(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getRekapitulasiPemeriksaan = async (req, res, next) => {
+  try {
+    const { template_rekap, start_date, end_date } = req.query;
+    if (!Object.prototype.hasOwnProperty.call(REKAP_GROUPS, template_rekap)) {
+      return res.status(400).json({ success: false, message: "Template rekap tidak valid." });
+    }
+
+    const where = {
+      kategori_sasaran: { [Op.in]: REKAP_GROUPS[template_rekap] },
+    };
+    if (start_date && end_date) where.tanggal = { [Op.between]: [new Date(start_date), new Date(end_date)] };
+
+    const records = await Pemeriksaan.findAll({
+      where,
+      order: [
+        ["tanggal", "ASC"],
+        ["id", "ASC"],
+      ],
+      include: [
+        {
+          model: KunjunganPosyandu,
+          as: "kunjungan",
+          required: true,
+          attributes: ["id", "warga_id", "sesi_posyandu_id"],
+          include: [
+            {
+              model: Warga,
+              as: "warga",
+              required: true,
+              include: [
+                { model: ProfileKehamilan, as: "profileKehamilan", required: false },
+                { model: Imunisasi, as: "imunisasi", required: false },
+              ],
+            },
+            {
+              model: SesiPosyandu,
+              as: "sesiPosyandu",
+              required: true,
+              include: [getPosyanduInclude(req.user)],
+            },
+          ],
+        },
+        { model: Rujukan, as: "rujukan", required: false },
+      ],
+    });
+
+    const plainRows = records.map((record) => (typeof record.get === "function" ? record.get({ plain: true }) : record));
+    const screeningConfig = await getScreeningConfig();
+    return res.status(200).json({
+      success: true,
+      data: {
+        template_rekap,
+        columns: REKAP_EXPORT_COLUMNS[template_rekap],
+        rows: aggregateRekapRows(plainRows, template_rekap, screeningConfig),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const exportPemeriksaanExcel = async (req, res, next) => {
   try {
-    const { page, limit, search, kategori_sasaran, sesi_posyandu_id, posyandu_id, start_date, end_date } = req.query;
+    const { page, limit, search, kategori_sasaran, sesi_posyandu_id, posyandu_id, start_date, end_date, template_rekap } = req.query;
+
+    if (template_rekap && !Object.prototype.hasOwnProperty.call(REKAP_GROUPS, template_rekap)) {
+      return res.status(400).json({ success: false, message: "Template rekap tidak valid." });
+    }
+    if (template_rekap && kategori_sasaran) {
+      return res.status(400).json({ success: false, message: "Pilih template rekap atau satu kategori, bukan keduanya." });
+    }
 
     if (["dinkes", "dinkesAdmin"].includes(req.user?.role)) {
       if (search || req.query.warga_id) {
@@ -253,6 +427,7 @@ const exportPemeriksaanExcel = async (req, res, next) => {
     const wargaWhere = {};
 
     if (kategori_sasaran) pemeriksaanWhere.kategori_sasaran = kategori_sasaran;
+    else if (template_rekap) pemeriksaanWhere.kategori_sasaran = { [Op.in]: REKAP_GROUPS[template_rekap] };
     if (start_date && end_date) pemeriksaanWhere.tanggal = { [Op.between]: [new Date(start_date), new Date(end_date)] };
     if (sesi_posyandu_id) sesiWhere.id = sesi_posyandu_id;
     if (posyandu_id) wargaWhere.posyandu_id = posyandu_id;
@@ -295,14 +470,71 @@ const exportPemeriksaanExcel = async (req, res, next) => {
     });
 
     const workbook = new ExcelJS.Workbook();
-    for (const group of Object.keys(REKAP_GROUPS)) {
+    const screeningConfig = await getScreeningConfig();
+    const exportGroups = template_rekap ? [template_rekap] : Object.keys(REKAP_GROUPS);
+    for (const group of exportGroups) {
       const worksheet = workbook.addWorksheet(group);
       const columns = REKAP_EXPORT_COLUMNS[group];
-      worksheet.columns = columns.map(({ key, label }) => ({ header: label, key, width: Math.min(Math.max(label.length + 2, 14), 32) }));
-      worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFF" } };
-      worksheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "1E40AF" } };
+      worksheet.columns = columns.map(({ key }, index) => ({ key, width: index === 0 ? 20 : 16, style: { alignment: { horizontal: "center", vertical: "middle", wrapText: true } } }));
       const plainRows = rows.map((row) => (typeof row.get === "function" ? row.get({ plain: true }) : row));
-      worksheet.addRows(aggregateRekapRows(plainRows, group));
+      const groupTitle = REKAP_TITLES[group] || group;
+
+      worksheet.addRow([`REKAPITULASI HASIL PEMERIKSAAN ${groupTitle.toUpperCase()}`]);
+      worksheet.mergeCells(1, 1, 1, columns.length);
+      worksheet.getRow(1).font = { bold: true, size: 14 };
+      worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle" };
+      worksheet.getRow(1).height = 24;
+
+      worksheet.addRow(["POSYANDU"]);
+      worksheet.mergeCells(2, 1, 2, columns.length);
+      worksheet.getRow(2).font = { bold: true };
+      worksheet.getRow(2).alignment = { horizontal: "center", vertical: "middle" };
+      worksheet.addRow([]);
+      worksheet.addRow(["Dusun / RT / RW", ":", ""]);
+      worksheet.addRow(["Desa / Kelurahan / Nagari", ":", ""]);
+      worksheet.addRow(["Kecamatan", ":", ""]);
+
+      const aggregateRows = aggregateRekapRows(plainRows, group, screeningConfig);
+      const rowsByPeriod = new Map(aggregateRows.map((row) => [row.bulan_tahun, row]));
+      const columnGroups = [];
+      columns.slice(1).forEach((column) => {
+        const label = getRekapColumnGroup(column.key);
+        const previousGroup = columnGroups[columnGroups.length - 1];
+        if (previousGroup?.label === label) previousGroup.columns.push(column);
+        else columnGroups.push({ label, columns: [column] });
+      });
+
+      const groupHeader = worksheet.addRow([]);
+      groupHeader.getCell(1).value = columns[0].label;
+      worksheet.mergeCells(7, 1, 8, 1);
+      let firstColumn = 2;
+      for (const columnGroup of columnGroups) {
+        groupHeader.getCell(firstColumn).value = columnGroup.label;
+        if (columnGroup.columns.length > 1) worksheet.mergeCells(7, firstColumn, 7, firstColumn + columnGroup.columns.length - 1);
+        firstColumn += columnGroup.columns.length;
+      }
+      groupHeader.font = { bold: true };
+      groupHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDE5F0" } };
+      groupHeader.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      groupHeader.height = 34;
+
+      const columnHeader = worksheet.addRow([]);
+      columns.slice(1).forEach((column, index) => {
+        columnHeader.getCell(index + 2).value = column.label;
+      });
+      columnHeader.font = { bold: true };
+      columnHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDE5F0" } };
+      columnHeader.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      columnHeader.height = 48;
+
+      const monthPeriods = getExportMonthPeriods(aggregateRows, start_date, end_date);
+      for (const period of monthPeriods) {
+        const row = rowsByPeriod.get(period.key) || {};
+        worksheet.addRow(columns.map(({ key }) => (key === "bulan_tahun" ? period.label : row[key] || 0)));
+      }
+
+      worksheet.views = [{ state: "frozen", xSplit: 1, ySplit: 8, topLeftCell: "B9" }];
+      worksheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
     }
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -598,6 +830,7 @@ const createPemeriksaan = async (req, res, next) => {
       kategori_sasaran: kategoriInput,
       tanggal,
       is_skrining_tahunan,
+      is_skrining_6_bulanan,
       // Measurement Fields
       bb_kg,
       tb_cm,
@@ -629,15 +862,22 @@ const createPemeriksaan = async (req, res, next) => {
     }
 
     const kategoriAkhir = kategoriFix;
+    const kategoriSkrining6Bulanan = ["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"];
+    if (is_skrining_6_bulanan && !kategoriSkrining6Bulanan.includes(kategoriAkhir)) {
+      return res.status(400).json({ success: false, message: "Skrining 6 bulanan hanya berlaku untuk kategori dewasa, lansia, dan remaja." });
+    }
 
-    // Pengecekan Skrining Tahunan (Khusus Dewasa & Lansia)
+    // Pengecekan skrining berkala per warga.
     let isTahunanFix = false;
-    if (["dewasa", "lansia"].includes(kategoriAkhir)) {
+    if (["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriAkhir)) {
       const targetYear = new Date(tglPemeriksaan).getFullYear();
       if (is_skrining_tahunan && (await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear, pemeriksaan.id))) {
         return res.status(409).json({ success: false, message: "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut." });
       }
       isTahunanFix = Boolean(is_skrining_tahunan);
+    }
+    if (is_skrining_6_bulanan && (await checkSudahSkrining6Bulanan(kunjungan.warga_id, tglPemeriksaan, pemeriksaan.id))) {
+      return res.status(409).json({ success: false, message: "Skrining 6 bulanan untuk warga ini belum jatuh tempo." });
     }
 
     // Format & Sanitasi Payload JSONB detail_skrining
@@ -653,6 +893,7 @@ const createPemeriksaan = async (req, res, next) => {
       jiwaProvided: Boolean(detail_skrining?.skrining_kesehatan_jiwa),
     });
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
+    scoredSkrining.detail.is_skrining_6_bulanan = Boolean(is_skrining_6_bulanan);
 
     const growthScores = getGrowthZScores(kunjungan.warga, { tanggal: tglPemeriksaan, bb_kg, tb_cm });
     const plotData = evaluasiPemeriksaan({
@@ -851,9 +1092,12 @@ const saveStep2 = async (req, res, next) => {
  */
 const saveStep4 = async (req, res, next) => {
   try {
-    const { kunjungan_id, detail_skrining, is_skrining_tahunan, profile_kehamilan_id } = req.body;
+    const { kunjungan_id, detail_skrining, is_skrining_tahunan, is_skrining_6_bulanan, profile_kehamilan_id } = req.body;
 
     const { kunjungan, pemeriksaan, tglPemeriksaan, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user);
+    if (is_skrining_6_bulanan && !["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriFix)) {
+      return res.status(400).json({ success: false, message: "Skrining 6 bulanan hanya berlaku untuk kategori dewasa, lansia, dan remaja." });
+    }
     if (profile_kehamilan_id) {
       const selectedProfile = await ProfileKehamilan.findOne({ where: { id: profile_kehamilan_id, warga_id: kunjungan.warga_id } });
       if (!selectedProfile) return res.status(400).json({ success: false, message: "profile_kehamilan_id tidak dimiliki oleh warga pada pemeriksaan ini." });
@@ -864,12 +1108,15 @@ const saveStep4 = async (req, res, next) => {
 
     // Pengecekan Skrining Tahunan
     let isTahunanFix = false;
-    if (["dewasa", "lansia"].includes(kategoriFix)) {
+    if (["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriFix)) {
       const targetYear = new Date(tglPemeriksaan).getFullYear();
       if (is_skrining_tahunan && (await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear, pemeriksaan.id))) {
         return res.status(409).json({ success: false, message: "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut." });
       }
       isTahunanFix = Boolean(is_skrining_tahunan);
+    }
+    if (is_skrining_6_bulanan && (await checkSudahSkrining6Bulanan(kunjungan.warga_id, tglPemeriksaan, pemeriksaan.id))) {
+      return res.status(409).json({ success: false, message: "Skrining 6 bulanan untuk warga ini belum jatuh tempo." });
     }
 
     const formattedSkrining = formatDetailSkrining(kategoriFix, detail_skrining, isTahunanFix, pemeriksaan.detail_skrining);
@@ -882,6 +1129,7 @@ const saveStep4 = async (req, res, next) => {
       jiwaProvided: Boolean(detail_skrining?.skrining_kesehatan_jiwa),
     });
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
+    scoredSkrining.detail.is_skrining_6_bulanan = Boolean(is_skrining_6_bulanan);
 
     await pemeriksaan.update({
       profile_kehamilan_id: profile_kehamilan_id !== undefined ? profile_kehamilan_id : pemeriksaan.profile_kehamilan_id,
@@ -1109,6 +1357,7 @@ const updatePemeriksaan = async (req, res, next) => {
       kategori_sasaran,
       tanggal,
       is_skrining_tahunan,
+      is_skrining_6_bulanan,
       bb_kg,
       tb_cm,
       lingkar_kepala_cm,
@@ -1173,6 +1422,9 @@ const updatePemeriksaan = async (req, res, next) => {
     }
 
     const kategoriAktif = tentukanKategoriAktif(pemeriksaan.kunjungan.warga.tanggal_lahir, pemeriksaan.kunjungan.warga.profileKehamilan, targetTanggal);
+    if (is_skrining_6_bulanan && !["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriAktif)) {
+      throw createPemeriksaanError(400, "Skrining 6 bulanan hanya berlaku untuk kategori dewasa, lansia, dan remaja.");
+    }
     const selectedProfile = profile_kehamilan_id ? await ProfileKehamilan.findOne({ where: { id: profile_kehamilan_id, warga_id: pemeriksaan.kunjungan.warga_id }, transaction }) : null;
     if (profile_kehamilan_id && !selectedProfile) throw createPemeriksaanError(400, "profile_kehamilan_id tidak dimiliki oleh warga pada pemeriksaan ini.");
     const profileForDate = selectedProfile || getLatestPregnancyProfile(pemeriksaan.kunjungan.warga.profileKehamilan || []);
@@ -1181,14 +1433,18 @@ const updatePemeriksaan = async (req, res, next) => {
 
     // Format ulang detail_skrining jika ada update payload JSONB
     let updatedDetailSkrining = pemeriksaan.detail_skrining;
-    if (detail_skrining !== undefined || is_skrining_tahunan !== undefined) {
+    if (detail_skrining !== undefined || is_skrining_tahunan !== undefined || is_skrining_6_bulanan !== undefined) {
       const screeningInput = detail_skrining !== undefined ? detail_skrining : pemeriksaan.detail_skrining || {};
       const screeningError = getScreeningError(kategoriAktif, screeningInput);
       if (screeningError) throw createPemeriksaanError(400, screeningError);
       let isTahunan = false;
-      if (["dewasa", "lansia"].includes(kategoriAktif)) isTahunan = Boolean(is_skrining_tahunan ?? pemeriksaan.detail_skrining?.is_skrining_tahunan);
+      if (["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriAktif)) isTahunan = Boolean(is_skrining_tahunan ?? pemeriksaan.detail_skrining?.is_skrining_tahunan);
       if (isTahunan && (await checkSudahSkriningTahunan(pemeriksaan.kunjungan.warga_id, new Date(targetTanggal).getFullYear(), pemeriksaan.id))) {
         throw createPemeriksaanError(409, "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut.");
+      }
+      const isSixMonthScreening = Boolean(is_skrining_6_bulanan ?? pemeriksaan.detail_skrining?.is_skrining_6_bulanan);
+      if (isSixMonthScreening && (await checkSudahSkrining6Bulanan(pemeriksaan.kunjungan.warga_id, targetTanggal, pemeriksaan.id))) {
+        throw createPemeriksaanError(409, "Skrining 6 bulanan untuk warga ini belum jatuh tempo.");
       }
 
       updatedDetailSkrining = formatDetailSkrining(kategoriAktif, screeningInput, isTahunan, pemeriksaan.detail_skrining);
@@ -1199,14 +1455,14 @@ const updatePemeriksaan = async (req, res, next) => {
         jiwaProvided: Boolean(screeningInput?.skrining_kesehatan_jiwa),
       });
       if (scoredSkrining.errors.length) throw createPemeriksaanError(400, scoredSkrining.errors.join(" "));
-      updatedDetailSkrining = scoredSkrining.detail;
+      updatedDetailSkrining = { ...scoredSkrining.detail, is_skrining_6_bulanan: isSixMonthScreening };
       const asiTransitionError = validateIrreversibleAsi(pemeriksaan.detail_skrining?.pelayanan_kesehatan?.is_asi_eksklusif, detail_skrining?.pelayanan_kesehatan?.is_asi_eksklusif);
       if (asiTransitionError) throw createPemeriksaanError(400, asiTransitionError);
     }
 
     const isStep2Edited =
       bb_kg !== undefined || tb_cm !== undefined || lingkar_kepala_cm !== undefined || lila_cm !== undefined || lingkar_perut_cm !== undefined || td_sistole !== undefined || td_diastole !== undefined || kadar_gula !== undefined;
-    const isStep4Edited = detail_skrining !== undefined || is_skrining_tahunan !== undefined;
+    const isStep4Edited = detail_skrining !== undefined || is_skrining_tahunan !== undefined || is_skrining_6_bulanan !== undefined;
     const isStep5Edited = topik_penyuluhan !== undefined || is_perlu_rujukan !== undefined || alasan_rujukan !== undefined || status_kehadiran_rujukan !== undefined;
 
     const oldValue = pemeriksaanAuditSnapshot(pemeriksaan);
@@ -1368,6 +1624,8 @@ const deletePemeriksaan = async (req, res, next) => {
 
 module.exports = {
   getAllPemeriksaan,
+  getRekapitulasiPemeriksaan,
+  getPemeriksaanStatistikBulanan,
   exportPemeriksaanExcel,
   getPemeriksaanById,
   getScreeningHistory,

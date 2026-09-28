@@ -1,8 +1,15 @@
 const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key) && obj[key] !== "" && obj[key] !== null && obj[key] !== undefined;
-const bool = (value) => value === true || value === 1 || value === "1" || String(value).toLowerCase() === "ya" || String(value).toLowerCase() === "true";
+const bool = (value) => value === true || value === 1 || value === "1" || ["ya", "sudah", "true"].includes(String(value).toLowerCase());
+const isNormalFinding = (value) => (typeof value === "string" ? value.trim().toLowerCase() === "normal" : bool(value));
 const num = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : undefined;
+};
+const numFromStatus = (value) => {
+  const normalized = String(value).trim().toLowerCase();
+  if (["sudah", "ya", "true"].includes(normalized)) return 1;
+  if (["belum", "tidak", "false"].includes(normalized)) return 0;
+  return num(value);
 };
 const set = (obj, key, value) => {
   if (value !== undefined) obj[key] = value;
@@ -39,12 +46,13 @@ function addTbc(target, form, category) {
 }
 
 function addPemeriksaan6Bulanan(target, form) {
+  if (form.isSkrining6Bulanan !== true) return;
   const penglihatan = {};
   const pendengaran = {};
-  if (has(form, "mataKanan")) set(penglihatan, "is_mata_kanan_normal", bool(form.mataKanan));
-  if (has(form, "mataKiri")) set(penglihatan, "is_mata_kiri_normal", bool(form.mataKiri));
-  if (has(form, "telingaKanan")) set(pendengaran, "is_telinga_kanan_normal", bool(form.telingaKanan));
-  if (has(form, "telingaKiri")) set(pendengaran, "is_telinga_kiri_normal", bool(form.telingaKiri));
+  if (has(form, "mataKanan")) set(penglihatan, "is_mata_kanan_normal", isNormalFinding(form.mataKanan));
+  if (has(form, "mataKiri")) set(penglihatan, "is_mata_kiri_normal", isNormalFinding(form.mataKiri));
+  if (has(form, "telingaKanan")) set(pendengaran, "is_telinga_kanan_normal", isNormalFinding(form.telingaKanan));
+  if (has(form, "telingaKiri")) set(pendengaran, "is_telinga_kiri_normal", isNormalFinding(form.telingaKiri));
   if (Object.keys(penglihatan).length || Object.keys(pendengaran).length) {
     target.pemeriksaan_6_bulanan = {};
     if (Object.keys(penglihatan).length) target.pemeriksaan_6_bulanan.tes_penglihatan_hitung_jari = penglihatan;
@@ -91,6 +99,7 @@ function addSkilas(target, form) {
     kognitif_dan_mobilisasi: {
       skilasOrientasi: "has_kendala_orientasi_waktu_tempat",
       skilasUlangKata: "has_kendala_ulang_3_kata",
+      skilasMobilisasi: "has_keterbatasan_mobilisasi",
       skilasTesKursi: "has_kendala_tes_berdiri_kursi",
     },
     malnutrisi: {
@@ -112,7 +121,10 @@ function addSkilas(target, form) {
   Object.entries(sections).forEach(([section, mappings]) => {
     const node = {};
     Object.entries(mappings).forEach(([source, key]) => {
-      if (has(form, source)) set(node, key, bool(form[source]));
+      if (has(form, source)) {
+        const isNormalResponse = ["skilasOrientasi", "skilasUlangKata", "skilasTesKursi", "skilasTesLihat", "skilasTesBisik"].includes(source);
+        set(node, key, isNormalResponse ? !bool(form[source]) : bool(form[source]));
+      }
     });
     if (Object.keys(node).length) result[section] = node;
   });
@@ -153,7 +165,7 @@ export function mapFlatScreeningToBackend(category, form = {}) {
 
   if (category === "busui") {
     const pelayanan_kesehatan = {};
-    if (has(form, "jumlahVitA")) set(pelayanan_kesehatan, "jumlah_kapsul_vit_a", num(form.jumlahVitA));
+    if (has(form, "jumlahVitA")) set(pelayanan_kesehatan, "jumlah_kapsul_vit_a", numFromStatus(form.jumlahVitA));
     if (has(form, "rutinVitA")) set(pelayanan_kesehatan, "is_rutin_vit_a", bool(form.rutinVitA));
     if (has(form, "menyusui")) set(pelayanan_kesehatan, "is_menyusui", bool(form.menyusui));
     if (has(form, "kbPascaPersalinan")) set(pelayanan_kesehatan, "is_kb_pasca_persalinan", bool(form.kbPascaPersalinan));
@@ -186,9 +198,9 @@ export function mapFlatScreeningToBackend(category, form = {}) {
 
     const puma = {};
     if (has(form, "pumaMerokok")) set(puma, "merokok_skor", num(form.pumaMerokok));
-    if (has(form, "pumaNapasPendek")) set(puma, "napas_pendek_skor", num(form.pumaNapasPendek));
-    if (has(form, "pumaDahak")) set(puma, "dahak_paru_skor", num(form.pumaDahak));
-    if (has(form, "pumaBatukFlu")) set(puma, "batuk_atau_spirometri_skor", num(form.pumaBatukFlu));
+    if (has(form, "pumaNapasPendek")) set(puma, "napas_pendek_skor", bool(form.pumaNapasPendek) ? 1 : 0);
+    if (has(form, "pumaDahak")) set(puma, "dahak_paru_skor", bool(form.pumaDahak) ? 1 : 0);
+    if (has(form, "pumaBatukFlu")) set(puma, "batuk_atau_spirometri_skor", bool(form.pumaBatukFlu) ? 1 : 0);
     if (Object.keys(puma).length) result.skrining_ppok_puma = puma;
 
     if (category === "lansia") {

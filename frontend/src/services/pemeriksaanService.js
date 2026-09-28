@@ -25,6 +25,14 @@ export const pemeriksaanService = {
     return { success: true, data: allItems, pagination: { total_items: allItems.length } };
   },
 
+  getMonthlyStatistics: async () => {
+    return await api.get("/pemeriksaan/statistik-bulanan");
+  },
+
+  getRekapitulasi: async (params = {}) => {
+    return await api.get("/pemeriksaan/rekapitulasi", { params });
+  },
+
   createPemeriksaan: async (data) => {
     return await api.post("/pemeriksaan", data);
   },

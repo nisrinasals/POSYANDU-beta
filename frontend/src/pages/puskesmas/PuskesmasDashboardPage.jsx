@@ -9,6 +9,13 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
   // Dynamic totals from Posyandu data
   // Gunakan agregasi backend agar dashboard tidak terpotong limit daftar warga (100/page).
   const totalSasaranCount = Number(globalStatistikSasaran?.total_warga ?? globalSasaranList?.length ?? 0);
+  const examinationRecords = useMemo(() => {
+    const recordsById = new Map();
+    Object.values(globalPemeriksaanData || {}).forEach((record) => {
+      if (record?.id && record?.tanggal) recordsById.set(String(record.id), record);
+    });
+    return [...recordsById.values()];
+  }, [globalPemeriksaanData]);
   const examinedCount = useMemo(() => {
     if (!globalSasaranList || globalSasaranList.length === 0) return 0;
     return globalSasaranList.filter((s) => s.statusPemeriksaan === "Sudah" || s.status === "Sudah" || !!globalPemeriksaanData?.[s.id] || !!globalPemeriksaanData?.[String(s.id)]).length;
@@ -22,12 +29,11 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
 
   // Aggregate the real examination records returned by the backend.
   const chartData = useMemo(() => {
-    const records = Object.values(globalPemeriksaanData || {}).filter((item) => item && typeof item === "object" && item.tanggal);
     const now = new Date();
     const countForMonth = (year, month) =>
-      records.filter((item) => {
-        const d = new Date(item.tanggal);
-        return d.getFullYear() === year && d.getMonth() === month;
+      examinationRecords.filter((item) => {
+        const [recordYear, recordMonth] = String(item.tanggal).slice(0, 10).split("-").map(Number);
+        return recordYear === year && recordMonth === month + 1;
       }).length;
 
     const points = [];
@@ -38,7 +44,6 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
         points.push({
           periode: d.toLocaleDateString("id-ID", { month: "short" }),
           pemeriksaan: count,
-          kunjungan: count,
         });
       }
     } else {
@@ -48,44 +53,31 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
         points.push({
           periode: new Date(year, month, 1).toLocaleDateString("id-ID", { month: "short" }),
           pemeriksaan: count,
-          kunjungan: count,
         });
       }
     }
     return points;
-  }, [globalPemeriksaanData, periodeGrafik]);
+  }, [examinationRecords, periodeGrafik]);
 
   const availableYears = useMemo(
     () =>
       [
         ...new Set(
-          Object.values(globalPemeriksaanData || {})
+          examinationRecords
             .map((item) => String(item?.tanggal || "").slice(0, 4))
             .filter((year) => /^\d{4}$/.test(year)),
         ),
       ].sort((a, b) => Number(b) - Number(a)),
-    [globalPemeriksaanData],
+    [examinationRecords],
   );
 
   // Scaler calculation for SVG Chart
   const maxPemeriksaan = Math.max(1, ...chartData.map((d) => d.pemeriksaan));
-  const maxKunjungan = Math.max(1, ...chartData.map((d) => d.kunjungan));
   const chartHeight = 220;
   const chartWidth = 720;
   const paddingX = 40;
   const plotWidth = chartWidth - paddingX * 2;
   const stepX = chartData.length > 1 ? plotWidth / (chartData.length - 1) : plotWidth;
-
-  // Generate line path coordinates for Kunjungan Posyandu
-  const linePoints = chartData.map((d, i) => {
-    const x = paddingX + i * stepX;
-    const y = chartHeight - (d.kunjungan / maxKunjungan) * (chartHeight - 30) - 15;
-    return { x, y, ...d };
-  });
-
-  const linePathD = linePoints.reduce((acc, pt, idx) => {
-    return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
-  }, "");
 
   // 9 Kategori Siklus Hidup Distribution Data dynamically calculated from Posyandu sasaran
   const kategoriDistribution = useMemo(() => {
@@ -203,7 +195,7 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. GRAFIK TREN PEMERIKSAAN & KUNJUNGAN POSYANDU (Bar + Line)              */}
+      {/* 2. GRAFIK TREN PEMERIKSAAN POSYANDU                                    */}
       {/* ========================================================================= */}
       <div className="card border-0 bg-white shadow-xs rounded-4 p-4">
         {/* Header Grafik */}
@@ -211,26 +203,20 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
           <div>
             <h5 className="fw-bold text-dark mb-1 d-flex align-items-center gap-2">
               <TrendingUp size={20} style={{ color: "#428A75" }} />
-              <span>Grafik Tren Pemeriksaan &amp; Kunjungan</span>
+              <span>Grafik Tren Pemeriksaan</span>
             </h5>
             <p className="text-muted small mb-0" style={{ fontSize: "0.825rem" }}>
-              Tren jumlah sasaran diperiksa dan frekuensi kunjungan Posyandu per bulan.
+              Jumlah rekaman pemeriksaan per bulan pada wilayah kerja Puskesmas.
             </p>
           </div>
 
           <div className="d-flex flex-wrap align-items-center gap-3">
             {/* Legend Keterangan */}
-            <div className="d-flex align-items-center gap-3 small">
+              <div className="d-flex align-items-center gap-3 small">
               <div className="d-flex align-items-center gap-1.5">
                 <span className="d-inline-block rounded-1" style={{ width: "14px", height: "14px", backgroundColor: "#428A75" }} />
                 <span className="text-muted" style={{ fontSize: "0.8rem" }}>
-                  Pemeriksaan Sasaran
-                </span>
-              </div>
-              <div className="d-flex align-items-center gap-1.5">
-                <span className="d-inline-block rounded-circle" style={{ width: "12px", height: "12px", backgroundColor: "#FE6D01" }} />
-                <span className="text-muted" style={{ fontSize: "0.8rem" }}>
-                  Kunjungan Posyandu
+                  Rekaman Pemeriksaan
                 </span>
               </div>
             </div>
@@ -250,7 +236,7 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
           </div>
         </div>
 
-        {/* Body Grafik (Kombinasi SVG Bar + Curved Line Responsive) */}
+        {/* Body Grafik */}
         <div className="position-relative w-100 overflow-hidden" style={{ minHeight: "260px" }}>
           {/* Y-Axis Gridlines & Reference Values */}
           <div className="position-absolute start-0 end-0 top-0 bottom-0 d-flex flex-column justify-content-between pe-2" style={{ pointerEvents: "none", height: `${chartHeight}px` }}>
@@ -267,17 +253,13 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
             })}
           </div>
 
-          {/* SVG Canvas overlaying Bars and Line */}
+          {/* SVG bar chart */}
           <div className="position-relative" style={{ height: `${chartHeight + 35}px`, marginLeft: "45px", marginRight: "20px" }}>
             <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 35}`} className="w-100 h-100" style={{ overflow: "visible" }}>
               <defs>
                 <linearGradient id="barGradientPuskesmas" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#428A75" stopOpacity="0.95" />
                   <stop offset="100%" stopColor="#428A75" stopOpacity="0.65" />
-                </linearGradient>
-                <linearGradient id="lineGlow" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#FE6D01" />
-                  <stop offset="100%" stopColor="#f59e0b" />
                 </linearGradient>
               </defs>
 
@@ -305,18 +287,6 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
                 );
               })}
 
-              {/* 2. Line Chart (Kunjungan Posyandu) */}
-              <path d={linePathD} fill="none" stroke="url(#lineGlow)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-
-              {/* 3. Line Points & Data Circles */}
-              {linePoints.map((pt, i) => {
-                const isHovered = activeTooltip?.index === i;
-                return (
-                  <g key={`pt-${i}`} style={{ pointerEvents: "none" }}>
-                    <circle cx={pt.x} cy={pt.y} r={isHovered ? "7" : "5"} fill="#ffffff" stroke="#FE6D01" strokeWidth="3" style={{ transition: "all 0.2s ease" }} />
-                  </g>
-                );
-              })}
             </svg>
 
             {/* Interactive Tooltip Card */}
@@ -339,10 +309,6 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
                     {activeTooltip.pemeriksaan} Sasaran
                   </strong>
                 </div>
-                <div className="d-flex align-items-center justify-content-between gap-2 text-muted">
-                  <span>Kunjungan:</span>
-                  <strong style={{ color: "#FE6D01" }}>{activeTooltip.kunjungan} Posyandu</strong>
-                </div>
               </div>
             )}
           </div>
@@ -351,7 +317,7 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
         {/* Footer Summary Insight */}
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 pt-3 border-top mt-2">
           <div className="text-muted small" style={{ fontSize: "0.8rem" }}>
-            💡 Tren pemeriksaan sasaran dan kunjungan posyandu dipantau secara berkala setiap bulan.
+            Tren dihitung dari rekaman pemeriksaan yang tersimpan pada backend.
           </div>
           <button
             className="btn btn-sm btn-light border text-dark fw-bold d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 align-self-start align-self-sm-auto"

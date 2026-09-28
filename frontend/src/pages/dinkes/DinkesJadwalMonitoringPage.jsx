@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Calendar, Clock, MapPin, Search, Eye, Filter, UserCheck, ChevronLeft, ChevronRight, X, Info, Building2, CalendarCheck, Users, FileText } from "lucide-react";
+import { formatDateId } from "../../utils/dataMappers";
 
 export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
   const themeColor = "#1e3a8a";
@@ -200,7 +201,7 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
                       {/* TANGGAL & WAKTU */}
                       <td className="py-3 px-3">
                         <div className="fw-semibold text-dark" style={{ fontSize: "0.875rem" }}>
-                          {item.tanggalFormatted || item.tanggal || ""}
+                          {formatDateId(item.tanggalFormatted || item.tanggal)}
                         </div>
                         <div className="text-muted small" style={{ fontSize: "0.825rem" }}>
                           {item.waktu || ""}
@@ -317,7 +318,7 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
                             <td className="text-muted ps-0 py-1" style={{ width: "125px" }}>
                               Hari / Tanggal
                             </td>
-                            <td className="py-1 fw-bold text-dark">: {selectedJadwal.tanggalFormatted || selectedJadwal.tanggal || ""}</td>
+                            <td className="py-1 fw-bold text-dark">: {formatDateId(selectedJadwal.tanggalFormatted || selectedJadwal.tanggal)}</td>
                           </tr>
                           <tr>
                             <td className="text-muted ps-0 py-1">Waktu Pelaksanaan</td>

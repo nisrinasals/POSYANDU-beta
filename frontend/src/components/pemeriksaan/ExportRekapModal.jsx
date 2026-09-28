@@ -1,31 +1,27 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { X, Download, FileSpreadsheet, CheckCircle2, Layers, Calendar, AlertCircle } from "lucide-react";
+import { Download, FileSpreadsheet, CheckCircle2, Layers, Calendar } from "lucide-react";
 import { pemeriksaanService } from "../../services";
+import RekapWorksheetPreview from "./RekapWorksheetPreview";
 
 const CATEGORY_GROUPS = {
-  bumil_nifas: {
+  bumil_nifas_menyusui: {
     label: "Ibu Hamil / Nifas / Menyusui",
-    categories: ["bumil", "busui"],
   },
   bayi_balita_apras: {
     label: "Bayi, Balita dan Apras",
-    categories: ["bayi", "balita", "apras"],
   },
-  remaja: {
+  usia_sekolah_remaja: {
     label: "Anak Usia Sekolah dan Remaja (6–18 Tahun)",
-    categories: ["uskrem_6_14", "uskrem_15_18"],
   },
   dewasa_lansia: {
     label: "Usia Dewasa dan Lansia (≥ 19 Tahun)",
-    categories: ["dewasa", "lansia"],
   },
   all: {
-    label: "Semua Kategori",
-    categories: [],
+    label: "Semua Template Rekap",
   },
 };
 
-export default function ExportRekapModal({ isOpen, onClose, currentCategory = "Semua Kategori", currentYear = "Semua", globalPemeriksaanData = {}, theme = "kader", themeColor = null }) {
+export default function ExportRekapModal({ isOpen, onClose, currentCategory = "Semua Kategori", currentYear = "Semua", globalPemeriksaanData = {}, theme = "kader", themeColor = null, roleTitle = "" }) {
   const isDinkes = theme === "dinkes";
   const isPuskesmas = theme === "puskesmas";
   const primaryColor = themeColor || (isDinkes ? "#1e3a8a" : isPuskesmas ? "#428A75" : "#2b2e4a");
@@ -35,21 +31,16 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
 
   const initialCategory = useMemo(() => {
     if (categoryKey.includes("bayi") || categoryKey.includes("balita") || categoryKey.includes("apras")) return "bayi_balita_apras";
-    if (categoryKey.includes("remaja") || categoryKey.includes("sekolah") || categoryKey.includes("usekrem")) return "remaja";
+    if (categoryKey.includes("remaja") || categoryKey.includes("sekolah") || categoryKey.includes("usekrem")) return "usia_sekolah_remaja";
     if (categoryKey.includes("dewasa") || categoryKey.includes("lansia")) return "dewasa_lansia";
-    if (categoryKey.includes("bumil") || categoryKey.includes("nifas") || categoryKey.includes("menyusui")) return "bumil_nifas";
+    if (categoryKey.includes("bumil") || categoryKey.includes("nifas") || categoryKey.includes("menyusui")) return "bumil_nifas_menyusui";
     return "all";
   }, [categoryKey]);
 
-  const availableYears = useMemo(() => {
-    const years = Object.values(globalPemeriksaanData || {})
-      .map((item) => String(item?.tanggal || "").slice(0, 4))
-      .filter((year) => /^\d{4}$/.test(year));
-    return [...new Set(years)].sort((a, b) => Number(b) - Number(a));
-  }, [globalPemeriksaanData]);
-
   const [selectedFormatCategory, setSelectedFormatCategory] = useState(initialCategory);
-  const [exportYear, setExportYear] = useState(currentYear === "Semua" ? "" : currentYear);
+  const defaultYear = currentYear === "Semua" ? String(new Date().getFullYear()) : currentYear;
+  const [exportYear, setExportYear] = useState(defaultYear);
+  const [backendYears, setBackendYears] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -57,14 +48,36 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
   useEffect(() => {
     if (!isOpen) return;
     setSelectedFormatCategory(initialCategory);
-    setExportYear(currentYear === "Semua" ? "" : currentYear);
+    setExportYear(currentYear === "Semua" ? String(new Date().getFullYear()) : currentYear);
     setShowSuccess(false);
     setErrorMessage("");
   }, [isOpen, initialCategory, currentYear]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    pemeriksaanService
+      .getMonthlyStatistics()
+      .then((response) => {
+        if (!cancelled) setBackendYears(Array.isArray(response?.data?.years) ? response.data.years : []);
+      })
+      .catch(() => {
+        if (!cancelled) setBackendYears([]);
+      });
 
-  const selectedGroup = CATEGORY_GROUPS[selectedFormatCategory] || CATEGORY_GROUPS.all;
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  const availableYears = useMemo(() => {
+    const yearsFromRecords = Object.values(globalPemeriksaanData || {})
+      .map((item) => String(item?.tanggal || "").slice(0, 4))
+      .filter((year) => /^\d{4}$/.test(year));
+    return [...new Set([...yearsFromRecords, ...backendYears, String(new Date().getFullYear())])].sort((a, b) => Number(b) - Number(a));
+  }, [backendYears, globalPemeriksaanData]);
+
+  if (!isOpen) return null;
 
   const extractBlob = (response) => {
     if (response instanceof Blob) return response;
@@ -97,9 +110,7 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
         params.end_date = `${year}-12-31`;
       }
 
-      if (selectedGroup.categories.length === 1) {
-        params.kategori_sasaran = selectedGroup.categories[0];
-      }
+      if (selectedFormatCategory !== "all") params.template_rekap = selectedFormatCategory;
 
       const response = await pemeriksaanService.exportPemeriksaanExcel(params);
       const blob = extractBlob(response);
@@ -111,7 +122,7 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `rekap-pemeriksaan-${year || "semua-data"}.xlsx`;
+      link.download = `rekap-pemeriksaan-${selectedFormatCategory}-${year || "semua-data"}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -130,7 +141,7 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
 
   return (
     <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(15, 23, 42, 0.65)", backdropFilter: "blur(4px)", zIndex: 1055 }}>
-      <div className="modal-dialog modal-dialog-centered modal-lg">
+      <div className="modal-dialog modal-dialog-centered modal-xl" style={{ maxWidth: "min(1250px, 96vw)" }}>
         <div className="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
           <div className="modal-header border-bottom px-4 py-3 bg-light">
             <div className="d-flex align-items-center gap-2">
@@ -139,7 +150,7 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
               </div>
               <div>
                 <h5 className="modal-title fw-bold text-dark mb-0">Export Rekapitulasi Pemeriksaan</h5>
-                <p className="text-muted small mb-0">Berkas dihasilkan langsung oleh backend dari data yang tersimpan.</p>
+                <p className="text-muted small mb-0">Pilih template dan tahun.</p>
               </div>
             </div>
             <button type="button" className="btn-close shadow-none" onClick={onClose} aria-label="Tutup" />
@@ -152,13 +163,13 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
                   <CheckCircle2 size={42} />
                 </div>
                 <h5 className="fw-bold text-dark">File Excel Berhasil Dibuat</h5>
-                <p className="text-muted small mb-0">File hasil export berasal dari endpoint backend.</p>
+                <p className="text-muted small mb-0">File rekap siap diunduh.</p>
               </div>
             ) : (
               <div className="row g-3">
                 <div className="col-12 col-md-7">
                   <label className="form-label fw-bold text-dark small d-flex align-items-center gap-2">
-                    <Layers size={14} style={{ color: primaryColor }} /> Kategori Export
+                    <Layers size={14} style={{ color: primaryColor }} /> Template Rekap
                   </label>
                   <select className="form-select border-2 fw-semibold py-2 text-dark" style={{ borderColor: primaryColor }} value={selectedFormatCategory} onChange={(e) => setSelectedFormatCategory(e.target.value)}>
                     {Object.entries(CATEGORY_GROUPS).map(([key, group]) => (
@@ -183,16 +194,6 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
                   </select>
                 </div>
 
-                <div className="col-12">
-                  <div className="alert alert-light border d-flex gap-2 align-items-start mb-0">
-                    <AlertCircle size={17} className="flex-shrink-0 mt-1" style={{ color: primaryColor }} />
-                    <div className="small text-secondary">
-                      <div className="fw-semibold text-dark mb-1">Sumber data</div>
-                      Export membaca data sesuai scope akun dari backend. Tidak ada data contoh, dummy row, atau identitas wilayah yang dibuat di frontend.
-                    </div>
-                  </div>
-                </div>
-
                 <div className="col-12 d-flex justify-content-end gap-2 pt-2">
                   <button type="button" className="btn btn-light border rounded-3 px-4" onClick={onClose} disabled={isExporting}>
                     Batal
@@ -201,6 +202,16 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
                     <Download size={16} />
                     {isExporting ? "Mengambil data..." : "Export Excel (.xlsx)"}
                   </button>
+                </div>
+
+                <div className="col-12">
+                  <div className="small text-muted mb-2">Pratinjau template rekap</div>
+                  <RekapWorksheetPreview
+                    templateRekap={selectedFormatCategory === "all" ? "bumil_nifas_menyusui" : selectedFormatCategory}
+                    year={exportYear || "Semua"}
+                    theme={theme}
+                    roleTitle={roleTitle}
+                  />
                 </div>
 
                 {errorMessage && (

@@ -4,7 +4,7 @@ const assert = require("assert");
 const test = require("node:test");
 const { Op } = require("sequelize");
 const { SKEMA_SKRINING, formatDetailSkrining, validateDetailSkrining } = require("../utils/detailSkriningHelper");
-const { checkSudahSkriningTahunan } = require("../utils/skriningChecker");
+const { checkSudahSkriningTahunan, checkSudahSkrining6Bulanan } = require("../utils/skriningChecker");
 const { Pemeriksaan } = require("../models");
 const { tentukanKategoriUmur } = require("../utils/kategoriHelper");
 
@@ -108,6 +108,25 @@ test("annual screening checker omits id filter when no pemeriksaan id is exclude
     };
     await checkSudahSkriningTahunan(10, 2026);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(calls[0].where, "id"), false);
+  } finally {
+    Pemeriksaan.findOne = originalFindOne;
+  }
+});
+
+test("six-month screening checker uses a clamped six-calendar-month range and excludes the current record", async () => {
+  const originalFindOne = Pemeriksaan.findOne;
+  const calls = [];
+  try {
+    Pemeriksaan.findOne = async (options) => {
+      calls.push(options);
+      return null;
+    };
+    assert.strictEqual(await checkSudahSkrining6Bulanan(10, "2026-08-31", 55), false);
+    const range = calls[0].where.tanggal[Object.getOwnPropertySymbols(calls[0].where.tanggal)[0]];
+    assert.strictEqual(range[0].toISOString().slice(0, 10), "2026-02-28");
+    assert.strictEqual(range[1].toISOString().slice(0, 10), "2026-08-31");
+    assert.deepStrictEqual(calls[0].where.id, { [Op.ne]: 55 });
+    assert.deepStrictEqual(calls[0].where.detail_skrining[Op.contains], { is_skrining_6_bulanan: true });
   } finally {
     Pemeriksaan.findOne = originalFindOne;
   }

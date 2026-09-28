@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Calendar, Search, ChevronLeft, ChevronRight, Eye, X, Info, CalendarCheck, FileText, MapPin } from "lucide-react";
+import { formatDateId } from "../../utils/dataMappers";
 
 export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJadwalList, onRefreshData }) {
   // Search & Filter states
@@ -284,7 +285,7 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
                             <td className="text-muted ps-0 py-1" style={{ width: "125px" }}>
                               Hari / Tanggal
                             </td>
-                            <td className="py-1 fw-bold text-dark">: {selectedJadwal.tanggalFormatted || selectedJadwal.tanggal}</td>
+                            <td className="py-1 fw-bold text-dark">: {formatDateId(selectedJadwal.tanggalFormatted || selectedJadwal.tanggal)}</td>
                           </tr>
                           <tr>
                             <td className="text-muted ps-0 py-1">Status Jadwal</td>
