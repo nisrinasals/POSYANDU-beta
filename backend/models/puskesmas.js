@@ -19,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: false,
       },
-      kelurahan_id: {
+      kecamatan_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
@@ -34,8 +34,12 @@ module.exports = (sequelize, DataTypes) => {
   );
 
   Puskesmas.associate = function (models) {
-    Puskesmas.belongsTo(models.Kelurahan, {
-      foreignKey: "kelurahan_id",
+    Puskesmas.belongsTo(models.Kecamatan, {
+      foreignKey: "kecamatan_id",
+      as: "kecamatan",
+    });
+    Puskesmas.hasMany(models.Kelurahan, {
+      foreignKey: "puskesmas_id",
       as: "kelurahan",
     });
     Puskesmas.hasMany(models.Posyandu, {

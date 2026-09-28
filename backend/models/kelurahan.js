@@ -14,6 +14,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
+      puskesmas_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       nama_kelurahan: {
         type: DataTypes.STRING(100),
         allowNull: false,
@@ -30,8 +34,8 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: "kecamatan_id",
       as: "kecamatan",
     });
-    Kelurahan.hasMany(models.Puskesmas, {
-      foreignKey: "kelurahan_id",
+    Kelurahan.belongsTo(models.Puskesmas, {
+      foreignKey: "puskesmas_id",
       as: "puskesmas",
     });
     Kelurahan.hasMany(models.Posyandu, {

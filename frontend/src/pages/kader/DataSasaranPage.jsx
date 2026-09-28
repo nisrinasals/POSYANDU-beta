@@ -132,6 +132,10 @@ export default function DataSasaranPage({
     pbl: "",
   });
 
+  const [showNamaSuggestions, setShowNamaSuggestions] = useState(false);
+  const [matchingNamaSuggestions, setMatchingNamaSuggestions] = useState([]);
+  const [namaRecommendationSelected, setNamaRecommendationSelected] = useState(false);
+
   const [mutasiCheckForm, setMutasiCheckForm] = useState({
     nama: "",
     nik: "",
@@ -296,6 +300,81 @@ export default function DataSasaranPage({
 
     return "dewasa";
   };
+  useEffect(() => {
+    // Recommendation hanya untuk kategori Bumil
+    if (selectedCategory?.id !== "bumil") {
+      setShowNamaSuggestions(false);
+      setMatchingNamaSuggestions([]);
+      setNamaRecommendationSelected(false);
+      return;
+    }
+
+    // Kalau user sudah memilih recommendation,
+    // jangan munculkan recommendation lagi
+    if (namaRecommendationSelected) {
+      setShowNamaSuggestions(false);
+      return;
+    }
+
+    const keyword = categoryForm.nama?.trim();
+
+    // Minimal 2 karakter
+    if (!keyword || keyword.length < 2) {
+      setShowNamaSuggestions(false);
+      setMatchingNamaSuggestions([]);
+      return;
+    }
+
+    const loadRecommendation = async () => {
+      try {
+        const res = await wargaService.getAllWarga({
+          search: keyword,
+          status_domisili: "all",
+          limit: 10,
+          page: 1,
+        });
+
+        console.log("BUMIL RECOMMENDATION RESPONSE:", res);
+
+        const rawData = Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.items) ? res.data.items : Array.isArray(res?.data?.data) ? res.data.data : [];
+
+        const suggestions = rawData
+          .filter((w) => {
+            const kategori = String(w.kategori_sasaran_saat_ini || w.kategori_sasaran || w.kategori || "").toLowerCase();
+
+            // Jangan rekomendasikan warga yang sudah
+            // Bumil / Busui / Nifas
+            return !["bumil", "busui", "nifas", "menyusui"].includes(kategori);
+          })
+          .slice(0, 5)
+          .map((w) => ({
+            id: w.id,
+            nama: w.nama_lengkap || w.nama || "",
+            nik: w.nik || "",
+            kategori: w.kategori_sasaran_saat_ini || w.kategori_sasaran || w.kategori || "Dewasa",
+            tglLahir: w.tanggal_lahir ? String(w.tanggal_lahir).split("T")[0] : "",
+            gender: w.jenis_kelamin || "",
+            alamat: w.alamat || "",
+            noHp: w.telepon || "",
+            namaIbu: w.nama_ibu || "",
+            namaAyah: w.nama_ayah || "",
+            statusPernikahan: w.status_perkawinan || "",
+            pekerjaan: w.pekerjaan || "",
+          }));
+
+        setMatchingNamaSuggestions(suggestions);
+        setShowNamaSuggestions(suggestions.length > 0);
+      } catch (err) {
+        console.error("Gagal mengambil rekomendasi Bumil:", err);
+        setMatchingNamaSuggestions([]);
+        setShowNamaSuggestions(false);
+      }
+    };
+
+    const timer = setTimeout(loadRecommendation, 300);
+
+    return () => clearTimeout(timer);
+  }, [categoryForm.nama, selectedCategory, namaRecommendationSelected]);
 
   // Filter Logic
   const filteredData = (sasaranList || []).filter((item) => {
@@ -536,6 +615,8 @@ export default function DataSasaranPage({
           ...(categoryForm.namaAyah || categoryForm.namaSuami ? { nama_suami: categoryForm.namaAyah || categoryForm.namaSuami } : {}),
           ...(categoryForm.anakKe ? { anak_ke: parseInt(categoryForm.anakKe, 10) } : {}),
           ...(categoryForm.jarakAnak ? { jarak_anak_sebelum_bulan: parseInt(categoryForm.jarakAnak, 10) } : {}),
+          ...(categoryForm.bb ? { bb_sebelum_hamil_kg: Number(categoryForm.bb) } : {}),
+          ...(categoryForm.tb ? { tb_sebelum_hamil_cm: Number(categoryForm.tb) } : {}),
           ...(categoryForm.tglPersalinan ? { tanggal_persalinan: categoryForm.tglPersalinan } : {}),
           status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
           is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
@@ -591,6 +672,8 @@ export default function DataSasaranPage({
             ...(categoryForm.namaAyah || categoryForm.namaSuami ? { nama_suami: categoryForm.namaAyah || categoryForm.namaSuami } : {}),
             ...(categoryForm.anakKe ? { anak_ke: parseInt(categoryForm.anakKe, 10) } : {}),
             ...(categoryForm.jarakAnak ? { jarak_anak_sebelum_bulan: parseInt(categoryForm.jarakAnak, 10) } : {}),
+            ...(categoryForm.bb ? { bb_sebelum_hamil_kg: Number(categoryForm.bb) } : {}),
+            ...(categoryForm.tb ? { tb_sebelum_hamil_cm: Number(categoryForm.tb) } : {}),
             ...(categoryForm.tglPersalinan ? { tanggal_persalinan: categoryForm.tglPersalinan } : {}),
             status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
             is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
@@ -620,6 +703,8 @@ export default function DataSasaranPage({
               nama_suami: categoryForm.namaAyah || categoryForm.namaSuami || null,
               anak_ke: categoryForm.anakKe ? parseInt(categoryForm.anakKe, 10) : 1,
               jarak_anak_sebelum_bulan: categoryForm.jarakAnak ? parseInt(categoryForm.jarakAnak, 10) : null,
+              bb_sebelum_hamil_kg: categoryForm.bb ? Number(categoryForm.bb) : null,
+              tb_sebelum_hamil_cm: categoryForm.tb ? Number(categoryForm.tb) : null,
               status_kehamilan: katId === "nifas" ? "nifas" : "hamil",
               is_menyusui: katId === "nifas" ? categoryForm.statusMenyusui !== "Sudah Tidak Menyusui" : false,
             });
@@ -1052,7 +1137,107 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
-                      <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={categoryForm.nama} onChange={(e) => setCategoryForm({ ...categoryForm, nama: e.target.value })} required />
+
+                      <div className="position-relative">
+                        <input
+                          type="text"
+                          className="form-control form-control-custom"
+                          placeholder="Masukkan nama lengkap"
+                          value={categoryForm.nama}
+                          onChange={(e) => {
+                            setNamaRecommendationSelected(false);
+
+                            setCategoryForm((prev) => ({
+                              ...prev,
+                              nama: e.target.value,
+                            }));
+                          }}
+                          onFocus={() => {
+                            if (selectedCategory?.id === "bumil" && !namaRecommendationSelected && matchingNamaSuggestions.length > 0) {
+                              setShowNamaSuggestions(true);
+                            }
+                          }}
+                          required
+                        />
+
+                        {selectedCategory?.id === "bumil" && showNamaSuggestions && !namaRecommendationSelected && matchingNamaSuggestions.length > 0 && (
+                          <div
+                            className="position-absolute w-100 bg-white border rounded-3 shadow-lg p-1"
+                            style={{
+                              maxHeight: "220px",
+                              overflowY: "auto",
+                              overflowX: "hidden",
+                              zIndex: 1050,
+                              top: "100%",
+                              left: 0,
+                            }}
+                          >
+                            <div className="px-2 py-1 text-muted small border-bottom mb-1 text-start" style={{ fontSize: "0.72rem" }}>
+                              Rekomendasi warga terdaftar — pilih jika warga ini akan dialihkan menjadi Ibu Hamil:
+                            </div>
+
+                            {matchingNamaSuggestions.map((w) => (
+                              <div
+                                key={w.id}
+                                role="button"
+                                className="d-flex flex-column text-start p-2 rounded-2 mb-1"
+                                style={{
+                                  cursor: "pointer",
+                                  backgroundColor: "#f8fafc",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = "#f1f5f9";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = "#f8fafc";
+                                }}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+
+                                  setCategoryForm((prev) => ({
+                                    ...prev,
+                                    nama: w.nama || "",
+                                    nik: w.nik || "",
+                                    tglLahir: w.tglLahir || "",
+                                    gender: w.gender === "P" ? "Perempuan" : w.gender === "L" ? "Laki-laki" : "",
+                                    alamat: w.alamat || "",
+                                    noHp: w.noHp || "",
+                                    namaIbu: w.namaIbu || "",
+                                    namaAyah: w.namaAyah || "",
+                                    statusPernikahan: w.statusPernikahan === "menikah" ? "Menikah" : w.statusPernikahan === "belum_menikah" ? "Belum Menikah" : w.statusPernikahan || "",
+                                    pekerjaan: w.pekerjaan || "",
+                                  }));
+
+                                  // Kunci recommendation setelah dipilih
+                                  setNamaRecommendationSelected(true);
+
+                                  // Tutup dropdown
+                                  setShowNamaSuggestions(false);
+                                  setMatchingNamaSuggestions([]);
+                                }}
+                              >
+                                <div
+                                  className="fw-bold text-dark small text-start"
+                                  style={{
+                                    wordBreak: "break-word",
+                                    lineHeight: "1.25",
+                                  }}
+                                >
+                                  {w.nama}
+                                </div>
+
+                                <div className="text-muted d-flex align-items-center gap-1 mt-1 text-start" style={{ fontSize: "0.72rem" }}>
+                                  <span className="font-monospace">{w.nik}</span>
+
+                                  <span style={{ color: "#cbd5e1" }}>•</span>
+
+                                  <span>{w.kategori || "Dewasa"}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mb-3">

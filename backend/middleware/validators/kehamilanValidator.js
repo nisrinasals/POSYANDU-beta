@@ -14,6 +14,8 @@ const makePregnancyFields = () => {
     ...dateValidators,
     body("anak_ke").optional({ nullable: true }).isInt({ min: 1 }).withMessage("anak_ke harus berupa bilangan bulat positif.").toInt(),
     body("jarak_anak_sebelum_bulan").optional({ nullable: true }).isInt({ min: 0 }).withMessage("jarak_anak_sebelum_bulan harus berupa bilangan bulat nol atau lebih.").toInt(),
+    body("bb_sebelum_hamil_kg").optional({ nullable: true }).isFloat({ min: 0.01 }).withMessage("bb_sebelum_hamil_kg harus berupa angka lebih dari 0.").toFloat(),
+    body("tb_sebelum_hamil_cm").optional({ nullable: true }).isFloat({ min: 0.01 }).withMessage("tb_sebelum_hamil_cm harus berupa angka lebih dari 0.").toFloat(),
     body("cara_persalinan").optional({ nullable: true }).isIn(caraPersalinan).withMessage("cara_persalinan tidak valid."),
     body("status_kehamilan").optional().isIn(statuses).withMessage("status_kehamilan tidak valid."),
     body("is_menyusui").optional().isBoolean().withMessage("is_menyusui harus berupa boolean.").toBoolean(),

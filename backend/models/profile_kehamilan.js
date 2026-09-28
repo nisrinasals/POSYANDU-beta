@@ -29,6 +29,18 @@ module.exports = (sequelize, DataTypes) => {
       jarak_anak_sebelum_bulan: {
         type: DataTypes.INTEGER,
       },
+      bb_sebelum_hamil_kg: {
+        type: DataTypes.DECIMAL(5, 2),
+        validate: {
+          min: 0.01,
+        },
+      },
+      tb_sebelum_hamil_cm: {
+        type: DataTypes.DECIMAL(5, 2),
+        validate: {
+          min: 0.01,
+        },
+      },
       tanggal_persalinan: {
         type: DataTypes.DATEONLY,
       },
