@@ -6,7 +6,7 @@ import { validateNik, formatNikInput, validateMeasurements } from "../../utils/v
 import GrowthChartPlotter from "../../components/pemeriksaan/GrowthChartPlotter";
 import ImunisasiTableHistory from "../../components/pemeriksaan/ImunisasiTableHistory";
 import { mapFlatScreeningToBackend } from "../../utils/screeningPayload";
-import { pemeriksaanService, kunjunganService, wargaService, sesiService, imunisasiService } from "../../services";
+import { pemeriksaanService, kunjunganService, wargaService, sesiService, imunisasiService, rujukanService } from "../../services";
 import { emptyImunisasiRows, mergeImunisasiRows } from "../../data/imunisasi";
 
 // Hitung umur dalam bulan untuk menentukan apakah layanan ASI eksklusif (0-6 bulan) ditampilkan.
@@ -298,11 +298,22 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       sesi_posyandu_id: Number(session.id),
     });
 
-    if (!createdRes?.data?.id) {
-      throw new Error("Backend tidak mengembalikan ID kunjungan.");
-    }
+    const kunjunganId = createdRes?.data?.kunjungan_id ?? createdRes?.data?.id ?? createdRes?.kunjungan_id ?? createdRes?.id;
 
-    return createdRes.data.id;
+    if (kunjunganId) return Number(kunjunganId);
+
+    // Fallback: kunjungan sudah tersimpan tetapi response tidak membawa ID.
+    const refreshedRes = await kunjunganService.getKunjunganList({
+      page: 1,
+      limit: 100,
+      sesi_posyandu_id: Number(session.id),
+      warga_id: Number(warga.id),
+    });
+    const refreshedVisits = Array.isArray(refreshedRes?.data) ? refreshedRes.data : Array.isArray(refreshedRes?.data?.items) ? refreshedRes.data.items : [];
+    const persistedVisit = refreshedVisits.find((item) => Number(item.warga_id || item.warga?.id) === Number(warga.id));
+    if (persistedVisit?.id) return Number(persistedVisit.id);
+
+    throw new Error("Backend tidak mengembalikan ID kunjungan.");
   };
 
   const { showSuccess, showWarning } = useNotification();
@@ -930,6 +941,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     topikPenyuluhan: "",
     mengikutiKelas: "",
     statusRujukan: "",
+    alasanRujukan: "",
   });
 
   const [imunisasiRowsByWarga, setImunisasiRowsByWarga] = useState({});
@@ -1067,6 +1079,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     topikPenyuluhan: "",
     mengikutiKelas: "",
     statusRujukan: "",
+    alasanRujukan: "",
   });
 
   // Helper setter/getter untuk field Langkah 4 (mendukung kedua mode)
@@ -1780,23 +1793,36 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     const warga = getWargaForId(targetId);
     try {
       const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga));
+      const statusRujukan = String(langkah5Form.statusRujukan || "").trim();
+      const alasanRujukanManual = String(langkah5Form.alasanRujukan || "").trim();
+      const isPerluRujukan = statusRujukan === "Rujuk ke Puskesmas / Pustu";
+      const hasAutomaticReason = Boolean(step5AutoReferral?.reasons?.length);
+
+      if (isPerluRujukan && !hasAutomaticReason && !alasanRujukanManual) {
+        showWarning("Alasan Rujukan Wajib", "Isi alasan rujukan manual jika memilih Rujuk ke Puskesmas / Pustu.");
+        return;
+      }
+
       const res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
         topik_penyuluhan: String(langkah5Form.topikPenyuluhan || "").trim(),
-        is_perlu_rujukan: String(langkah5Form.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu",
+        is_perlu_rujukan: isPerluRujukan,
+        alasan_rujukan: alasanRujukanManual || undefined,
       });
       if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
 
       const savedRujukanStatus = res?.rujukan || res?.data?.is_perlu_rujukan === true ? "Rujuk ke Puskesmas / Pustu" : "Tidak Perlu Rujukan";
+      const savedAlasanRujukan = res?.referral_reasons?.final || res?.rujukan?.alasan_rujukan || alasanRujukanManual || "";
       const savedLangkah5 = {
         ...langkah5Form,
         topikPenyuluhan: res?.data?.topik_penyuluhan ?? langkah5Form.topikPenyuluhan ?? "",
         statusRujukan: savedRujukanStatus,
+        alasanRujukan: savedAlasanRujukan,
       };
 
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
       setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
-      setGlobalPemeriksaanData?.((prev) => ({ ...prev, [targetId]: res.data }));
+      setGlobalPemeriksaanData?.((prev) => ({ ...prev, [targetId]: { ...res.data, rujukan: res?.rujukan || null, referral_reasons: res?.referral_reasons || null } }));
       setStepDataByWarga((prev) => ({
         ...prev,
         [targetId]: {
@@ -1982,6 +2008,23 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         const persistedRujukan = backendExam?.is_perlu_rujukan === true || Boolean(backendExam?.rujukan) ? "Rujuk ke Puskesmas / Pustu" : backendExam?.is_perlu_rujukan === false ? "Tidak Perlu Rujukan" : "";
         const persistedTopik = backendExam?.topik_penyuluhan ?? "";
 
+        let persistedAlasan = backendExam?.rujukan?.alasan_rujukan || backendExam?.referral_reasons?.final || backendExam?.alasan_rujukan || "";
+
+        // GET /pemeriksaan tidak selalu menyertakan relasi rujukan,
+        // sehingga ambil record rujukan yang terkait dengan pemeriksaan ini.
+        if (!persistedAlasan && backendExam?.id) {
+          try {
+            const rujukanRes = await rujukanService.getAllRujukan({
+              search: warga.nama || warga.nik || "",
+            });
+            const rujukanItems = Array.isArray(rujukanRes?.data) ? rujukanRes.data : [];
+            const matchedRujukan = rujukanItems.find((item) => Number(item.pemeriksaan_id || item.pemeriksaan?.id) === Number(backendExam.id));
+            persistedAlasan = matchedRujukan?.alasan_rujukan || "";
+          } catch (rujukanError) {
+            console.warn("Gagal mengambil alasan rujukan dari backend:", rujukanError);
+          }
+        }
+
         setGlobalPemeriksaanData?.((prev) => ({ ...prev, [String(activeStep5TargetId)]: backendExam }));
 
         if (examinationMode === "per-step") {
@@ -1989,12 +2032,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
             ...prev,
             topikPenyuluhan: persistedTopik || prev.topikPenyuluhan || "",
             statusRujukan: persistedRujukan || prev.statusRujukan || "",
+            alasanRujukan: persistedAlasan || prev.alasanRujukan || "",
           }));
         } else {
           setSequentialForm((prev) => ({
             ...prev,
             topikPenyuluhan: persistedTopik || prev.topikPenyuluhan || "",
             statusRujukan: persistedRujukan || prev.statusRujukan || "",
+            alasanRujukan: persistedAlasan || prev.alasanRujukan || "",
           }));
         }
       } catch (error) {
@@ -4998,7 +5043,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           onChange={(e) => {
                             const wId = e.target.value;
                             setSelectedWargaStep5(wId);
-                            setLangkah5Form({ topikPenyuluhan: "", mengikutiKelas: "", statusRujukan: "" });
+                            setLangkah5Form({ topikPenyuluhan: "", mengikutiKelas: "", statusRujukan: "", alasanRujukan: "" });
                           }}
                         >
                           {availableWargaStep5.length === 0 ? (
@@ -5063,6 +5108,24 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         <option value="Rujuk ke Puskesmas / Pustu">Rujuk Puskesmas atau Pustu (Bila ada indikasi medis hasil pemeriksaan &amp; skrining)</option>
                       </select>
                       <div className="form-text text-muted">Rujuk puskesmas atau pustu bila ada indikasi medis hasil pemeriksaan dan skrining.</div>
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label fw-bold text-dark small mb-1">Alasan Rujukan {effectiveRujukan === "Rujuk ke Puskesmas / Pustu" ? "*" : "(opsional)"}</label>
+                      <textarea
+                        rows="3"
+                        className="form-control form-control-custom bg-white border-0 py-3"
+                        placeholder={step5AutoReferral.reasons?.length ? "Tambahkan alasan rujukan manual (opsional)..." : "Masukkan alasan rujukan manual..."}
+                        value={examinationMode === "per-step" ? langkah5Form.alasanRujukan || "" : sequentialForm.alasanRujukan || ""}
+                        onChange={(e) => {
+                          if (examinationMode === "per-step") {
+                            setLangkah5Form((prev) => ({ ...prev, alasanRujukan: e.target.value }));
+                          } else {
+                            setSequentialForm((prev) => ({ ...prev, alasanRujukan: e.target.value }));
+                          }
+                        }}
+                      />
+                      {step5AutoReferral.reasons?.length > 0 && <div className="form-text text-danger">Indikasi otomatis: {step5AutoReferral.reasons.join("; ")}</div>}
                     </div>
                   </div>
 
@@ -5658,6 +5721,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           </div>
                           <div className="col-6">
                             <strong>Status Rujukan:</strong> <span className="badge bg-light text-dark border fw-semibold">{sequentialForm.statusRujukan || ""}</span>
+                          </div>
+                          <div className="col-12">
+                            <strong>Alasan Rujukan:</strong> {sequentialForm.alasanRujukan || step5AutoReferral.reasons?.join("; ") || "-"}
                           </div>
                         </div>
                       </div>
