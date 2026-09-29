@@ -2,7 +2,7 @@
 
 const { body } = require("express-validator");
 
-const email = body("email").trim().isEmail().withMessage("Email tidak valid.").normalizeEmail();
+const email = body("email").trim().isEmail().withMessage("Email tidak valid.").normalizeEmail({ gmail_remove_dots: false });
 const otp = body("otp_code")
   .trim()
   .matches(/^\d{6}$/)

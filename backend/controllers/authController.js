@@ -46,6 +46,14 @@ const register = async (req, res, next) => {
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
 
+    let finalPuskesmasId = puskesmas_id || null;
+    if (!finalPuskesmasId && posyandu_id) {
+      const foundPosyandu = await Posyandu.findByPk(posyandu_id);
+      if (foundPosyandu && foundPosyandu.puskesmas_id) {
+        finalPuskesmasId = foundPosyandu.puskesmas_id;
+      }
+    }
+
     // Buat User Baru (Default Status: pending_approval, token_version: 1)
     const newUser = await User.create({
       role,
@@ -54,7 +62,7 @@ const register = async (req, res, next) => {
       nama_lengkap,
       telepon,
       nik: nik || null,
-      puskesmas_id: puskesmas_id || null,
+      puskesmas_id: finalPuskesmasId,
       posyandu_id: posyandu_id || null,
       status: "pending_approval",
       token_version: 1,

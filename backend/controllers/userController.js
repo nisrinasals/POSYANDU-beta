@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
-const { User } = require("../models");
+const { User, Puskesmas, Posyandu } = require("../models");
 const { Op } = require("sequelize");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
 
@@ -53,7 +53,14 @@ const userAttributes = { exclude: ["password_hash", "token_version"] };
 
 const getUserScope = (actor) => {
   if (["sa", "dinkesAdmin"].includes(actor.role)) return {};
-  if (actor.role === "puskesmasAdmin") return { puskesmas_id: actor.puskesmas_id };
+  if (actor.role === "puskesmasAdmin") {
+    return {
+      [Op.or]: [
+        { puskesmas_id: actor.puskesmas_id },
+        { "$posyandu.puskesmas_id$": actor.puskesmas_id },
+      ],
+    };
+  }
   return { id: actor.id };
 };
 
@@ -62,13 +69,32 @@ const getUsers = async (req, res, next) => {
     const { page = 1, limit = 10, search, role, status, puskesmas_id, posyandu_id } = req.query;
     const where = getUserScope(req.user);
     const offset = (page - 1) * limit;
-    if (search) where[Op.or] = [{ nama_lengkap: { [Op.iLike]: `%${search}%` } }, { email: { [Op.iLike]: `%${search}%` } }];
+    if (search) {
+      const searchCond = [{ nama_lengkap: { [Op.iLike]: `%${search}%` } }, { email: { [Op.iLike]: `%${search}%` } }];
+      if (where[Op.or]) {
+        where[Op.and] = [{ [Op.or]: where[Op.or] }, { [Op.or]: searchCond }];
+        delete where[Op.or];
+      } else {
+        where[Op.or] = searchCond;
+      }
+    }
     if (role) where.role = role;
     if (status) where.status = status;
     if (puskesmas_id && req.user.role !== "puskesmasAdmin") where.puskesmas_id = puskesmas_id;
     if (posyandu_id) where.posyandu_id = posyandu_id;
 
-    const { count, rows } = await User.findAndCountAll({ where, attributes: userAttributes, limit: Number(limit), offset: Number(offset), order: [["nama_lengkap", "ASC"]] });
+    const { count, rows } = await User.findAndCountAll({
+      where,
+      attributes: userAttributes,
+      include: [
+        { model: Puskesmas, as: "puskesmas", attributes: ["id", "nama_puskesmas", "kode_puskesmas"] },
+        { model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "puskesmas_id"] },
+      ],
+      limit: Number(limit),
+      offset: Number(offset),
+      order: [["nama_lengkap", "ASC"]],
+      distinct: true,
+    });
     return res
       .status(200)
       .json({ success: true, message: "Berhasil mengambil daftar user.", data: rows, pagination: { total_items: count, total_pages: Math.ceil(count / limit), current_page: Number(page), items_per_page: Number(limit) } });
