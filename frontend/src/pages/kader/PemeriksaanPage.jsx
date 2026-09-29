@@ -2017,34 +2017,35 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   };
 
   const handleSaveLangkah5 = async (e) => {
-    e.preventDefault();
-    if (!selectedWargaStep5) {
-      showWarning("Pilih Sasaran Warga", "Silakan pilih nama warga pada dropdown Langkah 5 terlebih dahulu.");
+    if (e?.preventDefault) e.preventDefault();
+    const targetId = String(examinationMode === "per-step" ? selectedWargaStep5 : selectedWargaId || "");
+    if (!targetId) {
+      showWarning("Pilih Sasaran Warga", "Silakan pilih nama warga terlebih dahulu.");
       return;
     }
-    const valResult = validateStepData(5, langkah5Form, activeSubmenu);
+    const formToSave = examinationMode === "per-step" ? langkah5Form : sequentialForm;
+    const valResult = validateStepData(5, formToSave, activeSubmenu);
     if (!valResult.isValid) {
       showWarning("Data Belum Lengkap", valResult.errorMessage);
       return;
     }
-    const targetId = String(selectedWargaStep5);
     const warga = getWargaForId(targetId);
     try {
       const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga, presensiTanggal));
       const res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
-        topik_penyuluhan: String(langkah5Form.topikPenyuluhan || "").trim(),
-        is_perlu_rujukan: String(langkah5Form.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu",
-        alasan_rujukan: String(langkah5Form.alasanRujukan || "").trim() || undefined,
+        topik_penyuluhan: String(formToSave.topikPenyuluhan || "").trim(),
+        is_perlu_rujukan: String(formToSave.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu",
+        alasan_rujukan: String(formToSave.alasanRujukan || "").trim() || undefined,
       });
       if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
 
       const savedRujukanStatus = res?.rujukan || res?.data?.is_perlu_rujukan === true ? "Rujuk ke Puskesmas / Pustu" : "Tidak Perlu Rujukan";
       const savedLangkah5 = {
-        ...langkah5Form,
-        topikPenyuluhan: res?.data?.topik_penyuluhan ?? langkah5Form.topikPenyuluhan ?? "",
+        ...formToSave,
+        topikPenyuluhan: res?.data?.topik_penyuluhan ?? formToSave.topikPenyuluhan ?? "",
         statusRujukan: savedRujukanStatus,
-        alasanRujukan: res?.referral_reasons?.manual || langkah5Form.alasanRujukan || "",
+        alasanRujukan: res?.referral_reasons?.manual || formToSave.alasanRujukan || "",
       };
 
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
@@ -2167,6 +2168,11 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       } catch (err) {
         showWarning("Gagal Menyimpan Skrining", err?.message || "Skrining gagal disimpan ke backend.");
       }
+      return;
+    }
+    if (activeStep === 5) {
+      await handleSaveLangkah5(e);
+      return;
     }
   };
 
