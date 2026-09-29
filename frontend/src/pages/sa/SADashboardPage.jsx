@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { userService, posyanduService, pemeriksaanService } from "../../services";
-import { Building2, Users, Layers, Calendar, FileSpreadsheet, UserCheck, ChevronRight, TrendingUp, Download, Activity } from "lucide-react";
+import { Building2, Users, Layers, Calendar, FileSpreadsheet, UserCheck, ChevronRight, TrendingUp, Download, Activity, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip as ChartTooltip, Filler, Legend, BarElement } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Filler, Legend, BarElement);
 
-export default function DinkesDashboardPage({ onNavigate, user, globalStatistikSasaran = {}, isGlobalStatistikLoading = false }) {
-  const themeColor = user?.roleType === "sa" ? "#6b4e31" : "#1e3a8a";
+export default function SADashboardPage({ onNavigate, user, globalStatistikSasaran = {}, isGlobalStatistikLoading = false }) {
+  const themeColor = "#6b4e31";
   const [periodeGrafik, setPeriodeGrafik] = useState("6bulan");
   const [activeTooltip, setActiveTooltip] = useState(null);
   const [pendingAccountCount, setPendingAccountCount] = useState(0);
@@ -116,18 +116,11 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
       labels: cityChartData.map(d => d.periode),
       datasets: [
         {
-          fill: true,
           label: 'Pemeriksaan',
           data: cityChartData.map(d => d.pemeriksaan),
-          borderColor: themeColor,
-          backgroundColor: `${themeColor}33`,
-          tension: 0.4,
-          borderWidth: 3,
-          pointBackgroundColor: '#ffffff',
-          pointBorderColor: themeColor,
-          pointBorderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
+          backgroundColor: themeColor,
+          borderRadius: 4,
+          barPercentage: 0.5,
         }
       ]
     };
@@ -153,45 +146,79 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
 
   return (
     <div className="d-flex flex-column gap-4 pb-4">
-      {/* ========================================================================= */}
-      {/* 1. RINGKASAN EKSEKUTIF UTAMA KOTA (4 Top Metric Cards)                    */}
-      {/* ========================================================================= */}
-      <div className="row g-3 g-xl-3.5">
-        {/* Card 1: Puskesmas dengan data sasaran */}
-        <div className="col-12 col-sm-6 col-xl-3">
-          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: themeColor, cursor: "pointer" }} onClick={() => onNavigate("verifikasi-akun", "puskesmas")}>
+      {/* 1. HERO BANNER SA */}
+      <div
+        className="card border-0 rounded-4 text-white overflow-hidden shadow-sm"
+        style={{
+          background: `linear-gradient(135deg, ${themeColor} 0%, #4a3622 100%)`,
+          padding: "2rem",
+        }}
+      >
+        <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+          <div>
+            <div
+              className="d-inline-flex align-items-center gap-1.5 fw-semibold px-3 py-1 rounded-pill mb-2"
+              style={{
+                background: "rgba(255, 255, 255, 0.15)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                color: "#ffffff",
+                fontSize: "0.8rem",
+              }}
+            >
+              <ShieldCheck size={14} />
+              <span>Super Administrator Sengkuyung Katresnan</span>
+            </div>
+            <h3 className="fw-bold mb-1.5 text-white fs-4">Pusat Kendali Sistem</h3>
+            <p className="mb-0 small" style={{ maxWidth: "640px", fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.9)" }}>
+              Akses penuh untuk mengelola otorisasi akun, master data Puskesmas, Posyandu, dan pemantauan sistem agregat secara keseluruhan.
+            </p>
+          </div>
+          <div>
+            <div className="p-3 rounded-4" style={{ background: "rgba(255, 255, 255, 0.1)", border: "1px solid rgba(255, 255, 255, 0.2)" }}>
+               <div className="text-white-50 small mb-1">Pengajuan Baru</div>
+               <div className="fs-3 fw-bold">{pendingAccountCount} Akun</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. RINGKASAN MASTER DATA */}
+      <div className="row g-3">
+        {/* Card 1: Puskesmas */}
+        <div className="col-12 col-md-4">
+          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#1e3a8a", cursor: "pointer" }} onClick={() => onNavigate("master-puskesmas")}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
-                PUSKESMAS PADA DIREKTORI POSYANDU
+                PUSKESMAS
               </span>
-              <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(30, 58, 138, 0.1)", color: themeColor, width: "42px", height: "42px" }}>
+              <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(30, 58, 138, 0.12)", color: "#1e3a8a", width: "42px", height: "42px" }}>
                 <Building2 size={20} />
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
               <span className="fw-bolder text-dark fs-3 mb-0">{totalPuskesmasKota}</span>
-              <span className="text-muted fw-medium small">Puskesmas</span>
+              <span className="text-muted fw-medium small">Faskes</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
-              Puskesmas dengan Data Sasaran
+              Puskesmas Terdaftar
             </div>
           </div>
         </div>
 
-        {/* Card 2: Jumlah Posyandu Se-Kota */}
-        <div className="col-12 col-sm-6 col-xl-3">
-          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#0284c7", cursor: "pointer" }} onClick={() => onNavigate("jadwal-monitoring")}>
+        {/* Card 2: Posyandu */}
+        <div className="col-12 col-md-4">
+          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#0284c7", cursor: "pointer" }} onClick={() => onNavigate("master-posyandu")}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
-                TOTAL POSYANDU
+                POSYANDU
               </span>
-              <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(2, 132, 199, 0.1)", color: "#0284c7", width: "42px", height: "42px" }}>
+              <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(2, 132, 199, 0.12)", color: "#0284c7", width: "42px", height: "42px" }}>
                 <Layers size={20} />
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
               <span className="fw-bolder text-dark fs-3 mb-0">{totalPosyanduKota}</span>
-              <span className="text-muted fw-medium small">Posyandu</span>
+              <span className="text-muted fw-medium small">Lokasi</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
               Posyandu Terdaftar
@@ -199,36 +226,14 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
           </div>
         </div>
 
-        {/* Card 3: Verifikasi Manajemen Akun */}
-        <div className="col-12 col-sm-6 col-xl-3">
-          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#f59e0b", cursor: "pointer" }} onClick={() => onNavigate("verifikasi-akun", "puskesmas")}>
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
-                VERIFIKASI MANAJEMEN AKUN
-              </span>
-              <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(245, 158, 11, 0.12)", color: "#f59e0b", width: "42px", height: "42px" }}>
-                <UserCheck size={20} />
-              </div>
-            </div>
-            <div className="d-flex align-items-baseline gap-2 mb-1">
-              <span className="fw-bolder text-warning-emphasis fs-3 mb-0">{pendingAccountCount}</span>
-              <span className="text-muted fw-medium small">Pengajuan Baru</span>
-            </div>
-            <div className="text-muted small mt-1 d-flex align-items-center gap-1.5" style={{ fontSize: "0.78rem" }}>
-              <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill px-2 py-0.5 fw-semibold">Perlu Otorisasi</span>
-              <span>Dari pengajuan pendaftaran terbaru</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Total Sasaran Se-Kota */}
-        <div className="col-12 col-sm-6 col-xl-3">
+        {/* Card 3: Sasaran */}
+        <div className="col-12 col-md-4">
           <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#10b981", cursor: "pointer" }} onClick={() => onNavigate("data-sasaran")}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
-                TOTAL SASARAN KOTA
+                TOTAL SASARAN
               </span>
-              <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(16, 185, 129, 0.1)", color: "#10b981", width: "42px", height: "42px" }}>
+              <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(16, 185, 129, 0.12)", color: "#10b981", width: "42px", height: "42px" }}>
                 <Users size={20} />
               </div>
             </div>
@@ -237,7 +242,7 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
               <span className="text-muted fw-medium small">Jiwa</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
-              9 Kategori Siklus Hidup ILP
+              Total Sasaran Seluruh Kota
             </div>
           </div>
         </div>
@@ -291,7 +296,7 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
         {/* Chart Canvas */}
         <div className="position-relative w-100 overflow-hidden" style={{ height: "300px", marginTop: "1rem" }}>
           {cityChartData.length > 0 ? (
-            <Line data={chartDataConfig} options={chartOptions} />
+            <Bar data={chartDataConfig} options={chartOptions} />
           ) : (
             <div className="d-flex align-items-center justify-content-center h-100 text-muted">
               Tidak ada data pemeriksaan

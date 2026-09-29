@@ -614,6 +614,18 @@ table td .text-muted, table td .small {
   border-left: 4px solid #1e3a8a !important;
 }
 
+.sa-nav-link:hover {
+  color: #6b4e31 !important;
+  background-color: #f5ebe6 !important;
+}
+
+.sa-nav-link.active {
+  color: #6b4e31 !important;
+  background-color: #ede0d4 !important;
+  font-weight: 700;
+  border-left: 4px solid #6b4e31 !important;
+}
+
 .submenu-link {
   padding-left: 2.5rem;
   font-size: 0.8125rem !important;
@@ -647,6 +659,19 @@ table td .text-muted, table td .small {
   color: #1e3a8a !important;
   border-left-color: #1e3a8a !important;
   background-color: #dbeafe !important;
+  font-weight: 700;
+}
+
+.sa-submenu-link:hover {
+  color: #6b4e31 !important;
+  border-left-color: #6b4e31 !important;
+  background-color: #f5ebe6 !important;
+}
+
+.sa-submenu-link.active {
+  color: #6b4e31 !important;
+  border-left-color: #6b4e31 !important;
+  background-color: #ede0d4 !important;
   font-weight: 700;
 }
 

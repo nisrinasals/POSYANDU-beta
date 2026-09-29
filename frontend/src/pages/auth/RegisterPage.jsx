@@ -17,7 +17,6 @@ export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoTo
     nik: "",
     telepon: "",
     posyandu: "",
-    bidang: "",
     password: "",
     confirmPassword: "",
   });
@@ -383,8 +382,8 @@ export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoTo
         {/* Top Header Bar */}
         <div className="d-flex align-items-center justify-content-between mb-3">
           <div className="d-flex align-items-center gap-2.5">
-            <img src={logoPosyandu} alt="Posyandu Care" style={{ width: "30px", height: "30px", objectFit: "contain" }} />
-            <span className="fw-bold text-dark fs-5">Posyandu Care</span>
+            <img src={logoPosyandu} alt="SENGKUYUNG KATRESNAN" style={{ width: "30px", height: "30px", objectFit: "contain" }} />
+            <span className="fw-bold text-dark fs-5">SENGKUYUNG KATRESNAN</span>
           </div>
 
           <button type="button" className="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1.5" style={{ fontSize: "0.785rem" }} onClick={onGoToLogin}>
@@ -578,47 +577,7 @@ export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoTo
                   </div>
 
                   {/* Posyandu / Puskesmas / Bidang */}
-                  {role === "dinkes" ? (
-                    <div className="mb-3">
-                      <label className="form-label fw-bold text-dark mb-1.5" style={{ fontSize: "0.82rem" }}>
-                        Bidang Penugasan
-                      </label>
-                      <div className="input-group" style={{ height: "44px" }}>
-                        <span
-                          className="input-group-text border-end-0 text-secondary"
-                          style={{
-                            backgroundColor: "#f8fafc",
-                            borderColor: "#dbe5ee",
-                            borderTopLeftRadius: "10px",
-                            borderBottomLeftRadius: "10px",
-                          }}
-                        >
-                          <Building2 size={16} />
-                        </span>
-                        <select
-                          name="bidang"
-                          className="form-select border-start-0 text-dark shadow-none"
-                          value={formData.bidang}
-                          onChange={handleChange}
-                          style={{
-                            backgroundColor: "#f8fafc",
-                            borderColor: "#dbe5ee",
-                            borderTopRightRadius: "10px",
-                            borderBottomRightRadius: "10px",
-                            fontSize: "0.875rem",
-                          }}
-                          disabled={isLoading}
-                        >
-                          <option value="">-- Pilih Bidang Penugasan --</option>
-                          <option value="Bidang Kesmas (Kesehatan Masyarakat)">Bidang Kesmas (Kesehatan Masyarakat)</option>
-                          <option value="Bidang P2P (Pencegahan &amp; Pengendalian Penyakit)">Bidang P2P (Pencegahan &amp; Pengendalian Penyakit)</option>
-                          <option value="Bidang Yankes (Pelayanan Kesehatan)">Bidang Yankes (Pelayanan Kesehatan)</option>
-                          <option value="Bidang SDK (Sumber Daya Kesehatan)">Bidang SDK (Sumber Daya Kesehatan)</option>
-                          <option value="Sekretariat / Perencanaan">Sekretariat / Perencanaan</option>
-                        </select>
-                      </div>
-                    </div>
-                  ) : role === "puskesmas" ? (
+                  {role === "puskesmas" ? (
                     <div className="mb-3">
                       <label className="form-label fw-bold text-dark mb-1.5" style={{ fontSize: "0.82rem" }}>
                         Puskesmas
@@ -658,7 +617,7 @@ export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoTo
                         </select>
                       </div>
                     </div>
-                  ) : (
+                  ) : role === "kader" ? (
                     <div className="mb-3">
                       <label className="form-label fw-bold text-dark mb-1.5 d-flex justify-content-between align-items-center" style={{ fontSize: "0.82rem" }}>
                         <span>Wilayah Posyandu</span>
@@ -676,7 +635,7 @@ export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoTo
                         required
                       />
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Kata Sandi (Minimal 8 Karakter) */}
                   <div className="mb-3">

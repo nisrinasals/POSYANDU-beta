@@ -12,6 +12,9 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Semua Kategori (Semua Siklus)");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const [selectedCitizen, setSelectedCitizen] = useState(null);
   const [selectedExamDetail, setSelectedExamDetail] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -121,6 +124,10 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
       return matchSearch && matchCat && matchMonthYear;
     });
   }, [allRekapList, searchTerm, selectedCategory, selectedMonthNum, selectedYear]);
+
+  const totalItems = filteredList.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const paginatedList = filteredList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const handleOpenDetail = async (citizen) => {
     setSelectedCitizen(citizen);
@@ -276,9 +283,9 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
                   </td>
                 </tr>
               ) : (
-                filteredList.map((row, idx) => (
+                paginatedList.map((row, idx) => (
                   <tr key={row.id} className="border-bottom">
-                    <td className="ps-4 text-center fw-medium text-muted small">{idx + 1}</td>
+                    <td className="ps-4 text-center fw-medium text-muted small">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                     <td>
                       <div className="fw-bold text-dark mb-0">{row.nama}</div>
                       <div className="text-muted font-monospace" style={{ fontSize: "0.78rem" }}>
@@ -309,26 +316,30 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
 
         <div className="p-3 bg-light-subtle d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2 border-top">
           <span className="text-muted small">
-            Menampilkan {filteredList.length} dari {allRekapList.length} sasaran
+            Menampilkan {paginatedList.length} dari {totalItems} sasaran
           </span>
           <nav>
-            <ul className="pagination pagination-sm mb-0">
-              <li className="page-item disabled">
-                <span className="page-link">&lt;</span>
-              </li>
-              <li className="page-item active">
-                <span className="page-link bg-dark border-dark">1</span>
-              </li>
-              <li className="page-item">
-                <span className="page-link text-dark">2</span>
-              </li>
-              <li className="page-item">
-                <span className="page-link text-dark">3</span>
-              </li>
-              <li className="page-item">
-                <span className="page-link text-dark">&gt;</span>
-              </li>
-            </ul>
+            {totalPages > 1 && (
+              <ul className="pagination pagination-sm mb-0">
+                <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                  <button className="page-link shadow-none" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
+                    &lt;
+                  </button>
+                </li>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <li key={page} className={`page-item ${currentPage === page ? "active" : ""}`}>
+                    <button className={`page-link shadow-none ${currentPage === page ? "bg-dark border-dark text-white" : "text-dark"}`} onClick={() => setCurrentPage(page)}>
+                      {page}
+                    </button>
+                  </li>
+                ))}
+                <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                  <button className="page-link shadow-none" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
+                    &gt;
+                  </button>
+                </li>
+              </ul>
+            )}
           </nav>
         </div>
       </div>

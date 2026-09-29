@@ -409,31 +409,33 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
             Menampilkan <span className="fw-semibold text-dark">{paginatedList.length}</span> dari total <span className="fw-semibold text-dark">{filteredList.length}</span> jadwal
           </div>
 
-          <div className="d-flex align-items-center gap-1">
-            <button className="btn btn-sm btn-light border p-1" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
-              <ChevronLeft size={14} />
-            </button>
-
-            {Array.from({ length: totalPages }).map((_, pIdx) => (
-              <button
-                key={pIdx + 1}
-                className={`btn btn-sm px-2.5 py-0.5 fw-bold ${currentPage === pIdx + 1 ? "text-white" : "btn-light border text-secondary"}`}
-                style={{
-                  backgroundColor: currentPage === pIdx + 1 ? "#2b2e4a" : undefined,
-                  borderColor: currentPage === pIdx + 1 ? "#2b2e4a" : undefined,
-                  fontSize: "0.78rem",
-                  minWidth: "28px",
-                }}
-                onClick={() => setCurrentPage(pIdx + 1)}
-              >
-                {pIdx + 1}
+          {totalPages > 1 && (
+            <div className="d-flex align-items-center gap-1">
+              <button className="btn btn-sm btn-light border p-1" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft size={14} />
               </button>
-            ))}
 
-            <button className="btn btn-sm btn-light border p-1" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
-              <ChevronRight size={14} />
-            </button>
-          </div>
+              {Array.from({ length: totalPages }).map((_, pIdx) => (
+                <button
+                  key={pIdx + 1}
+                  className={`btn btn-sm px-2.5 py-0.5 fw-bold ${currentPage === pIdx + 1 ? "text-white" : "btn-light border text-secondary"}`}
+                  style={{
+                    backgroundColor: currentPage === pIdx + 1 ? "#2b2e4a" : undefined,
+                    borderColor: currentPage === pIdx + 1 ? "#2b2e4a" : undefined,
+                    fontSize: "0.78rem",
+                    minWidth: "28px",
+                  }}
+                  onClick={() => setCurrentPage(pIdx + 1)}
+                >
+                  {pIdx + 1}
+                </button>
+              ))}
+
+              <button className="btn btn-sm btn-light border p-1" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

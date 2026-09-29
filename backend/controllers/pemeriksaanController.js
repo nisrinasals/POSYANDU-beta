@@ -485,15 +485,16 @@ const exportPemeriksaanExcel = async (req, res, next) => {
       worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle" };
       worksheet.getRow(1).height = 24;
 
-      const userPosyandu = req.user?.posyandu?.nama_posyandu || "POSYANDU";
+      const { nama_posyandu, dusun, desa_kelurahan, kecamatan } = req.query;
+      const userPosyandu = nama_posyandu || req.user?.posyandu?.nama_posyandu || "POSYANDU";
       worksheet.addRow([userPosyandu.toUpperCase()]);
       worksheet.mergeCells(2, 1, 2, columns.length);
       worksheet.getRow(2).font = { bold: true };
       worksheet.getRow(2).alignment = { horizontal: "center", vertical: "middle" };
       worksheet.addRow([]);
-      worksheet.addRow(["Dusun / RT / RW", ":", req.user?.posyandu?.dusun || ""]);
-      worksheet.addRow(["Desa / Kelurahan / Nagari", ":", req.user?.posyandu?.desa_kelurahan || ""]);
-      worksheet.addRow(["Kecamatan", ":", req.user?.posyandu?.kecamatan || ""]);
+      worksheet.addRow(["Dusun / RT / RW", ":", dusun || req.user?.posyandu?.dusun || ""]);
+      worksheet.addRow(["Desa / Kelurahan / Nagari", ":", desa_kelurahan || req.user?.posyandu?.desa_kelurahan || ""]);
+      worksheet.addRow(["Kecamatan", ":", kecamatan || req.user?.posyandu?.kecamatan || ""]);
 
       const aggregateRows = aggregateRekapRows(plainRows, group, screeningConfig);
       const rowsByPeriod = new Map(aggregateRows.map((row) => [row.bulan_tahun, row]));

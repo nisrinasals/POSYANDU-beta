@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Download, FileSpreadsheet, CheckCircle2, Layers, Calendar } from "lucide-react";
+import { Download, FileSpreadsheet, CheckCircle2, Layers, Calendar, MapPin } from "lucide-react";
 import { pemeriksaanService } from "../../services";
 import RekapWorksheetPreview from "./RekapWorksheetPreview";
 
@@ -45,13 +45,33 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
   const [showSuccess, setShowSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const [namaPosyandu, setNamaPosyandu] = useState("");
+  const [dusun, setDusun] = useState("");
+  const [desaKelurahan, setDesaKelurahan] = useState("");
+  const [kecamatan, setKecamatan] = useState("");
+
   useEffect(() => {
     if (!isOpen) return;
     setSelectedFormatCategory(initialCategory);
     setExportYear(currentYear === "Semua" ? String(new Date().getFullYear()) : currentYear);
     setShowSuccess(false);
     setErrorMessage("");
-  }, [isOpen, initialCategory, currentYear]);
+
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (theme === "kader" && user?.posyandu) {
+          setNamaPosyandu(user.posyandu.nama_posyandu || "");
+          setDusun(user.posyandu.dusun || "");
+          setDesaKelurahan(user.posyandu.desa_kelurahan || "");
+          setKecamatan(user.posyandu.kecamatan || "");
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [isOpen, initialCategory, currentYear, theme]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -111,6 +131,10 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
       }
 
       if (selectedFormatCategory !== "all") params.template_rekap = selectedFormatCategory;
+      if (namaPosyandu) params.nama_posyandu = namaPosyandu;
+      if (dusun) params.dusun = dusun;
+      if (desaKelurahan) params.desa_kelurahan = desaKelurahan;
+      if (kecamatan) params.kecamatan = kecamatan;
 
       const response = await pemeriksaanService.exportPemeriksaanExcel(params);
       const blob = extractBlob(response);
@@ -192,6 +216,31 @@ export default function ExportRekapModal({ isOpen, onClose, currentCategory = "S
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="col-12 border-top pt-3 mt-3">
+                  <div className="d-flex align-items-center gap-2 mb-3">
+                    <MapPin size={16} style={{ color: primaryColor }} />
+                    <h6 className="fw-bold mb-0 text-dark">Identitas Wilayah</h6>
+                  </div>
+                  <div className="row g-3">
+                    <div className="col-12 col-sm-6">
+                      <label className="form-label small fw-medium text-muted mb-1">Nama Posyandu</label>
+                      <input type="text" className="form-control" placeholder="Contoh: Posyandu Anggrek 1" value={namaPosyandu} onChange={(e) => setNamaPosyandu(e.target.value)} disabled={theme === "kader"} />
+                    </div>
+                    <div className="col-12 col-sm-6">
+                      <label className="form-label small fw-medium text-muted mb-1">Dusun / RT / RW</label>
+                      <input type="text" className="form-control" placeholder="Contoh: RT 01 / RW 02" value={dusun} onChange={(e) => setDusun(e.target.value)} disabled={theme === "kader"} />
+                    </div>
+                    <div className="col-12 col-sm-6">
+                      <label className="form-label small fw-medium text-muted mb-1">Desa / Kelurahan</label>
+                      <input type="text" className="form-control" placeholder="Contoh: Suka Maju" value={desaKelurahan} onChange={(e) => setDesaKelurahan(e.target.value)} disabled={theme === "kader"} />
+                    </div>
+                    <div className="col-12 col-sm-6">
+                      <label className="form-label small fw-medium text-muted mb-1">Kecamatan</label>
+                      <input type="text" className="form-control" placeholder="Contoh: Medan Area" value={kecamatan} onChange={(e) => setKecamatan(e.target.value)} disabled={theme === "kader"} />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="col-12 d-flex justify-content-end gap-2 pt-2">

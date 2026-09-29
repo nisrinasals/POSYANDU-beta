@@ -10,11 +10,10 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
   const [backendReferrals, setBackendReferrals] = useState([]);
   const [isLoadingReferrals, setIsLoadingReferrals] = useState(true);
   const [referralError, setReferralError] = useState("");
-  const [loadingReferrals, setLoadingReferrals] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingReferrals(true);
+    setIsLoadingReferrals(true);
     setReferralError("");
     rujukanService
       .getAllRujukan()
@@ -29,7 +28,7 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
         }
       })
       .finally(() => {
-        if (!cancelled) setLoadingReferrals(false);
+        if (!cancelled) setIsLoadingReferrals(false);
       });
     return () => {
       cancelled = true;
@@ -63,7 +62,7 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
         kader: item.kader?.nama_lengkap || "",
         masalahBadge: item.alasan_rujukan || "",
         masalahSub: item.alasan_rujukan || "",
-        tglDirujuk: formatDateId(item.tanggal_rujukan),
+        tglDirujuk: formatDateId(item.tanggal_rujukan || item.createdAt || item.updatedAt) || "-",
         kehadiran: item.status_kehadiran_rujukan === "tidak_hadir" ? "Tidak Hadir" : item.status_kehadiran_rujukan === "hadir" ? "Hadir" : "",
         catatanKunjungan: "",
         raw: item,
@@ -93,13 +92,16 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
   // Filtered referrals
   const filteredReferrals = useMemo(() => {
     return referrals.filter((item) => {
-      const matchSearch =
-        item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.nik.includes(searchTerm) ||
-        item.posyandu.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.kader && item.kader.toLowerCase().includes(searchTerm.toLowerCase()));
+      if (!item) return false;
+      const namaStr = String(item.nama || "").toLowerCase();
+      const nikStr = String(item.nik || "");
+      const posStr = String(item.posyandu || "").toLowerCase();
+      const kaderStr = String(item.kader || "").toLowerCase();
+      const query = String(searchTerm || "").toLowerCase();
 
-      const matchPosyandu = selectedPosyandu === "all" || (item.posyandu && item.posyandu.toLowerCase().includes(selectedPosyandu.toLowerCase()));
+      const matchSearch = !query || namaStr.includes(query) || nikStr.includes(query) || posStr.includes(query) || kaderStr.includes(query);
+
+      const matchPosyandu = selectedPosyandu === "all" || (item.posyandu && String(item.posyandu).toLowerCase().includes(selectedPosyandu.toLowerCase()));
 
       const matchSiklus = selectedSiklus === "all" || item.kategori === selectedSiklus;
 
@@ -129,8 +131,8 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
 
   return (
     <div className="d-flex flex-column gap-3 pb-4">
-      {loadingReferrals && <div className="alert alert-light border mb-0">Memuat data rujukan dari backend...</div>}
-      {!loadingReferrals && referralError && <div className="alert alert-danger border mb-0">{referralError}</div>}
+      {isLoadingReferrals && <div className="alert alert-light border mb-0">Memuat data rujukan dari backend...</div>}
+      {!isLoadingReferrals && referralError && <div className="alert alert-danger border mb-0">{referralError}</div>}
       {/* Filter and Search Bar Section */}
       <div className="card border-0 bg-white shadow-xs rounded-4 p-4" style={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
         <div className="row g-3 align-items-center">
@@ -188,22 +190,8 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
             </select>
           </div>
 
-          {/* Filter Status Kehadiran */}
-          <div className="col-12 col-sm-6 col-md-2">
-            <select
-              className="form-select bg-white border border-secondary-subtle fw-medium text-dark rounded-3 shadow-none"
-              value={selectedKehadiranFilter}
-              onChange={(e) => setSelectedKehadiranFilter(e.target.value)}
-              style={{ height: "44px", fontSize: "0.85rem", borderColor: "#d0d5dd", borderRadius: "10px" }}
-            >
-              <option value="all">Semua Status</option>
-              <option value="Hadir">Hadir</option>
-              <option value="Tidak Hadir">Tidak Hadir</option>
-            </select>
-          </div>
-
           {/* Filter Action Button */}
-          <div className="col-12 col-md-1">
+          <div className="col-12 col-md-3">
             <button
               type="button"
               className="btn w-100 d-flex align-items-center justify-content-center text-white fw-bold rounded-3 shadow-xs"
@@ -211,7 +199,7 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
               onClick={handleResetFilter}
               title="Filter / Reset"
             >
-              <span>Filter</span>
+              <span>Reset Filter</span>
             </button>
           </div>
         </div>
@@ -249,9 +237,6 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
                 <th className="py-3 fw-bold" style={{ minWidth: "220px" }}>
                   INDIKASI / MASALAH RUJUKAN
                 </th>
-                <th className="py-3 fw-bold" style={{ minWidth: "140px" }}>
-                  STATUS HADIR
-                </th>
                 <th className="pe-4 py-3 text-center fw-bold" style={{ width: "80px" }}>
                   AKSI
                 </th>
@@ -287,18 +272,6 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
                         </div>
                       </td>
 
-                      <td className="py-3">
-                        {item.kehadiran ? (
-                          <span
-                            className={`badge ${item.kehadiran === "Hadir" ? "bg-success-subtle text-success border border-success-subtle" : "bg-warning-subtle text-warning-emphasis border border-warning-subtle"} px-2.5 py-1 rounded-pill`}
-                          >
-                            {item.kehadiran}
-                          </span>
-                        ) : (
-                          ""
-                        )}
-                      </td>
-
                       <td className="pe-4 py-3 text-center text-nowrap">
                         <button type="button" className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none rounded-3 px-2.5 py-1" onClick={() => handleOpenDetailModal(item)} title="Lihat Detail Rujukan">
                           <Eye size={14} />
@@ -325,17 +298,7 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
             Menampilkan <span className="fw-semibold text-dark">{filteredReferrals.length}</span> dari total <span className="fw-semibold text-dark">{referrals.length}</span> data rujukan
           </div>
 
-          <div className="d-flex align-items-center gap-1">
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
-              <ChevronLeft size={15} />
-            </button>
-            <button className="btn btn-sm text-white px-2.5 py-0.5 fw-bold rounded-2" style={{ backgroundColor: "#428A75" }}>
-              1
-            </button>
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
-              <ChevronRight size={15} />
-            </button>
-          </div>
+          
         </div>
       </div>
 

@@ -77,7 +77,7 @@ export default function PuskesmasVerifikasiKaderPage({
               telepon: u.no_telepon || u.telepon || "",
               posyandu: u.posyandu?.nama_posyandu || u.posyandu || "",
               rw: u.rw || "",
-              tglDaftar: formatDateId(u.createdAt),
+              tglDaftar: formatDateId(u.email_verified_at || u.verified_at || u.createdAt),
               status: u.status === "pending_approval" ? "pending" : u.status || "",
               bidangJabatan: u.jabatan || u.bidangJabatan || "",
               unitKategori: u.unit || "",
@@ -346,15 +346,6 @@ export default function PuskesmasVerifikasiKaderPage({
               <span className={`badge rounded-pill ${activeTab === "active" ? "bg-white text-dark" : "bg-secondary text-white"}`}>{currentActiveCount}</span>
             </button>
 
-            <button
-              className={`btn d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-bold transition-all ${activeTab === "rejected" ? "text-white shadow-sm" : "btn-light border text-secondary"}`}
-              style={{ backgroundColor: activeTab === "rejected" ? "#428A75" : undefined }}
-              onClick={() => setActiveTab("rejected")}
-            >
-              <UserX size={16} />
-              <span>Ditolak / Non-Aktif</span>
-              <span className={`badge rounded-pill ${activeTab === "rejected" ? "bg-white text-dark" : "bg-secondary text-white"}`}>{currentRejectedCount}</span>
-            </button>
           </div>
         </div>
       )}
@@ -389,7 +380,7 @@ export default function PuskesmasVerifikasiKaderPage({
           )}
 
           <div className="col-12 col-md-2 d-flex gap-2">
-            <button className="btn text-white w-100 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold rounded-3" style={{ backgroundColor: "#428A75" }}>
+            <button className="btn text-white flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold rounded-3" style={{ backgroundColor: "#428A75" }}>
               <Filter size={16} />
               <span>Filter</span>
             </button>
@@ -416,8 +407,8 @@ export default function PuskesmasVerifikasiKaderPage({
               <thead>
                 <tr>
                   <th style={{ width: "50px" }}>NO</th>
-                  <th>NAMA &amp; NIK</th>
-                  <th>EMAIL</th>
+                  <th>NAMA LENGKAP &amp; NIK</th>
+                  <th>EMAIL &amp; TELEPON</th>
                   <th>POSYANDU / RW</th>
                   <th>TANGGAL DAFTAR</th>
                   <th>STATUS</th>
@@ -464,7 +455,7 @@ export default function PuskesmasVerifikasiKaderPage({
                         )}
                       </td>
                       <td className="text-center">
-                        {item.status === "pending" && (
+                        {item.status === "pending" ? (
                           <div className="d-flex align-items-center justify-content-center gap-2">
                             <button
                               className="btn text-white btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 fw-semibold shadow-xs"
@@ -475,14 +466,10 @@ export default function PuskesmasVerifikasiKaderPage({
                               <Check size={14} />
                               <span>Setujui</span>
                             </button>
-                            <button className="btn btn-outline-danger btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 shadow-xs" onClick={() => handleRejectKader(item.id, item.nama)} title="Tolak pendaftaran kader">
-                              <X size={14} />
-                              <span>Tolak</span>
-                            </button>
                           </div>
+                        ) : (
+                          <span className="badge bg-light text-success border border-success-subtle px-2 py-1 small">✓ Terverifikasi</span>
                         )}
-                        {item.status === "active" && <span className="badge bg-light text-success border border-success-subtle px-2 py-1 small">✓ Terverifikasi</span>}
-                        {(item.status === "rejected" || item.status === "inactive") && <span className="badge bg-light text-danger border border-danger-subtle px-2 py-1 small">✕ Ditolak</span>}
                       </td>
                     </tr>
                   ))
@@ -507,8 +494,8 @@ export default function PuskesmasVerifikasiKaderPage({
               <thead>
                 <tr>
                   <th style={{ width: "50px" }}>NO</th>
-                  <th>NAMA</th>
-                  <th>EMAIL</th>
+                  <th>NAMA LENGKAP</th>
+                  <th>EMAIL &amp; TELEPON</th>
                   <th>TANGGAL DAFTAR</th>
                   <th>STATUS</th>
                   <th className="text-center">AKSI</th>
@@ -545,7 +532,7 @@ export default function PuskesmasVerifikasiKaderPage({
                         )}
                       </td>
                       <td className="text-center">
-                        {item.status === "pending" && (
+                        {item.status === "pending" ? (
                           <div className="d-flex align-items-center justify-content-center gap-2">
                             <button
                               className="btn text-white btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 fw-semibold shadow-xs"
@@ -556,14 +543,10 @@ export default function PuskesmasVerifikasiKaderPage({
                               <Check size={14} />
                               <span>Setujui</span>
                             </button>
-                            <button className="btn btn-outline-danger btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 shadow-xs" onClick={() => handleRejectStaf(item.id, item.nama)} title="Tolak pendaftaran staf puskesmas">
-                              <X size={14} />
-                              <span>Tolak</span>
-                            </button>
                           </div>
+                        ) : (
+                          <span className="badge bg-light text-success border border-success-subtle px-2 py-1 small">✓ Terverifikasi</span>
                         )}
-                        {item.status === "active" && <span className="badge bg-light text-success border border-success-subtle px-2 py-1 small">✓ Terverifikasi</span>}
-                        {(item.status === "rejected" || item.status === "inactive") && <span className="badge bg-light text-danger border border-danger-subtle px-2 py-1 small">✕ Ditolak</span>}
                       </td>
                     </tr>
                   ))
@@ -589,7 +572,7 @@ export default function PuskesmasVerifikasiKaderPage({
               <thead>
                 <tr>
                   <th style={{ width: "50px" }}>NO</th>
-                  <th>NAMA &amp; NIK</th>
+                  <th>NAMA LENGKAP &amp; NIK</th>
                   <th>EMAIL &amp; TELEPON</th>
                   <th>TANGGAL DAFTAR</th>
                   <th>STATUS AKSES</th>
@@ -668,27 +651,7 @@ export default function PuskesmasVerifikasiKaderPage({
 
         {/* Table Footer & Pagination */}
         <div className="d-flex flex-column flex-sm-row align-items-center justify-content-between pt-3 border-top mt-3 text-muted small gap-3">
-          <div className="d-flex align-items-center gap-1">
-            <span className="text-muted">Menampilkan</span>
-            <strong className="text-dark me-1">{isKader ? filteredKader.length : isStaf ? filteredStaf.length : filteredKelolaAkun.length}</strong>
-            <span>
-              {isKelola
-                ? `dari total ${kelolaTotalCount} akun terverifikasi (kader & staf) di ${/* backend value only */ ""}`
-                : `dari ${isKader ? filteredKader.length : filteredStaf.length} pendaftaran ${isKader ? "kader posyandu" : "staf puskesmas"} yang ${activeTab === "pending" ? "menunggu verifikasi" : activeTab === "active" ? "aktif" : "ditolak"}`}
-            </span>
-          </div>
-
-          <div className="d-flex align-items-center gap-1">
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
-              <ChevronLeft size={16} />
-            </button>
-            <button className="btn btn-sm text-white px-3 py-1 rounded-2 fw-bold" style={{ backgroundColor: "#428A75" }}>
-              1
-            </button>
-            <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          
         </div>
       </div>
     </div>

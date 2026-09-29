@@ -21,6 +21,11 @@ import DinkesDataSasaranPage from "./pages/dinkes/DinkesDataSasaranPage";
 import DinkesJadwalMonitoringPage from "./pages/dinkes/DinkesJadwalMonitoringPage";
 import RekapTemplateExcelView from "./components/pemeriksaan/RekapTemplateExcelView";
 
+import SADashboardPage from "./pages/sa/SADashboardPage";
+import SAVerifikasiAkunPage from "./pages/sa/SAVerifikasiAkunPage";
+import SADataSasaranPage from "./pages/sa/SADataSasaranPage";
+import SAJadwalMonitoringPage from "./pages/sa/SAJadwalMonitoringPage";
+
 import { authService, sesiService, pemeriksaanService, userService, posyanduService, rujukanService } from "./services";
 
 import wargaService from "./services/wargaService";
@@ -188,10 +193,12 @@ export default function App() {
     // =======================================================
     // ROLE ACCESS
     // =======================================================
+    const isSA = currentBackendRole === "sa";
+    const isDinkesAdminRole = ["dinkesAdmin", "dinkes-admin"].includes(currentBackendRole);
     const isDinkesRole = ["dinkes", "dinkesAdmin", "dinkes-staf", "dinkes-admin"].includes(currentBackendRole);
 
-    const isDinkesAdminRole = ["dinkesAdmin", "dinkes-admin"].includes(currentBackendRole);
-    const canAccessPersonalData = !isDinkesRole || isDinkesAdminRole;
+    const isStafRole = ["dinkes-staf", "puskesmas-staf"].includes(currentBackendRole);
+    const canAccessPersonalData = (isSA || !isDinkesRole || isDinkesAdminRole) && !isStafRole;
     const isPuskesmasRole = ["puskesmas", "puskesmasAdmin", "puskesmas-admin", "puskesmas-staf", "puskesmas-user"].includes(currentBackendRole);
 
     if (!canAccessPersonalData) {
@@ -316,18 +323,26 @@ export default function App() {
     } catch (err) {
       console.error("Gagal mengambil Data Warga dari backend:", err);
     }
+    
     // =======================================================
-    // POSYANDU & RUJUKAN PUSKESMAS
+    // POSYANDU & PUSKESMAS (DIAMBIL UNTUK SEMUA ROLE KARENA DIGUNAKAN DI FILTER DATA)
+    // =======================================================
+    try {
+      const posyanduRes = await posyanduService.getAllPosyandu();
+      setGlobalPosyanduList(Array.isArray(posyanduRes?.data) ? posyanduRes.data : []);
+    } catch (err) {
+      console.error("Gagal mengambil data Posyandu secara global:", err);
+      setGlobalPosyanduList([]);
+    }
+    // =======================================================
+    // RUJUKAN PUSKESMAS
     // =======================================================
     if (isPuskesmasRole) {
       try {
-        const [posyanduRes, rujukanRes] = await Promise.all([posyanduService.getAllPosyandu(), rujukanService.getAllRujukan()]);
-
-        setGlobalPosyanduList(Array.isArray(posyanduRes?.data) ? posyanduRes.data : []);
+        const rujukanRes = await rujukanService.getAllRujukan();
         setGlobalRujukanList(Array.isArray(rujukanRes?.data) ? rujukanRes.data : []);
       } catch (err) {
-        console.error("Gagal mengambil data Posyandu/Rujukan Puskesmas:", err);
-        setGlobalPosyanduList([]);
+        console.error("Gagal mengambil data Rujukan Puskesmas:", err);
         setGlobalRujukanList([]);
       }
     }
@@ -528,6 +543,77 @@ export default function App() {
   const isPuskesmasStaf = user.roleType === "puskesmas-staf";
 
   // =========================================================
+  // SUPER ADMIN (SA)
+  // =========================================================
+  const isSA = user.roleType === "sa";
+  if (isSA) {
+    return (
+      <AppLayout user={user} activeMenu={activeMenu} activeSubmenu={activeSubmenu} onNavigate={handleNavigate} onLogout={handleLogout}>
+        {activeMenu === "dashboard" && (
+          <SADashboardPage
+            onNavigate={handleNavigate}
+            user={user}
+            globalStatistikSasaran={globalStatistikSasaran}
+            isGlobalStatistikLoading={isGlobalStatistikLoading}
+            globalJadwalList={globalJadwalList}
+            onRefreshData={fetchBackendData}
+          />
+        )}
+
+        {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && (
+          <SAVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} user={user} />
+        )}
+
+        {activeMenu === "data-sasaran" && (
+          <SADataSasaranPage
+            globalSasaranList={globalSasaranList}
+            globalPemeriksaanData={globalPemeriksaanData}
+            globalStatistikSasaran={globalStatistikSasaran}
+            isGlobalStatistikLoading={isGlobalStatistikLoading}
+            privacyMode={false}
+            onNavigate={handleNavigate}
+            initialCategoryFilter={categoryFilterParam}
+            setCategoryFilterParam={setCategoryFilterParam}
+            onRefreshData={fetchBackendData}
+            user={user}
+            globalPosyanduList={globalPosyanduList}
+          />
+        )}
+
+        {(activeMenu === "jadwal" || activeMenu === "jadwal-monitoring") && (
+          <SAJadwalMonitoringPage globalJadwalList={globalJadwalList} onRefreshData={fetchBackendData} user={user} />
+        )}
+
+        {activeMenu === "laporan-ekspor" && (
+          <PuskesmasRekapitulasiPage
+            globalSasaranList={globalSasaranList}
+            globalPemeriksaanData={globalPemeriksaanData}
+            onNavigate={handleNavigate}
+            onRefreshData={fetchBackendData}
+            user={user}
+            userRole={"sa"}
+          />
+        )}
+
+        {activeMenu === "profil-pengguna" && (
+          <ProfilPenggunaPage
+            user={{
+              ...user,
+              roleType: "sa",
+            }}
+            onUpdateUser={(updated) =>
+              setUser((prev) => ({
+                ...prev,
+                ...updated,
+              }))
+            }
+          />
+        )}
+      </AppLayout>
+    );
+  }
+
+  // =========================================================
   // DINKES
   // =========================================================
   if (isDinkes) {
@@ -544,7 +630,7 @@ export default function App() {
           />
         )}
 
-        {isDinkesAdmin && (activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && <DinkesVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} />}
+        {isDinkesAdmin && (activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && <DinkesVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} user={user} />}
 
         {activeMenu === "data-sasaran" && (
           <DinkesDataSasaranPage
@@ -557,29 +643,30 @@ export default function App() {
             initialCategoryFilter={categoryFilterParam}
             setCategoryFilterParam={setCategoryFilterParam}
             onRefreshData={fetchBackendData}
+            user={user}
+            globalPosyanduList={globalPosyanduList}
           />
         )}
 
-        {(activeMenu === "jadwal" || activeMenu === "jadwal-monitoring") && <DinkesJadwalMonitoringPage globalJadwalList={globalJadwalList} onRefreshData={fetchBackendData} />}
+        {(activeMenu === "jadwal" || activeMenu === "jadwal-monitoring") && <DinkesJadwalMonitoringPage globalJadwalList={globalJadwalList} onRefreshData={fetchBackendData} user={user} />}
 
-        {activeMenu === "laporan-ekspor" &&
-          (isDinkesAdmin ? (
-            <PuskesmasRekapitulasiPage
-              globalSasaranList={globalSasaranList}
-              globalPemeriksaanData={globalPemeriksaanData}
-              onNavigate={handleNavigate}
-              user={user}
-              userRole="dinkes-admin"
-            />
-          ) : (
-            <RekapTemplateExcelView userRole="dinkes-staf" user={user} />
-          ))}
+        {activeMenu === "laporan-ekspor" && (
+          <PuskesmasRekapitulasiPage
+            globalSasaranList={globalSasaranList}
+            globalPemeriksaanData={globalPemeriksaanData}
+            onNavigate={handleNavigate}
+            onRefreshData={fetchBackendData}
+            user={user}
+            userRole={user.roleType === "sa" ? "sa" : isDinkesAdmin ? "dinkes-admin" : "dinkes-staf"}
+            globalPosyanduList={globalPosyanduList}
+          />
+        )}
 
         {activeMenu === "profil-pengguna" && (
           <ProfilPenggunaPage
             user={{
               ...user,
-              roleType: isDinkesAdmin ? "dinkes-admin" : "dinkes-staf",
+              roleType: user.roleType === "sa" ? "sa" : isDinkesAdmin ? "dinkes-admin" : "dinkes-staf",
             }}
             onUpdateUser={(updated) =>
               setUser((prev) => ({
@@ -640,6 +727,7 @@ export default function App() {
             onRefreshData={fetchBackendData}
             user={user}
             userRole={isPuskesmasStaf ? "puskesmas-staf" : "puskesmas-admin"}
+            globalPosyanduList={globalPosyanduList}
           />
         )}
 

@@ -268,27 +268,29 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
             Menampilkan <span className="fw-semibold text-dark">{paginatedData.length}</span> dari <span className="fw-semibold text-dark">{totalItems}</span> sasaran
           </div>
 
-          <div className="d-flex align-items-center gap-1">
-            <button className="btn btn-sm btn-light border p-1 px-2 text-muted" disabled={currentPage === 1} onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}>
-              <ChevronLeft size={15} />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                className={`btn btn-sm px-2.5 py-1 fw-bold ${currentPage === page ? "text-white" : "btn-light border text-dark"}`}
-                style={{
-                  backgroundColor: currentPage === page ? "#428A75" : undefined,
-                  fontSize: "0.8rem",
-                }}
-                onClick={() => setCurrentPage(page)}
-              >
-                {page}
+          {totalPages > 1 && (
+            <div className="d-flex align-items-center gap-1">
+              <button className="btn btn-sm btn-light border p-1 px-2 text-muted" disabled={currentPage === 1} onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}>
+                <ChevronLeft size={15} />
               </button>
-            ))}
-            <button className="btn btn-sm btn-light border p-1 px-2 text-muted" disabled={currentPage === totalPages} onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}>
-              <ChevronRight size={15} />
-            </button>
-          </div>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`btn btn-sm px-2.5 py-1 fw-bold ${currentPage === page ? "text-white" : "btn-light border text-dark"}`}
+                  style={{
+                    backgroundColor: currentPage === page ? "#428A75" : undefined,
+                    fontSize: "0.8rem",
+                  }}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button className="btn btn-sm btn-light border p-1 px-2 text-muted" disabled={currentPage === totalPages} onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}>
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

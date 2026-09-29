@@ -16,7 +16,17 @@ export const posyanduService = {
         params: { ...params, page, limit: 100 },
       });
       const items = Array.isArray(res?.data) ? res.data : [];
-      allItems.push(...items);
+      const mappedItems = items.map((item, index) => ({
+        ...item,
+        id: item.id,
+        no: index + 1 + (page - 1) * 100,
+        nama: item.nama_posyandu,
+        kelurahan: item.kelurahan?.nama_kelurahan || "",
+        kecamatan: item.kelurahan?.kecamatan?.nama_kecamatan || "",
+        puskesmas: item.puskesmas?.nama_puskesmas || "",
+        label: `${item.nama_posyandu} (Kel. ${item.kelurahan?.nama_kelurahan || ""}, Pkm. ${item.puskesmas?.nama_puskesmas || ""})`
+      }));
+      allItems.push(...mappedItems);
       totalPages = Number(res?.pagination?.total_pages || 1);
       page += 1;
     } while (page <= totalPages);

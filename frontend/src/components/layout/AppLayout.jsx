@@ -8,11 +8,12 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
   const [verifikasiPuskesmasOpen, setVerifikasiPuskesmasOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  const isSA = user?.roleType === "sa";
   const isPuskesmasAdmin = user?.roleType === "puskesmas" || user?.roleType === "puskesmas-admin";
   const isPuskesmasStaf = user?.roleType === "puskesmas-staf" || user?.roleType === "puskesmas-user";
   const isPuskesmas = isPuskesmasAdmin || isPuskesmasStaf;
 
-  const isDinkesAdmin = user?.roleType === "dinkes-admin";
+  const isDinkesAdmin = user?.roleType === "dinkes-admin" || isSA;
   const isDinkesStaf = user?.roleType === "dinkes-staf" || user?.roleType === "dinkes";
   const isDinkes = isDinkesAdmin || isDinkesStaf;
 
@@ -21,18 +22,21 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
   };
 
   const getPageBg = () => {
+    if (isSA) return "#f4ede8"; // Soft brown for SA page background
     if (isDinkes) return "#eef2f6";
     if (isPuskesmas) return "#EEF1EF";
     return "#f2f2f2";
   };
 
   const getBrandBg = () => {
+    if (isSA) return "#6b4e31"; // Neutral brown for SA brand
     if (isDinkes) return "#1e3a8a";
     if (isPuskesmas) return "#2E4E52";
     return "#2b2e4a";
   };
 
   const getRoleBadgeBg = () => {
+    if (isSA) return "#8c6b5d"; // Brown for SA badge
     if (isDinkesAdmin) return "#1e3a8a";
     if (isDinkesStaf) return "#0284c7";
     if (isPuskesmasAdmin) return "#2E4E52";
@@ -41,6 +45,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
   };
 
   const getRoleLabel = () => {
+    if (isSA) return "Super Admin";
     if (isDinkesAdmin) return "Dinkes (Admin)";
     if (isDinkesStaf) return "Dinkes (Staf)";
     if (isPuskesmasAdmin) return "Puskesmas (Admin)";
@@ -49,6 +54,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
   };
 
   const getRoleSubLabel = () => {
+    if (isSA) return "SENGKUYUNG KATRESNAN";
     if (isPuskesmas) return user?.puskesmas || "";
     if (isDinkes) return user?.instansi || user?.puskesmas || "";
     return user?.posyandu || "";
@@ -85,7 +91,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
           <div className="p-2 text-white rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: getBrandBg() }}>
             {isDinkes ? <Building2 size={20} /> : isPuskesmas ? <Shield size={20} /> : <HeartHandshake size={20} />}
           </div>
-          <span className="fw-bold text-dark">Posyandu Beta</span>
+          <span className="fw-bold text-dark">SENGKUYUNG KATRESNAN</span>
         </div>
         <button className="btn btn-outline-secondary btn-sm" onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}>
           <Menu size={20} />
@@ -100,15 +106,15 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
             {isDinkes ? <Building2 size={24} /> : isPuskesmas ? <Shield size={24} /> : <HeartHandshake size={24} />}
           </div>
           <div>
-            <h6 className="fw-bold mb-0 text-dark">Posyandu Beta</h6>
+            <h6 className="fw-bold mb-0 text-dark">SENGKUYUNG KATRESNAN</h6>
             <span
               className="fw-bold"
               style={{
                 fontSize: "0.75rem",
-                color: isDinkes ? "#1e3a8a" : isPuskesmas ? "#428A75" : "#64748b",
+                color: isSA ? "#6b4e31" : isDinkes ? "#1e3a8a" : isPuskesmas ? "#428A75" : "#64748b",
               }}
             >
-              {isDinkes ? (isDinkesAdmin ? "DINAS KESEHATAN (ADMIN)" : "DINAS KESEHATAN (STAF)") : isPuskesmas ? (isPuskesmasAdmin ? "PUSKESMAS (ADMIN)" : "PUSKESMAS (STAF)") : "Sistem Layanan Kesehatan"}
+              {isSA ? "SUPER ADMIN SISTEM" : isDinkes ? (isDinkesAdmin ? "DINAS KESEHATAN (ADMIN)" : "DINAS KESEHATAN (STAF)") : isPuskesmas ? (isPuskesmasAdmin ? "PUSKESMAS (ADMIN)" : "PUSKESMAS (STAF)") : "Sistem Layanan Kesehatan"}
             </span>
           </div>
         </div>
@@ -119,7 +125,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
             className="p-2.5 rounded-3 border d-flex align-items-center justify-content-between"
             style={{
               fontSize: "0.8rem",
-              backgroundColor: isDinkes ? "rgba(219, 234, 254, 0.5)" : isPuskesmas ? "rgba(220, 252, 231, 0.5)" : "#f8fafc",
+              backgroundColor: isSA ? "rgba(107, 78, 49, 0.1)" : isDinkes ? "rgba(219, 234, 254, 0.5)" : isPuskesmas ? "rgba(220, 252, 231, 0.5)" : "#f8fafc",
             }}
           >
             <div className="d-flex align-items-center gap-2 overflow-hidden">
@@ -148,7 +154,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 {/* 1. Dashboard Dinkes */}
                 <a
                   href="#dashboard"
-                  className={`nav-link-custom dinkes-nav-link ${activeMenu === "dashboard" ? "active" : ""}`}
+                  className={`nav-link-custom ${isSA ? "sa-nav-link" : "dinkes-nav-link"} ${activeMenu === "dashboard" ? "active" : ""}`}
                   onClick={(e) => {
                     e.preventDefault();
                     onNavigate("dashboard");
@@ -162,7 +168,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 {isDinkesAdmin && (
                   <div>
                     <div
-                      className={`nav-link-custom dinkes-nav-link justify-content-between ${activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun" ? "active" : ""}`}
+                      className={`nav-link-custom ${isSA ? "sa-nav-link" : "dinkes-nav-link"} justify-content-between ${activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun" ? "active" : ""}`}
                       style={{ cursor: "pointer" }}
                       onClick={() => {
                         onNavigate("verifikasi-akun", activeSubmenu || "puskesmas");
@@ -181,7 +187,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                         {/* Submenu 1: Verifikasi Puskesmas */}
                         <a
                           href="#verifikasi-puskesmas"
-                          className={`nav-link-custom submenu-link dinkes-submenu-link ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && (activeSubmenu === "puskesmas" || !activeSubmenu) ? "active" : ""}`}
+                          className={`nav-link-custom submenu-link ${isSA ? "sa-submenu-link" : "dinkes-submenu-link"} ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && (activeSubmenu === "puskesmas" || !activeSubmenu) ? "active" : ""}`}
                           onClick={(e) => {
                             e.preventDefault();
                             onNavigate("verifikasi-akun", "puskesmas");
@@ -194,7 +200,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                         {/* Submenu 2: Verifikasi Staf Internal Dinkes */}
                         <a
                           href="#verifikasi-staf"
-                          className={`nav-link-custom submenu-link dinkes-submenu-link ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "staf" ? "active" : ""}`}
+                          className={`nav-link-custom submenu-link ${isSA ? "sa-submenu-link" : "dinkes-submenu-link"} ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "staf" ? "active" : ""}`}
                           onClick={(e) => {
                             e.preventDefault();
                             onNavigate("verifikasi-akun", "staf");
@@ -207,7 +213,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                         {/* Submenu 3: Kelola Akun Terdaftar */}
                         <a
                           href="#kelola-akun"
-                          className={`nav-link-custom submenu-link dinkes-submenu-link ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kelola" ? "active" : ""}`}
+                          className={`nav-link-custom submenu-link ${isSA ? "sa-submenu-link" : "dinkes-submenu-link"} ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kelola" ? "active" : ""}`}
                           onClick={(e) => {
                             e.preventDefault();
                             onNavigate("verifikasi-akun", "kelola");
@@ -225,7 +231,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 {isDinkesAdmin && (
                   <a
                     href="#data-sasaran"
-                    className={`nav-link-custom dinkes-nav-link ${activeMenu === "data-sasaran" ? "active" : ""}`}
+                    className={`nav-link-custom ${isSA ? "sa-nav-link" : "dinkes-nav-link"} ${activeMenu === "data-sasaran" ? "active" : ""}`}
                     onClick={(e) => {
                       e.preventDefault();
                       onNavigate("data-sasaran");
@@ -239,7 +245,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 {/* 4. Jadwal Posyandu (Bisa diakses Admin & Staf) */}
                 <a
                   href="#jadwal-monitoring"
-                  className={`nav-link-custom dinkes-nav-link ${activeMenu === "jadwal-monitoring" || activeMenu === "jadwal" ? "active" : ""}`}
+                  className={`nav-link-custom ${isSA ? "sa-nav-link" : "dinkes-nav-link"} ${activeMenu === "jadwal-monitoring" || activeMenu === "jadwal" ? "active" : ""}`}
                   onClick={(e) => {
                     e.preventDefault();
                     onNavigate("jadwal-monitoring");
@@ -252,7 +258,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 {/* 5. Rekapitulasi Wilayah (Bisa diakses Admin & Staf - Staf khusus format Excel) */}
                 <a
                   href="#laporan-ekspor"
-                  className={`nav-link-custom dinkes-nav-link ${activeMenu === "laporan-ekspor" ? "active" : ""}`}
+                  className={`nav-link-custom ${isSA ? "sa-nav-link" : "dinkes-nav-link"} ${activeMenu === "laporan-ekspor" ? "active" : ""}`}
                   onClick={(e) => {
                     e.preventDefault();
                     onNavigate("laporan-ekspor");
@@ -265,7 +271,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 {/* 6. Profil Pengguna / Instansi Dinkes */}
                 <a
                   href="#profil-pengguna"
-                  className={`nav-link-custom dinkes-nav-link ${activeMenu === "profil-pengguna" ? "active" : ""}`}
+                  className={`nav-link-custom ${isSA ? "sa-nav-link" : "dinkes-nav-link"} ${activeMenu === "profil-pengguna" ? "active" : ""}`}
                   onClick={(e) => {
                     e.preventDefault();
                     onNavigate("profil-pengguna");
@@ -391,7 +397,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 )}
 
                 {/* 5. Pemantauan Rujukan (KHUSUS ADMIN PUSKESMAS) */}
-                {isPuskesmas && (
+                {isPuskesmasAdmin && (
                   <a
                     href="#pemantauan-rujukan"
                     className={`nav-link-custom puskesmas-nav-link ${activeMenu === "pemantauan-rujukan" ? "active" : ""}`}
@@ -561,7 +567,17 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
         <header className="d-flex flex-column flex-md-row align-items-md-center justify-content-between pb-3 mb-4 border-bottom gap-3" style={{ minHeight: "56px" }}>
           <div className="d-flex flex-column justify-content-center">
             <h2 className="page-title fw-bold mb-1 text-dark" style={{ fontSize: "1.45rem", letterSpacing: "-0.02em", lineHeight: "1.25" }}>
-              {isDinkes ? (
+              {isSA ? (
+                <>
+                  {activeMenu === "dashboard" && "Dashboard Super Administrator"}
+                  {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") &&
+                    (activeSubmenu === "staf" ? "Manajemen Staf Dinkes" : activeSubmenu === "kelola" ? "Kelola Akun Dinkes & Puskesmas" : "Manajemen Akun Puskesmas")}
+                  {(activeMenu === "jadwal-monitoring" || activeMenu === "jadwal") && "Monitoring Posyandu Sistem"}
+                  {activeMenu === "data-sasaran" && "Database Sasaran Terpadu"}
+                  {activeMenu === "laporan-ekspor" && "Rekapitulasi Sistem"}
+                  {activeMenu === "profil-pengguna" && "Profil Super Admin"}
+                </>
+              ) : isDinkes ? (
                 <>
                   {activeMenu === "dashboard" && (isDinkesStaf ? "Dashboard Staf Dinas Kesehatan" : "Dashboard Dinas Kesehatan")}
                   {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") &&
@@ -595,7 +611,16 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
               )}
             </h2>
             <p className="text-muted small mb-0" style={{ fontSize: "0.8rem", lineHeight: "1.3" }}>
-              {isDinkes ? (
+              {isSA ? (
+                <>
+                  {activeMenu === "dashboard" && "Pusat kendali dan manajemen master data seluruh sistem layanan terpadu"}
+                  {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && "Akses penuh memanipulasi status, aktivasi, dan password seluruh pengguna terdaftar"}
+                  {(activeMenu === "jadwal-monitoring" || activeMenu === "jadwal") && "Log monitoring semua jadwal yang berjalan di sistem"}
+                  {activeMenu === "data-sasaran" && "Database mentah dan agregasi demografi sasaran"}
+                  {activeMenu === "laporan-ekspor" && "Ekspor data mentah dan laporan sistem untuk audit"}
+                  {activeMenu === "profil-pengguna" && "Pengaturan kredensial keamanan tingkat lanjut"}
+                </>
+              ) : isDinkes ? (
                 <>
                   {activeMenu === "dashboard" && "Pemantauan indikator kesehatan, status pelaporan Puskesmas, dan kesiapan fasilitas kesehatan tingkat Kota"}
                   {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") &&

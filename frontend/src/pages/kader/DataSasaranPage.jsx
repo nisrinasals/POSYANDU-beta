@@ -140,6 +140,46 @@ export default function DataSasaranPage({
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedSasaran, setSelectedSasaran] = useState(null);
 
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [nameSuggestions, setNameSuggestions] = useState([]);
+
+  const handleNameChange = (e) => {
+    const value = e.target.value;
+    setCategoryForm({ ...categoryForm, nama: value });
+    if (value.length >= 2) {
+      const isFemaleOnly = selectedCategory?.id === "bumil" || selectedCategory?.id === "nifas";
+      const suggestions = (sasaranList || []).filter((s) => {
+        const matchName = s.nama?.toLowerCase().includes(value.toLowerCase());
+        if (!matchName) return false;
+        if (isFemaleOnly) {
+          return s.gender === "P" || s.gender === "Perempuan";
+        }
+        return true;
+      });
+      setNameSuggestions(suggestions);
+      setShowNameSuggestions(true);
+    } else {
+      setShowNameSuggestions(false);
+    }
+  };
+
+  const handleSelectNameSuggestion = (warga) => {
+    const isFemaleOnly = selectedCategory?.id === "bumil" || selectedCategory?.id === "nifas";
+    setCategoryForm({
+      ...categoryForm,
+      nama: warga.nama || "",
+      nik: warga.nik || "",
+      tglLahir: warga.tglLahir || "",
+      namaIbu: warga.namaIbu || warga.keteranganIbuSuami || "",
+      namaAyah: warga.namaAyah || "",
+      gender: isFemaleOnly ? "Perempuan" : warga.gender || "",
+      noHp: warga.noHp || "",
+      posyandu: warga.posyandu || "",
+      alamat: warga.alamat || "",
+    });
+    setShowNameSuggestions(false);
+  };
+
   // 1. Form State for 3 Variasi Form Sasaran (Bumil, Bayi, Standar + Status Menyusui)
   const [categoryForm, setCategoryForm] = useState({
     // Umum / Standar (Gambar 1)
@@ -1156,9 +1196,21 @@ export default function DataSasaranPage({
                 <div className="row g-3 mb-4">
                   {/* Kolom Kiri */}
                   <div className="col-md-6">
-                    <div className="mb-3">
+                    <div className="mb-3 position-relative">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
-                      <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={categoryForm.nama} onChange={(e) => setCategoryForm({ ...categoryForm, nama: e.target.value })} required />
+                      <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={categoryForm.nama} onChange={handleNameChange} required />
+                      {showNameSuggestions && nameSuggestions.length > 0 && (
+                        <div className="position-absolute w-100 bg-white border rounded shadow-sm mt-1 z-3" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                          {nameSuggestions.map((s, i) => (
+                            <div key={i} className="p-2 border-bottom text-dark" style={{ cursor: "pointer", fontSize: "0.85rem" }} onClick={() => handleSelectNameSuggestion(s)}>
+                              <div className="fw-semibold">{s.nama}</div>
+                              <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                NIK: {s.nik || "-"} | {s.kategori}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="mb-3">
@@ -1361,9 +1413,21 @@ export default function DataSasaranPage({
                 <div className="row g-3 mb-4">
                   {/* Kolom Kiri */}
                   <div className="col-md-6">
-                    <div className="mb-3">
+                    <div className="mb-3 position-relative">
                       <label className="form-label fw-medium small mb-1">Nama Lengkap</label>
-                      <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={categoryForm.nama} onChange={(e) => setCategoryForm({ ...categoryForm, nama: e.target.value })} required />
+                      <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama lengkap" value={categoryForm.nama} onChange={handleNameChange} required />
+                      {showNameSuggestions && nameSuggestions.length > 0 && (
+                        <div className="position-absolute w-100 bg-white border rounded shadow-sm mt-1 z-3" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                          {nameSuggestions.map((s, i) => (
+                            <div key={i} className="p-2 border-bottom text-dark" style={{ cursor: "pointer", fontSize: "0.85rem" }} onClick={() => handleSelectNameSuggestion(s)}>
+                              <div className="fw-semibold">{s.nama}</div>
+                              <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                NIK: {s.nik || "-"} | {s.kategori}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="mb-3">

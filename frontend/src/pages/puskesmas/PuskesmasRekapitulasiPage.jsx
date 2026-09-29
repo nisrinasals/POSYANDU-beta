@@ -2,7 +2,9 @@ import React, { useState, useMemo } from "react";
 import { Download, Search, Users, CheckCircle, Clock, AlertTriangle, Filter, Calendar, Eye, FileText, Printer } from "lucide-react";
 import DetailRekapModal, { resolve5StepDetails } from "../../components/pemeriksaan/DetailRekapModal";
 import ExportRekapModal from "../../components/pemeriksaan/ExportRekapModal";
+import RekapWorksheetPreview from "../../components/pemeriksaan/RekapWorksheetPreview";
 import { formatAgeFromMonths, formatDateId } from "../../utils/dataMappers";
+import { pemeriksaanService } from "../../services";
 
 const getAgeInMonths = (birthDate, referenceDate = new Date()) => {
   if (!birthDate) return null;
@@ -14,20 +16,31 @@ const getAgeInMonths = (birthDate, referenceDate = new Date()) => {
   return months < 0 ? null : months;
 };
 
-export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], globalPemeriksaanData = {}, onNavigate, user, userRole = "puskesmas" }) {
-  const isDinkes = userRole === "dinkes" || user?.roleType?.includes("dinkes");
+export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], globalPemeriksaanData = {}, globalPosyanduList = [], onNavigate, user, userRole = "puskesmas" }) {
+  const isSA = userRole === "sa" || user?.roleType === "sa";
+  const isDinkes = userRole === "dinkes" || userRole === "dinkes-admin" || userRole === "dinkes-staf" || user?.roleType?.includes("dinkes");
+  const isStaf = userRole === "dinkes-staf" || userRole === "puskesmas-staf" || user?.roleType === "dinkes-staf" || user?.roleType === "puskesmas-staf" || user?.role === "staf";
+  const isSuperAdminOrDinkes = isSA || isDinkes;
   const themeColor = isDinkes ? "#1e3a8a" : "#428A75";
   const roleTitle = isDinkes ? user?.instansi || user?.role || "" : user?.puskesmas || user?.instansi || user?.role || "";
+  const [stafTemplateKey, setStafTemplateKey] = useState("bumil_nifas_menyusui");
 
   // Filter starts from all backend data; user can narrow it with month/year selectors.
-  const [selectedMonthNum, setSelectedMonthNum] = useState("Semua");
-  const [selectedYear, setSelectedYear] = useState("Semua");
+  const [selectedMonthYear, setSelectedMonthYear] = useState("");
+  const selectedYear = selectedMonthYear ? selectedMonthYear.split("-")[0] : "Semua";
+  const selectedMonthNum = selectedMonthYear ? selectedMonthYear.split("-")[1] : "Semua";
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPosyandu, setSelectedPosyandu] = useState("Semua Posyandu");
+  const [selectedPuskesmas, setSelectedPuskesmas] = useState("Semua Puskesmas");
   const [selectedCategory, setSelectedCategory] = useState("Semua Kategori (Semua Siklus)");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Modal State for Single-Page View
   const [selectedCitizen, setSelectedCitizen] = useState(null);
+  const [selectedExamDetail, setSelectedExamDetail] = useState(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   // Modal State for Export Excel
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -59,9 +72,11 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
           tglLahir: s.tglLahir || "",
           gender: s.gender || "",
           posyandu: s.posyandu || "",
+          puskesmas: s.puskesmas || "",
           rw: s.rw || "",
           keteranganKeluarga: s.keteranganIbuSuami || s.namaIbu || s.namaAyah || "",
           tglPeriksa: resolved.tglPeriksa || s.tglPeriksa || resolved.tanggal || "",
+          pemeriksaanId: exam?.id || resolved?.idPemeriksaan || s.pemeriksaanId || null,
           status: isExamined ? "Sudah" : "Belum",
         };
       })
@@ -69,10 +84,21 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
       .filter((item) => item.status === "Sudah");
   }, [globalSasaranList, globalPemeriksaanData]);
 
+  // Available Puskesmas List
+  const availablePuskesmasList = useMemo(() => {
+    return [...new Set(globalPosyanduList.map((item) => item.puskesmas).filter(Boolean))].sort();
+  }, [globalPosyanduList]);
+
   // Available Posyandu List for filter dropdown
   const availablePosyanduList = useMemo(() => {
-    return [...new Set((allRekapList || []).map((item) => item.posyandu).filter(Boolean))].sort();
-  }, [allRekapList]);
+    let baseList = globalPosyanduList;
+    if (isSuperAdminOrDinkes && selectedPuskesmas !== "Semua Puskesmas") {
+      baseList = baseList.filter(item => item.puskesmas === selectedPuskesmas);
+    } else if (!isSuperAdminOrDinkes && user?.puskesmas) {
+      baseList = baseList.filter(item => item.puskesmas === user.puskesmas);
+    }
+    return [...new Set(baseList.map((item) => item.nama).filter(Boolean))].sort();
+  }, [isSuperAdminOrDinkes, selectedPuskesmas, user?.puskesmas]);
 
   // Filtered List Logic (Search, Category, Posyandu, Month & Year)
   const filteredList = useMemo(() => {
@@ -80,7 +106,8 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
       // 1. Search match
       const matchSearch = !searchTerm || (item.nama || "").toLowerCase().includes(searchTerm.toLowerCase()) || (item.nik || "").includes(searchTerm) || (item.posyandu || "").toLowerCase().includes(searchTerm.toLowerCase());
 
-      // 2. Posyandu match
+      // 2. Posyandu & Puskesmas match
+      const matchPuskesmas = selectedPuskesmas === "Semua Puskesmas" || (item.puskesmas && item.puskesmas.toLowerCase().includes(selectedPuskesmas.toLowerCase()));
       const matchPosyandu = selectedPosyandu === "Semua Posyandu" || selectedPosyandu === "all" || (item.posyandu && item.posyandu.toLowerCase().includes(selectedPosyandu.toLowerCase()));
 
       // 3. Category match
@@ -122,17 +149,131 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
         }
       }
 
-      return matchSearch && matchPosyandu && matchCat && matchMonthYear;
+      return matchSearch && matchPuskesmas && matchPosyandu && matchCat && matchMonthYear;
     });
-  }, [allRekapList, searchTerm, selectedPosyandu, selectedCategory, selectedMonthNum, selectedYear]);
+  }, [allRekapList, searchTerm, selectedPosyandu, selectedPuskesmas, selectedCategory, selectedMonthNum, selectedYear]);
 
-  const handleOpenDetail = (citizen) => {
+  const totalItems = filteredList.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const paginatedList = filteredList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const handleOpenDetail = async (citizen) => {
     setSelectedCitizen(citizen);
+    setSelectedExamDetail(null);
+    const pemeriksaanId = citizen?.pemeriksaanId || citizen?.exam?.id;
+    if (!pemeriksaanId) {
+      setIsLoadingDetail(false);
+      return;
+    }
+
+    setIsLoadingDetail(true);
+    try {
+      const response = await pemeriksaanService.getPemeriksaanById(pemeriksaanId);
+      const detail = response?.data || response || null;
+      setSelectedExamDetail(detail);
+    } catch (error) {
+      console.error("Gagal mengambil detail pemeriksaan:", error);
+      setSelectedExamDetail(null);
+    } finally {
+      setIsLoadingDetail(false);
+    }
   };
 
   const handleCloseDetail = () => {
     setSelectedCitizen(null);
+    setSelectedExamDetail(null);
+    setIsLoadingDetail(false);
   };
+
+  if (isStaf) {
+    return (
+      <div className="container-fluid p-0">
+        {/* Top Header & Export Action */}
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+          <div>
+            <h4 className="fw-bold text-dark mb-1">Rekapitulasi Pelaporan (Agregat)</h4>
+            <p className="text-muted small mb-0">Format laporan agregat bulanan Excel (.xlsx) untuk verifikasi &amp; pelaporan.</p>
+          </div>
+          <button
+            className="btn btn-sm px-3 py-2 fw-semibold d-flex align-items-center gap-2 rounded-3 shadow-xs text-white"
+            style={{ backgroundColor: themeColor }}
+            onClick={() => setIsExportModalOpen(true)}
+            title="Export Laporan Rekapitulasi ke Excel"
+          >
+            <Download size={16} /> Export Excel
+          </button>
+        </div>
+
+        {/* Filter Bar for Staf */}
+        <div className="card card-custom p-3 mb-4 bg-white border-0 shadow-sm rounded-4">
+          <div className="row g-3 align-items-center">
+            <div className="col-12 col-md-6">
+              <label className="form-label text-muted small fw-bold mb-1">Pilih Template Kategori Rekap</label>
+              <select
+                className="form-select bg-light text-dark fw-semibold py-2"
+                value={stafTemplateKey}
+                onChange={(e) => setStafTemplateKey(e.target.value)}
+              >
+                <option value="bumil_nifas_menyusui">Ibu Hamil, Nifas &amp; Menyusui</option>
+                <option value="bayi_balita_apras">Bayi, Balita &amp; Anak Pra-Sekolah</option>
+                <option value="usia_sekolah_remaja">Anak Usia Sekolah &amp; Remaja (6–18 Tahun)</option>
+                <option value="dewasa_lansia">Usia Dewasa &amp; Lansia (≥ 19 Tahun)</option>
+              </select>
+            </div>
+
+            <div className="col-12 col-md-4">
+              <label className="form-label text-muted small fw-bold mb-1">Tahun Laporan</label>
+              <select
+                className="form-select bg-light text-dark fw-semibold py-2"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+              >
+                <option value="Semua">Semua Tahun</option>
+                {[
+                  ...new Set([
+                    ...Object.values(globalPemeriksaanData || {})
+                      .map((exam) => String(exam?.tanggal || "").slice(0, 4))
+                      .filter((year) => /^\d{4}$/.test(year)),
+                    String(new Date().getFullYear()),
+                  ]),
+                ]
+                  .sort((a, b) => Number(b) - Number(a))
+                  .map((year) => (
+                    <option key={year} value={year}>
+                      Tahun {year}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Aggregate Preview Table Component */}
+        <div className="card card-custom p-3 bg-white border-0 shadow-sm rounded-4 mb-4">
+          <RekapWorksheetPreview
+            templateRekap={stafTemplateKey}
+            year={selectedYear}
+            theme={isDinkes ? "dinkes" : "puskesmas"}
+            roleTitle={roleTitle}
+          />
+        </div>
+
+        {/* EXPORT REKAP MODAL */}
+        <ExportRekapModal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          currentCategory={stafTemplateKey}
+          currentYear={selectedYear}
+          globalSasaranList={globalSasaranList}
+          globalPemeriksaanData={globalPemeriksaanData}
+          filteredList={filteredList}
+          theme={isDinkes ? "dinkes" : "puskesmas"}
+          themeColor={themeColor}
+          roleTitle={roleTitle}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="container-fluid p-0">
@@ -151,65 +292,31 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
       {/* Filter Bar Section */}
       <div className="card card-custom p-3 mb-4 bg-white border-0 shadow-sm rounded-4">
         <div className="row g-2 align-items-center">
-          {/* Dropdown Filter Bulan */}
-          <div className="col-12 col-sm-6 col-md-2">
-            <div className="input-group">
-              <span className="input-group-text bg-light border-end-0 text-muted px-2">
-                <Calendar size={14} />
-              </span>
-              <select className="form-select bg-light border-start-0 text-dark fw-semibold small py-2" value={selectedMonthNum} onChange={(e) => setSelectedMonthNum(e.target.value)} title="Pilih Bulan Periksa">
-                <option value="Semua">Semua Bulan</option>
-                <option value="01">Januari</option>
-                <option value="02">Februari</option>
-                <option value="03">Maret</option>
-                <option value="04">April</option>
-                <option value="05">Mei</option>
-                <option value="06">Juni</option>
-                <option value="07">Juli</option>
-                <option value="08">Agustus</option>
-                <option value="09">September</option>
-                <option value="10">Oktober</option>
-                <option value="11">November</option>
-                <option value="12">Desember</option>
+          {/* Puskesmas Filter */}
+          {isSuperAdminOrDinkes && (
+            <div className="col-12 col-md-2">
+              <select className="form-select text-dark fw-semibold small py-2" style={{ backgroundColor: "#f8f9fa", borderColor: "#dee2e6" }} value={selectedPuskesmas} onChange={(e) => { setSelectedPuskesmas(e.target.value); setSelectedPosyandu("Semua Posyandu"); }} title="Pilih Puskesmas">
+                <option value="Semua Puskesmas">Semua Puskesmas</option>
+                {availablePuskesmasList.map((puskesmas, idx) => (
+                  <option key={idx} value={puskesmas}>{puskesmas}</option>
+                ))}
               </select>
             </div>
-          </div>
+          )}
 
-          {/* Dropdown Filter Tahun */}
-          <div className="col-12 col-sm-6 col-md-2">
-            <select className="form-select bg-light text-dark fw-semibold small py-2" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} title="Pilih Tahun Periksa">
-              <option value="Semua">Semua Tahun</option>
-              {[
-                ...new Set(
-                  Object.values(globalPemeriksaanData || {})
-                    .map((exam) => String(exam?.tanggal || "").slice(0, 4))
-                    .filter((year) => /^\d{4}$/.test(year)),
-                ),
-              ]
-                .sort((a, b) => Number(b) - Number(a))
-                .map((year) => (
-                  <option key={year} value={year}>
-                    Tahun {year}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          {/* Filter Posyandu */}
-          <div className="col-12 col-sm-6 col-md-3">
-            <select className="form-select bg-light text-dark fw-semibold small py-2" value={selectedPosyandu} onChange={(e) => setSelectedPosyandu(e.target.value)} title="Pilih Posyandu">
+          {/* Posyandu Filter */}
+          <div className={`col-12 ${isSuperAdminOrDinkes ? "col-md-2" : "col-md-3"}`}>
+            <select className="form-select text-dark fw-semibold small py-2" style={{ backgroundColor: "#f8f9fa", borderColor: "#dee2e6" }} value={selectedPosyandu} onChange={(e) => setSelectedPosyandu(e.target.value)} title="Pilih Posyandu">
               <option value="Semua Posyandu">Semua Posyandu</option>
               {availablePosyanduList.map((pos, idx) => (
-                <option key={idx} value={pos}>
-                  {pos}
-                </option>
+                <option key={idx} value={pos}>{pos}</option>
               ))}
             </select>
           </div>
 
           {/* Category Dropdown */}
-          <div className="col-12 col-sm-6 col-md-2">
-            <select className="form-select bg-light text-dark small py-2" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+          <div className={`col-12 ${isSuperAdminOrDinkes ? "col-md-3" : "col-md-3"}`}>
+            <select className="form-select text-dark small py-2" style={{ backgroundColor: "#f8f9fa", borderColor: "#dee2e6" }} value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
               <option value="Semua Kategori (Semua Siklus)">Semua Kategori</option>
               <option value="Bumil">Bumil</option>
               <option value="Nifas/Menyusui">Nifas/Menyusui</option>
@@ -223,13 +330,37 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
             </select>
           </div>
 
+          {/* Bulan & Tahun Filter (Combined) */}
+          <div className={`col-12 ${isSuperAdminOrDinkes ? "col-md-2" : "col-md-3"}`}>
+            <div className="input-group">
+              <span className="input-group-text border-end-0 px-2" style={{ backgroundColor: "#f8f9fa", borderColor: "#dee2e6", color: themeColor }}>
+                <Calendar size={14} />
+              </span>
+              <input 
+                type="month" 
+                className="form-control border-start-0 text-dark fw-semibold small py-2" 
+                style={{ backgroundColor: "#f8f9fa", borderColor: "#dee2e6", outlineColor: themeColor }}
+                value={selectedMonthYear} 
+                onChange={(e) => setSelectedMonthYear(e.target.value)} 
+                title="Pilih Waktu Periksa" 
+              />
+            </div>
+          </div>
+
           {/* Search Bar */}
           <div className="col-12 col-md-3">
             <div className="input-group">
-              <span className="input-group-text bg-light border-end-0 text-muted px-2">
+              <span className="input-group-text border-end-0 px-2" style={{ backgroundColor: "#f8f9fa", borderColor: "#dee2e6", color: themeColor }}>
                 <Search size={14} />
               </span>
-              <input type="text" className="form-control bg-light border-start-0 text-dark small py-2" placeholder="Cari Nama / NIK..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <input 
+                type="text" 
+                className="form-control border-start-0 text-dark small py-2" 
+                style={{ backgroundColor: "#f8f9fa", borderColor: "#dee2e6", outlineColor: themeColor }}
+                placeholder="Cari Nama / NIK..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+              />
             </div>
           </div>
         </div>
@@ -277,9 +408,9 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
                   </td>
                 </tr>
               ) : (
-                filteredList.map((row, idx) => (
+                paginatedList.map((row, idx) => (
                   <tr key={row.id || idx} className="border-bottom">
-                    <td className="ps-4 text-center fw-medium text-muted small">{idx + 1}</td>
+                    <td className="ps-4 text-center fw-medium text-muted small">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                     <td>
                       <div className="fw-bold text-dark mb-0">{row.nama}</div>
                       <div className="text-muted font-monospace" style={{ fontSize: "0.78rem" }}>
@@ -308,34 +439,50 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
         {/* Footer Pagination Bar */}
         <div className="p-3 bg-light-subtle d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2 border-top">
           <span className="text-muted small">
-            Menampilkan {filteredList.length} dari {allRekapList.length} sasaran
+            Menampilkan {paginatedList.length} dari {totalItems} sasaran
           </span>
           <nav>
-            <ul className="pagination pagination-sm mb-0">
-              <li className="page-item disabled">
-                <span className="page-link">&lt;</span>
-              </li>
-              <li className="page-item active">
-                <span className="page-link text-white border-0" style={{ backgroundColor: themeColor }}>
-                  1
-                </span>
-              </li>
-              <li className="page-item">
-                <span className="page-link text-dark">2</span>
-              </li>
-              <li className="page-item">
-                <span className="page-link text-dark">3</span>
-              </li>
-              <li className="page-item">
-                <span className="page-link text-dark">&gt;</span>
-              </li>
-            </ul>
+            {totalPages > 1 && (
+              <ul className="pagination pagination-sm mb-0">
+                <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                  <button className="page-link shadow-none" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
+                    &lt;
+                  </button>
+                </li>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <li key={page} className={`page-item ${currentPage === page ? "active" : ""}`}>
+                    <button
+                      className="page-link shadow-none text-dark"
+                      style={currentPage === page ? { backgroundColor: themeColor, color: "white", borderColor: themeColor } : {}}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  </li>
+                ))}
+                <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                  <button className="page-link shadow-none" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
+                    &gt;
+                  </button>
+                </li>
+              </ul>
+            )}
           </nav>
         </div>
       </div>
 
       {/* SINGLE-PAGE DETAIL MODAL (Menampilkan Seluruh Langkah 1 s/d 5 Dalam Satu Halaman Utuh) */}
-      {selectedCitizen && <DetailRekapModal citizen={selectedCitizen} onClose={handleCloseDetail} theme={isDinkes ? "dinkes" : "puskesmas"} themeColor={themeColor} roleTitle={roleTitle} />}
+      {selectedCitizen && (
+        <DetailRekapModal
+          citizen={selectedCitizen}
+          examData={selectedExamDetail}
+          isLoading={isLoadingDetail}
+          onClose={handleCloseDetail}
+          theme={isDinkes ? "dinkes" : "puskesmas"}
+          themeColor={themeColor}
+          roleTitle={roleTitle}
+        />
+      )}
 
       {/* EXPORT REKAP MODAL */}
       <ExportRekapModal

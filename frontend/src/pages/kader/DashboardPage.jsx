@@ -1,5 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { Search, FileText, ChevronRight, Heart, UserPlus, Calendar, Clock, MapPin, Users } from "lucide-react";
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip as ChartTooltip, Filler, Legend, BarElement } from 'chart.js';
+import { Line, Bar } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Filler, Legend, BarElement);
 
 export default function DashboardPage({ onNavigate, globalSasaranList = [], globalPemeriksaanData = {}, globalJadwalList = [], user }) {
   const [hoveredCategory, setHoveredCategory] = useState(null);
@@ -47,6 +51,48 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
     return br - ar;
   })[0] || { nama: "-", hadir: 0, total: 0 };
   const maxBarValue = Math.max(1, ...kategoriDistribution.map((k) => k.total));
+
+  const chartDataConfig = useMemo(() => {
+    return {
+      labels: kategoriDistribution.map(cat => cat.nama),
+      datasets: [
+        {
+          label: 'Sasaran Hadir',
+          data: kategoriDistribution.map(cat => cat.hadir),
+          backgroundColor: '#F25B8E',
+          borderRadius: 4,
+          barPercentage: 0.6,
+          categoryPercentage: 0.4,
+        },
+        {
+          label: 'Target Sasaran',
+          data: kategoriDistribution.map(cat => cat.total),
+          backgroundColor: '#cbd5e1',
+          borderRadius: 4,
+          barPercentage: 0.6,
+          categoryPercentage: 0.4,
+        }
+      ]
+    };
+  }, [kategoriDistribution]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top', align: 'end' },
+      tooltip: {
+        callbacks: {
+          label: (context) => `${context.dataset.label}: ${context.parsed.y} Orang`
+        }
+      }
+    },
+    scales: {
+      y: { beginAtZero: true, grid: { borderDash: [4, 4] } },
+      x: { grid: { display: false } }
+    },
+    interaction: { mode: 'index', intersect: false }
+  };
 
   return (
     <div className="d-flex flex-column gap-4">
@@ -302,133 +348,15 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
 
         {/* Grafik Batang Komparasi */}
         <div className="p-3 p-md-4 rounded-4 bg-light border">
-          {/* Chart Legend */}
-          <div className="d-flex align-items-center gap-3 mb-3 small">
-            <div className="d-flex align-items-center gap-1.5">
-              <span className="d-inline-block rounded-pill border" style={{ width: "12px", height: "12px", backgroundColor: "#F25B8E", borderColor: "#d93c72" }} />
-              <span className="fw-semibold text-dark">Sasaran Hadir</span>
-            </div>
-            <div className="d-flex align-items-center gap-1.5">
-              <span className="d-inline-block rounded-pill" style={{ width: "12px", height: "12px", backgroundColor: "#cbd5e1" }} />
-              <span className="text-muted">Target Sasaran</span>
-            </div>
-          </div>
-
           {/* Visual Bar Chart */}
-          <div className="position-relative" style={{ overflowX: "auto" }}>
-            <div style={{ minWidth: "650px", height: "280px" }} className="d-flex align-items-end justify-content-between pt-4 pb-2 px-2">
-              {kategoriDistribution.map((cat) => {
-                const persenHadir = cat.total ? Math.round((cat.hadir / cat.total) * 100) : 0;
-                const totalHeightPct = Math.max(15, Math.round((cat.total / maxBarValue) * 210));
-                const hadirHeightPct = Math.max(10, Math.round((cat.hadir / maxBarValue) * 210));
-                const isHovered = hoveredCategory === cat.id;
-
-                return (
-                  <div
-                    key={cat.id}
-                    className="d-flex flex-column align-items-center h-100 justify-content-end position-relative"
-                    style={{
-                      flex: 1,
-                      cursor: "pointer",
-                      padding: "0 6px",
-                    }}
-                    onMouseEnter={() => setHoveredCategory(cat.id)}
-                    onMouseLeave={() => setHoveredCategory(null)}
-                    onClick={() => onNavigate("data-sasaran", null, { kategori: cat.nama })}
-                  >
-                    {/* Hover Info Tooltip */}
-                    {isHovered && (
-                      <div
-                        className="position-absolute bg-dark text-white rounded-3 p-2 shadow-lg text-center"
-                        style={{
-                          bottom: `${totalHeightPct + 50}px`,
-                          zIndex: 20,
-                          whiteSpace: "nowrap",
-                          fontSize: "0.75rem",
-                          animation: "fadeIn 0.15s ease",
-                        }}
-                      >
-                        <div className="fw-bold">{cat.nama}</div>
-                        <div>
-                          Hadir: <strong className="text-warning">{cat.hadir}</strong> dari <strong>{cat.total}</strong>
-                        </div>
-                        <div className="text-success fw-semibold">Kehadiran: {persenHadir}%</div>
-                      </div>
-                    )}
-
-                    {/* Percentage Badge on Top of Bar */}
-                    <span
-                      className={`badge rounded-pill mb-1.5 px-2 py-0.5 small ${persenHadir >= 80 ? "bg-success-subtle text-success" : persenHadir >= 65 ? "text-dark border" : "bg-warning-subtle text-warning-emphasis"}`}
-                      style={{
-                        fontSize: "0.7rem",
-                        fontWeight: 600,
-                        backgroundColor: persenHadir >= 65 && persenHadir < 80 ? "#fdf2f8" : undefined,
-                        borderColor: persenHadir >= 65 && persenHadir < 80 ? "#F25B8E" : undefined,
-                        color: persenHadir >= 65 && persenHadir < 80 ? "#be185d" : undefined,
-                      }}
-                    >
-                      {persenHadir}%
-                    </span>
-
-                    {/* Bars Container */}
-                    <div className="d-flex align-items-end justify-content-center gap-1 w-100" style={{ height: "210px" }}>
-                      {/* 1. Bar Sasaran Hadir */}
-                      <div
-                        className="rounded-top-3 transition-all"
-                        style={{
-                          width: "45%",
-                          maxWidth: "28px",
-                          height: `${hadirHeightPct}px`,
-                          background: isHovered ? "linear-gradient(180deg, #d93c72 0%, #F25B8E 100%)" : "linear-gradient(180deg, #F25B8E 0%, #d93c72 100%)",
-                          border: "1px solid #d93c72",
-                          boxShadow: isHovered ? "0 4px 12px rgba(242, 91, 142, 0.5)" : "none",
-                          transform: isHovered ? "scaleY(1.02)" : "none",
-                          transformOrigin: "bottom",
-                          transition: "all 0.2s ease",
-                        }}
-                        title={`Hadir: ${cat.hadir}`}
-                      />
-
-                      {/* 2. Bar Total Sasaran */}
-                      <div
-                        className="rounded-top-3 transition-all"
-                        style={{
-                          width: "45%",
-                          maxWidth: "28px",
-                          height: `${totalHeightPct}px`,
-                          backgroundColor: isHovered ? "#94a3b8" : "#cbd5e1",
-                          transform: isHovered ? "scaleY(1.02)" : "none",
-                          transformOrigin: "bottom",
-                          transition: "all 0.2s ease",
-                        }}
-                        title={`Total: ${cat.total}`}
-                      />
-                    </div>
-
-                    {/* Numbers label */}
-                    <div className="mt-1 small text-muted text-center" style={{ fontSize: "0.72rem", fontWeight: 500 }}>
-                      <span className="fw-bold" style={{ color: "#F25B8E" }}>
-                        {cat.hadir}
-                      </span>
-                      /{cat.total}
-                    </div>
-
-                    {/* X-Axis Category Name */}
-                    <div
-                      className={`text-center mt-1 text-truncate w-100 small ${isHovered ? "fw-bold" : "text-dark"}`}
-                      style={{
-                        fontSize: "0.74rem",
-                        maxWidth: "80px",
-                        color: isHovered ? "#F25B8E" : undefined,
-                      }}
-                      title={cat.nama}
-                    >
-                      {cat.nama}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="position-relative w-100 overflow-hidden" style={{ height: "300px" }}>
+            {kategoriDistribution.length > 0 ? (
+              <Bar data={chartDataConfig} options={chartOptions} />
+            ) : (
+              <div className="d-flex align-items-center justify-content-center h-100 text-muted">
+                Tidak ada data sasaran
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -2,8 +2,8 @@ import React, { useState, useMemo } from "react";
 import { Calendar, Clock, MapPin, Search, Eye, Filter, UserCheck, ChevronLeft, ChevronRight, X, Info, Building2, CalendarCheck, Users, FileText } from "lucide-react";
 import { formatDateId } from "../../utils/dataMappers";
 
-export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
-  const themeColor = "#1e3a8a";
+export default function DinkesJadwalMonitoringPage({ globalJadwalList = [], user }) {
+  const themeColor = user?.roleType === "sa" ? "#6b4e31" : "#1e3a8a";
   const [searchQuery, setSearchQuery] = useState("");
   const [bulanFilter, setBulanFilter] = useState("Semua");
   const [selectedPuskesmas, setSelectedPuskesmas] = useState("Semua");
@@ -63,12 +63,12 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
   };
 
   return (
-    <div className="d-flex flex-column gap-3.5 pb-5">
+    <div className="d-flex flex-column gap-4 pb-5">
       {/* Filter & Action Bar */}
-      <div className="card border-0 bg-white shadow-xs rounded-4 p-3.5">
+      <div className="card border-0 bg-white shadow-xs rounded-4 p-3">
         <div className="row g-3 align-items-center">
           {/* Search bar */}
-          <div className="col-12 col-md-5">
+          <div className="col-12 col-md-8">
             <div className="position-relative">
               <Search size={18} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
               <input
@@ -90,28 +90,9 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
             </div>
           </div>
 
-          {/* Puskesmas Selector */}
-          <div className="col-12 col-sm-6 col-md-4">
-            <select
-              className="form-select bg-light border-0 rounded-3 text-dark fw-semibold shadow-none px-3"
-              style={{ fontSize: "0.875rem", height: "44px", cursor: "pointer" }}
-              value={selectedPuskesmas}
-              onChange={(e) => {
-                setSelectedPuskesmas(e.target.value);
-                setCurrentPage(1);
-              }}
-            >
-              <option value="Semua">Semua Puskesmas</option>
-              {[...new Set((rawList || []).map((item) => item.puskesmas).filter(Boolean))].sort().map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
 
           {/* Month Selector */}
-          <div className="col-12 col-sm-6 col-md-3">
+          <div className="col-12 col-md-4">
             <select
               className="form-select bg-light border-0 rounded-3 text-dark fw-semibold shadow-none px-3"
               style={{ fontSize: "0.875rem", height: "44px", cursor: "pointer" }}
@@ -143,9 +124,6 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
               <CalendarCheck size={20} style={{ color: themeColor }} />
               <span>Daftar Jadwal Posyandu Se-Kota</span>
             </h5>
-            <p className="text-muted small mb-0" style={{ fontSize: "0.8rem" }}>
-              Menampilkan {paginatedList.length} dari {filteredList.length} total jadwal operasional posyandu
-            </p>
           </div>
           <div className="badge bg-light text-secondary border px-3 py-1.5 rounded-pill small fw-semibold align-self-start align-self-sm-center">Periode: {bulanFilter === "Semua" ? "Semua Jadwal" : bulanFilter}</div>
         </div>
@@ -159,9 +137,8 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
                   NO
                 </th>
                 <th className="py-3 px-3">NAMA POSYANDU &amp; RW</th>
-                <th className="py-3 px-3">TANGGAL &amp; WAKTU</th>
+                <th className="py-3 px-3">TANGGAL</th>
                 <th className="py-3 px-3">LOKASI</th>
-                <th className="py-3 px-3">FOKUS LAYANAN</th>
                 <th className="py-3 px-3 text-center">STATUS</th>
                 <th className="py-3 px-3 text-end">AKSI</th>
               </tr>
@@ -198,13 +175,10 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
                         </div>
                       </td>
 
-                      {/* TANGGAL & WAKTU */}
+                      {/* TANGGAL */}
                       <td className="py-3 px-3">
                         <div className="fw-semibold text-dark" style={{ fontSize: "0.875rem" }}>
                           {formatDateId(item.tanggalFormatted || item.tanggal)}
-                        </div>
-                        <div className="text-muted small" style={{ fontSize: "0.825rem" }}>
-                          {item.waktu || ""}
                         </div>
                       </td>
 
@@ -215,17 +189,6 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
                         </div>
                         <div className="text-muted small" style={{ fontSize: "0.8rem" }}>
                           {item.alamatDetail || item.rw || ""}
-                        </div>
-                      </td>
-
-                      {/* FOKUS LAYANAN */}
-                      <td className="py-3 px-3">
-                        <div className="d-flex flex-wrap gap-1.5">
-                          {(item.fokusLayanan || []).map((layanan, fIdx) => (
-                            <span key={fIdx} className="badge bg-light text-dark border px-2.5 py-1 rounded-2" style={{ fontSize: "0.78rem", fontWeight: 500 }}>
-                              {layanan}
-                            </span>
-                          ))}
                         </div>
                       </td>
 
@@ -260,29 +223,31 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
             Menampilkan <span className="fw-semibold text-dark">{paginatedList.length}</span> dari <span className="fw-semibold text-dark">{filteredList.length}</span> jadwal posyandu se-Kota
           </div>
 
-          <div className="d-flex align-items-center gap-1">
-            <button className="btn btn-sm btn-light border p-1.5 rounded-2" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
-              <ChevronLeft size={16} />
-            </button>
-            {Array.from({ length: totalPages }).map((_, pIdx) => (
-              <button
-                key={pIdx + 1}
-                className={`btn btn-sm px-2.5 py-1 rounded-2 fw-semibold ${currentPage === pIdx + 1 ? "text-white" : "btn-light border text-secondary"}`}
-                style={{
-                  fontSize: "0.8rem",
-                  minWidth: "32px",
-                  backgroundColor: currentPage === pIdx + 1 ? themeColor : undefined,
-                  borderColor: currentPage === pIdx + 1 ? themeColor : undefined,
-                }}
-                onClick={() => setCurrentPage(pIdx + 1)}
-              >
-                {pIdx + 1}
+          {totalPages > 1 && (
+            <div className="d-flex align-items-center gap-1">
+              <button className="btn btn-sm btn-light border p-1.5 rounded-2" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft size={16} />
               </button>
-            ))}
-            <button className="btn btn-sm btn-light border p-1.5 rounded-2" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
-              <ChevronRight size={16} />
-            </button>
-          </div>
+              {Array.from({ length: totalPages }).map((_, pIdx) => (
+                <button
+                  key={pIdx + 1}
+                  className={`btn btn-sm px-2.5 py-1 rounded-2 fw-semibold ${currentPage === pIdx + 1 ? "text-white" : "btn-light border text-secondary"}`}
+                  style={{
+                    fontSize: "0.8rem",
+                    minWidth: "32px",
+                    backgroundColor: currentPage === pIdx + 1 ? themeColor : undefined,
+                    borderColor: currentPage === pIdx + 1 ? themeColor : undefined,
+                  }}
+                  onClick={() => setCurrentPage(pIdx + 1)}
+                >
+                  {pIdx + 1}
+                </button>
+              ))}
+              <button className="btn btn-sm btn-light border p-1.5 rounded-2" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -291,7 +256,7 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
         <div className="modal show d-block" style={{ backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1050 }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
-              <div className="modal-header border-bottom px-4 py-3" style={{ backgroundColor: "#1e3a8a" }}>
+              <div className="modal-header border-bottom px-4 py-3" style={{ backgroundColor: themeColor }}>
                 <div className="d-flex align-items-center gap-2">
                   <FileText size={19} color="#ffffff" style={{ stroke: "#ffffff" }} />
                   <h5 className="modal-title fw-bold mb-0" style={{ color: "#ffffff", fontSize: "1.05rem" }}>
@@ -307,7 +272,7 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
                   <div className="col-12 col-md-6">
                     <div className="card border-0 shadow-xs rounded-3 h-100 p-3 bg-white">
                       <div className="d-flex align-items-center gap-2 pb-2 mb-2 border-bottom text-dark">
-                        <Calendar size={16} style={{ color: "#1e3a8a" }} />
+                        <Calendar size={16} style={{ color: themeColor }} />
                         <h6 className="fw-bold mb-0" style={{ fontSize: "0.9rem" }}>
                           Waktu Pelaksanaan
                         </h6>
@@ -319,10 +284,6 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
                               Hari / Tanggal
                             </td>
                             <td className="py-1 fw-bold text-dark">: {formatDateId(selectedJadwal.tanggalFormatted || selectedJadwal.tanggal)}</td>
-                          </tr>
-                          <tr>
-                            <td className="text-muted ps-0 py-1">Waktu Pelaksanaan</td>
-                            <td className="py-1 text-dark">: {selectedJadwal.waktu || ""}</td>
                           </tr>
                           <tr>
                             <td className="text-muted ps-0 py-1">Status Jadwal</td>
@@ -370,30 +331,6 @@ export default function DinkesJadwalMonitoringPage({ globalJadwalList = [] }) {
                     </div>
                   </div>
 
-                  {/* Card 3: Fokus Layanan & Catatan */}
-                  <div className="col-12">
-                    <div className="card border-0 shadow-xs rounded-3 p-3 bg-white">
-                      <h6 className="fw-bold text-dark mb-2" style={{ fontSize: "0.9rem" }}>
-                        Fokus Layanan Hari Ini
-                      </h6>
-                      <div className="d-flex flex-wrap gap-1.5 mb-3">
-                        {(selectedJadwal.fokusLayanan || []).map((layanan, i) => (
-                          <span key={i} className="badge bg-light text-secondary border px-2.5 py-1 rounded-2" style={{ fontSize: "0.78rem" }}>
-                            {layanan}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="p-3 bg-light rounded-2 border">
-                        <span className="text-muted d-block mb-1" style={{ fontSize: "0.74rem" }}>
-                          Catatan Persiapan:
-                        </span>
-                        <p className="mb-0 text-dark fw-medium" style={{ fontSize: "0.84rem" }}>
-                          {selectedJadwal.catatan || ""}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
 

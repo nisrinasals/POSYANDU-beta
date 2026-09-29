@@ -95,7 +95,7 @@ export default function RekapWorksheetPreview({ templateRekap, year, theme = "pu
     <section className="border rounded-3 overflow-hidden" aria-live="polite">
       <div className="px-3 py-2 text-center border-bottom bg-white">
         <div className="fw-bold text-dark text-uppercase" style={{ fontSize: "0.8rem" }}>Rekapitulasi Hasil Pemeriksaan {title}</div>
-        <div className="small fw-semibold text-dark">{theme === "dinkes" ? "DINAS KESEHATAN" : `PUSKESMAS ${roleTitle}`}</div>
+        <div className="small fw-semibold text-dark">{theme === "dinkes" ? "DINAS KESEHATAN" : theme === "kader" ? "POSYANDU" : `PUSKESMAS ${roleTitle}`}</div>
       </div>
 
       {isLoading ? (

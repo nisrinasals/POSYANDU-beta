@@ -696,6 +696,17 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     return activeWargaList.find((w) => String(w.id) === String(selectedWargaId)) || activeWargaList[0] || null;
   }, [activeWargaList, selectedWargaId]);
 
+  const activeTargetWarga = useMemo(() => {
+    if (examinationMode === "sequential") {
+      return currentSelectedWarga;
+    }
+    if (activeStep === 2) return (selectedWargaStep2 ? activeWargaList.find((w) => String(w.id) === String(selectedWargaStep2)) : null) || currentSelectedWarga;
+    if (activeStep === 3) return (selectedWargaStep3 ? activeWargaList.find((w) => String(w.id) === String(selectedWargaStep3)) : null) || currentSelectedWarga;
+    if (activeStep === 4) return (selectedWargaStep4 ? activeWargaList.find((w) => String(w.id) === String(selectedWargaStep4)) : null) || currentSelectedWarga;
+    if (activeStep === 5) return (selectedWargaStep5 ? activeWargaList.find((w) => String(w.id) === String(selectedWargaStep5)) : null) || currentSelectedWarga;
+    return currentSelectedWarga;
+  }, [examinationMode, activeStep, selectedWargaStep2, selectedWargaStep3, selectedWargaStep4, selectedWargaStep5, currentSelectedWarga, activeWargaList]);
+
   // Find the examination record listed by the backend. Detailed measurements are fetched from Step 3.
   const currentExamListRecord = useMemo(() => {
     if (!currentSelectedWarga) return null;
@@ -2499,6 +2510,22 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
         {/* Gray Container Form Area */}
         <div className="p-4 p-md-5" style={{ backgroundColor: "#cbd5e1" }}>
+          {/* Target Citizen Identity Indicator - Compact & Clean */}
+          {activeTargetWarga && (
+            <div className="alert alert-light border shadow-xs rounded-3 p-2.5 px-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-dark text-white fw-bold px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                  Sasaran Diperiksa
+                </span>
+                <span className="fw-bold text-dark mb-0">{activeTargetWarga.nama}</span>
+                {activeTargetWarga.nik && <span className="text-muted font-monospace small">({activeTargetWarga.nik})</span>}
+              </div>
+              <span className="badge bg-secondary text-white small px-2 py-1 rounded-2">
+                Langkah {activeStep} / 5
+              </span>
+            </div>
+          )}
+
           {/* ========================================================================= */}
           {/* LANGKAH 1: PENDAFTARAN & PRESENSI KEHADIRAN SASARAN */}
           {/* ========================================================================= */}
@@ -2507,7 +2534,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
               {/* Header Langkah 1 */}
               <div className="mb-4">
                 <h3 className="fw-bold text-dark mb-1">Pendaftaran &amp; Presensi Sasaran</h3>
-                    <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-3 mt-2 text-dark">
+                <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-3 mt-2 text-dark">
                   <Calendar size={17} className="text-primary flex-shrink-0" />
                   <div>
                     <div className="small text-muted">Sesi Presensi</div>
@@ -2523,24 +2550,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           {presensiSesiAktif.status === "open" ? "Dibuka" : "Ditutup"}
                         </span>
                       </div>
-                      ) : (
-                      <div className="small fw-semibold text-danger">Belum ada sesi Posyandu pada tanggal ini</div>
+                    ) : (
+                      <div className="small fw-semibold text-danger">Belum ada sesi Posyandu pada hari ini</div>
                     )}
                   </div>
-                      <div>
-                        <label className="form-label small text-muted mb-1" htmlFor="presensi-session-date">Tanggal sesi (maksimal 7 hari)</label>
-                        <input
-                          id="presensi-session-date"
-                          type="date"
-                          className="form-control form-control-sm"
-                          min={getLocalDateOffset(-6)}
-                          max={getLocalDateOnly()}
-                          value={presensiTanggal}
-                          onChange={(event) => setPresensiTanggal(event.target.value)}
-                        />
-                      </div>
                 </div>
-                    <div className="small text-muted mt-2">Sesi berstatus Dibuka dapat diproses pada hari pelaksanaan sampai enam hari setelahnya. Sesi Ditutup tidak dapat diubah.</div>
+                <div className="small text-muted mt-2">Sesi berstatus Dibuka dapat diproses pada hari pelaksanaan. Sesi Ditutup tidak dapat diubah.</div>
               </div>
 
               {/* =================================================================== */}

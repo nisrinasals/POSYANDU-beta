@@ -3,7 +3,7 @@ import { Search, Eye, Filter, Info, ChevronLeft, ChevronRight, Building2, X } fr
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
 import { formatDateId } from "../../utils/dataMappers";
 
-export default function DinkesDataSasaranPage({
+export default function SADataSasaranPage({
   globalSasaranList = [],
   globalPemeriksaanData = {},
   globalStatistikSasaran = {},
@@ -15,7 +15,7 @@ export default function DinkesDataSasaranPage({
   setCategoryFilterParam,
   user,
 }) {
-  const themeColor = user?.roleType === "sa" ? "#6b4e31" : "#1e3a8a";
+  const themeColor = "#6b4e31";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Semua Status");

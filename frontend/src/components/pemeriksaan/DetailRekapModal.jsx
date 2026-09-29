@@ -111,6 +111,24 @@ const SCREENING_LABELS = {
   has_sedih_tertekan_putus_asa: "Merasa Sedih atau Putus Asa",
   has_kurang_minat_kesenangan: "Kurang Minat atau Kesenangan",
   is_imunisasi_covid19: "Imunisasi COVID-19",
+  zscore_bbu: "Z-Score BB/U",
+  zscore_pbu: "Z-Score PB/U",
+  zscore_tbu: "Z-Score TB/U",
+  zscore_bbpb: "Z-Score BB/PB",
+  zscore_bbtb: "Z-Score BB/TB",
+  zscore_imtu: "Z-Score IMT/U",
+  status_gizi_bbu: "Status Gizi BB/U",
+  status_gizi_pbu: "Status Gizi PB/U",
+  status_gizi_tbu: "Status Gizi TB/U",
+  status_gizi_bbpb: "Status Gizi BB/PB",
+  status_gizi_bbtb: "Status Gizi BB/TB",
+  status_gizi_imtu: "Status Gizi IMT/U",
+  penyuluhan: "Penyuluhan",
+  topik_penyuluhan: "Topik Penyuluhan",
+  tindakan_edukasi: "Edukasi & Tindakan Diberikan",
+  rujukan: "Status Rujukan",
+  is_perlu_rujukan: "Perlu Rujukan",
+  alasan_rujukan: "Alasan Rujukan",
 };
 
 const formatDisplayKey = (key) =>
@@ -162,9 +180,9 @@ export const resolve5StepDetails = (citizen, examData = null) => {
   const zScores = exam?.z_scores || {};
   const plot = exam?.hasil_plot || {};
 
-  const tglPeriksa = formatDateId(exam?.tanggal || citizen.tglPeriksa || "");
+  const tglPeriksa = formatDateId(exam?.tanggal || citizen.tglPeriksa || source.tanggal || "");
 
-  const isExamined = Boolean(citizen.statusPemeriksaan === "Sudah" || citizen.status === "Sudah" || exam?.kunjungan?.status_langkah === "langkah_5");
+  const isExamined = Boolean(citizen.statusPemeriksaan === "Sudah" || citizen.status === "Sudah" || exam?.kunjungan?.status_langkah === "langkah_5" || !!exam);
 
   const l1 = {
     nik: citizen.nik || source.nik || "",
@@ -173,6 +191,8 @@ export const resolve5StepDetails = (citizen, examData = null) => {
     gender: citizen.gender || source.jenis_kelamin || "",
     keteranganKeluarga: citizen.keteranganIbuSuami || citizen.namaIbu || citizen.namaAyah || citizen.namaSuami || "",
     alamat: citizen.alamat || source.alamat || "",
+    posyandu: citizen.posyandu || source.posyandu?.nama_posyandu || source.posyandu || "",
+    rw: citizen.rw || source.rw || "",
   };
 
   if (exam?.langkah1 && typeof exam.langkah1 === "object") {
@@ -196,43 +216,62 @@ export const resolve5StepDetails = (citizen, examData = null) => {
     if (isFilled(value)) l2[key] = formatMeasurement(value, unit);
   }
 
-  if (step2.imt !== undefined && step2.imt !== null && step2.imt !== "") {
-    l2.IMT = formatMeasurement(step2.imt, "kg/m²");
+  const imtVal = step2.imt ?? exam?.imt ?? source.imt;
+  if (isFilled(imtVal)) {
+    l2.IMT = formatMeasurement(imtVal, "kg/m²");
   }
 
-  if (step2.tensi !== undefined && step2.tensi !== null && step2.tensi !== "") {
-    l2["Tekanan Darah"] = String(step2.tensi);
+  const tensiVal = step2.tensi ?? exam?.tensi ?? source.tensi;
+  if (isFilled(tensiVal)) {
+    l2["Tekanan Darah"] = String(tensiVal);
+  } else if (isFilled(l2["Tekanan Darah Sistole"]) && isFilled(l2["Tekanan Darah Diastole"])) {
+    l2["Tekanan Darah"] = `${exam?.td_sistole || step2.td_sistole}/${exam?.td_diastole || step2.td_diastole} mmHg`;
   }
 
   let l3 = {};
   if (exam?.langkah3 && typeof exam.langkah3 === "object") {
     l3 = { ...exam.langkah3 };
   } else {
-    if (Object.values(zScores).some((v) => isFilled(v))) l3.zScores = zScores;
-    if (Object.keys(plot).length) l3.hasil_plot = plot;
-    if (exam?.periode) l3.periode = exam.periode;
-
-    if (!Object.keys(l3).length) {
-      const zScoreFields = {
-        zscore_bbu: exam?.zscore_bbu,
-        zscore_pbu: exam?.zscore_pbu,
-        zscore_tbu: exam?.zscore_tbu,
-        zscore_bbpb: exam?.zscore_bbpb,
-        zscore_bbtb: exam?.zscore_bbtb,
-        zscore_imtu: exam?.zscore_imtu,
-      };
-      if (Object.values(zScoreFields).some((v) => isFilled(v))) {
-        l3 = zScoreFields;
+    const zScoreMap = {
+      "Z-Score BB/U": exam?.zscore_bbu,
+      "Z-Score PB/U": exam?.zscore_pbu,
+      "Z-Score TB/U": exam?.zscore_tbu,
+      "Z-Score BB/PB": exam?.zscore_bbpb,
+      "Z-Score BB/TB": exam?.zscore_bbtb,
+      "Z-Score IMT/U": exam?.zscore_imtu,
+      "Status Gizi BB/U": exam?.status_gizi_bbu,
+      "Status Gizi PB/U": exam?.status_gizi_pbu,
+      "Status Gizi TB/U": exam?.status_gizi_tbu,
+      "Status Gizi BB/PB": exam?.status_gizi_bbpb,
+      "Status Gizi BB/TB": exam?.status_gizi_bbtb,
+      "Status Gizi IMT/U": exam?.status_gizi_imtu,
+    };
+    for (const [k, v] of Object.entries(zScoreMap)) {
+      if (isFilled(v)) l3[k] = v;
+    }
+    if (Object.values(zScores).some((v) => isFilled(v))) {
+      for (const [zk, zv] of Object.entries(zScores)) {
+        if (isFilled(zv)) l3[zk] = zv;
       }
     }
+    if (Object.keys(plot).length) {
+      for (const [pk, pv] of Object.entries(plot)) {
+        if (isFilled(pv)) l3[pk] = pv;
+      }
+    }
+    if (exam?.periode) l3.periode = exam.periode;
   }
 
-  const l4 = step4 && typeof step4 === "object" ? step4 : {};
+  const l4 = (step4 && typeof step4 === "object" ? { ...step4 } : {}) || {};
+  if (exam?.detail_skrining && typeof exam.detail_skrining === "object") {
+    Object.assign(l4, exam.detail_skrining);
+  }
+
   const l5 = {
-    penyuluhan: step5.penyuluhan || step5.topikPenyuluhan || exam?.topik_penyuluhan || "",
-    rujukan: step5.rujukan || step5.statusRujukan || exam?.alasan_rujukan || (exam?.is_perlu_rujukan === true ? "Perlu rujukan" : ""),
-    is_perlu_rujukan: exam?.is_perlu_rujukan,
-    alasan_rujukan: exam?.alasan_rujukan || "",
+    topik_penyuluhan: step5.penyuluhan || step5.topikPenyuluhan || exam?.topik_penyuluhan || "-",
+    tindakan_edukasi: step5.tindakan_edukasi || exam?.tindakan_edukasi || "-",
+    is_perlu_rujukan: exam?.is_perlu_rujukan !== undefined ? (exam.is_perlu_rujukan ? "Ya" : "Tidak") : (step5.is_perlu_rujukan ? "Ya" : "Tidak"),
+    alasan_rujukan: step5.rujukan || step5.statusRujukan || step5.alasan_rujukan || exam?.alasan_rujukan || "-",
   };
 
   return {

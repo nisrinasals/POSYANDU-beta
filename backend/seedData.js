@@ -116,11 +116,11 @@ async function seedDatabase() {
 
     // 4. Seed Users Akun Resmi Gmail untuk semua Role (Super Admin, Dinkes Admin, Dinkes Staf, Puskesmas Admin, Puskesmas Staf, Kader)
     console.log("4. Seeding Akun Login Gmail untuk semua Role...");
-    const passwordHash = await bcrypt.hash("password123", 10);
+    const passwordHash = await bcrypt.hash("12345678", 10);
 
     const defaultUsers = [
       {
-        email: "superadmin.posyandu@gmail.com",
+        email: "superadmin@gmail.com",
         nama_lengkap: "Super Administrator Sistem",
         role: "sa",
         telepon: "088888888888",
@@ -129,7 +129,7 @@ async function seedDatabase() {
         email_verified_at: new Date(),
       },
       {
-        email: "admin.dinkes.depok@gmail.com",
+        email: "admindinkes@gmail.com",
         nama_lengkap: "dr. H. Rahmat Hidayat, M.Kes",
         role: "dinkesAdmin",
         telepon: "081298765432",
@@ -138,7 +138,7 @@ async function seedDatabase() {
         email_verified_at: new Date(),
       },
       {
-        email: "staf.dinkes.depok@gmail.com",
+        email: "stafdinkes@gmail.com",
         nama_lengkap: "Anisa Mayasari, SKM",
         role: "dinkes",
         telepon: "081298765433",
@@ -147,7 +147,7 @@ async function seedDatabase() {
         email_verified_at: new Date(),
       },
       {
-        email: "admin.pkm.sukamaju@gmail.com",
+        email: "adminpuskesmas@gmail.com",
         nama_lengkap: "dr. Hendra Setiawan",
         role: "puskesmasAdmin",
         puskesmas_id: puskesmasSukamaju.id,
@@ -157,7 +157,7 @@ async function seedDatabase() {
         email_verified_at: new Date(),
       },
       {
-        email: "staf.pkm.sukamaju@gmail.com",
+        email: "userpuskesmas@gmail.com",
         nama_lengkap: "dr. Sarah Amanda Putri",
         role: "puskesmas",
         puskesmas_id: puskesmasSukamaju.id,
@@ -167,7 +167,7 @@ async function seedDatabase() {
         email_verified_at: new Date(),
       },
       {
-        email: "kader.posyandu.melati@gmail.com",
+        email: "kaderposyandu@gmail.com",
         nama_lengkap: "Dzakiyah Al Zahrani",
         role: "kader",
         posyandu_id: posyanduMelati.id,
@@ -196,26 +196,6 @@ async function seedDatabase() {
         console.log(`   * Updated user: ${u.email} [${u.role}]`);
       }
     }
-
-    // 5. Seed Sesi Posyandu Hari Ini
-    console.log("5. Seeding Sesi Posyandu Hari Ini...");
-    const todayStr = new Date().toISOString().split("T")[0];
-    let sesiHariIni = await SesiPosyandu.findOne({
-      where: {
-        posyandu_id: posyanduMelati.id,
-        tanggal_pelaksanaan: todayStr,
-      },
-    });
-    if (!sesiHariIni) {
-      sesiHariIni = await SesiPosyandu.create({
-        posyandu_id: posyanduMelati.id,
-        tanggal_pelaksanaan: todayStr,
-        lokasi: "Balai Warga RW 04",
-        rw: "04",
-        status: "open",
-      });
-    }
-    console.log(`   + Sesi Posyandu ID: ${sesiHariIni.id} pada tanggal ${todayStr}`);
 
     console.log("=== SEEDING DATABASE SELESAI DENGAN SUKSES! ===");
     process.exit(0);

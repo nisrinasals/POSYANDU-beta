@@ -4,7 +4,7 @@ import { useNotification } from "../../context/NotificationContext";
 import { userService } from "../../services";
 import { formatDateId } from "../../utils/dataMappers";
 
-export default function DinkesVerifikasiAkunPage({
+export default function SAVerifikasiAkunPage({
   activeSubmenu = "puskesmas",
   staffList: propStaffList,
   puskesmasList: propPuskesmasList,
@@ -19,7 +19,7 @@ export default function DinkesVerifikasiAkunPage({
   onRefreshData,
   user,
 }) {
-  const themeColor = user?.roleType === "sa" ? "#6b4e31" : "#1e3a8a";
+  const themeColor = "#6b4e31";
   const { showConfirm, showSuccess, showWarning } = useNotification();
   const isPuskesmas = activeSubmenu === "puskesmas";
   const isStaf = activeSubmenu === "staf";
@@ -338,7 +338,6 @@ export default function DinkesVerifikasiAkunPage({
             </button>
           </div>
         </div>
-
         {/* ========================================================================= */}
         {/* TABEL VERIFIKASI (SUBMENU 1 & 2) */}
         {/* ========================================================================= */}

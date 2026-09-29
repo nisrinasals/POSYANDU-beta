@@ -1,5 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { Building2, Users, TrendingUp, Calendar, Download, ChevronRight, ArrowUpRight, Activity, CheckCircle2, FileSpreadsheet } from "lucide-react";
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip as ChartTooltip, Filler, Legend, BarElement } from 'chart.js';
+import { Line, Bar } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Filler, Legend, BarElement);
 
 export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList = [], globalPemeriksaanData = {}, globalJadwalList = [], globalStatistikSasaran = {}, globalPosyanduList = [], globalRujukanList = [] }) {
   // Filter Periode Grafik ('6bulan', '2026', '2025')
@@ -71,13 +75,38 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
     [examinationRecords],
   );
 
-  // Scaler calculation for SVG Chart
-  const maxPemeriksaan = Math.max(1, ...chartData.map((d) => d.pemeriksaan));
-  const chartHeight = 220;
-  const chartWidth = 720;
-  const paddingX = 40;
-  const plotWidth = chartWidth - paddingX * 2;
-  const stepX = chartData.length > 1 ? plotWidth / (chartData.length - 1) : plotWidth;
+  const chartDataConfig = useMemo(() => {
+    return {
+      labels: chartData.map(d => d.periode),
+      datasets: [
+        {
+          label: 'Pemeriksaan',
+          data: chartData.map(d => d.pemeriksaan),
+          backgroundColor: '#428A75',
+          borderRadius: 4,
+          barPercentage: 0.5,
+        }
+      ]
+    };
+  }, [chartData]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (context) => `Pemeriksaan: ${context.parsed.y.toLocaleString("id-ID")}`
+        }
+      }
+    },
+    scales: {
+      y: { beginAtZero: true, grid: { borderDash: [4, 4] } },
+      x: { grid: { display: false } }
+    },
+    interaction: { mode: 'index', intersect: false }
+  };
 
   // 9 Kategori Siklus Hidup Distribution Data dynamically calculated from Posyandu sasaran
   const kategoriDistribution = useMemo(() => {
@@ -121,7 +150,7 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-              <span className="fw-bolder text-dark fs-2 mb-0">{totalPosyanduCount}</span>
+              <span className="fw-bolder text-dark fs-3 mb-0">{totalPosyanduCount}</span>
               <span className="text-muted fw-medium small">Posyandu</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
@@ -142,7 +171,7 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-              <span className="fw-bolder text-dark fs-2 mb-0">{totalSasaranCount.toLocaleString("id-ID")}</span>
+              <span className="fw-bolder text-dark fs-3 mb-0">{totalSasaranCount.toLocaleString("id-ID")}</span>
               <span className="text-muted fw-medium small">Sasaran</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
@@ -163,7 +192,7 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-              <span className="fw-bolder text-dark fs-2 mb-0">{totalJadwalCount}</span>
+              <span className="fw-bolder text-dark fs-3 mb-0">{totalJadwalCount}</span>
               <span className="text-muted fw-medium small">Sesi Posyandu</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
@@ -184,7 +213,7 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-              <span className="fw-bolder text-danger fs-2 mb-0">{rujukanCount}</span>
+              <span className="fw-bolder text-danger fs-3 mb-0">{rujukanCount}</span>
               <span className="text-muted fw-medium small">Kasus</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
@@ -237,87 +266,20 @@ export default function PuskesmasDashboardPage({ onNavigate, globalSasaranList =
         </div>
 
         {/* Body Grafik */}
-        <div className="position-relative w-100 overflow-hidden" style={{ minHeight: "260px" }}>
-          {/* Y-Axis Gridlines & Reference Values */}
-          <div className="position-absolute start-0 end-0 top-0 bottom-0 d-flex flex-column justify-content-between pe-2" style={{ pointerEvents: "none", height: `${chartHeight}px` }}>
-            {[1, 0.75, 0.5, 0.25, 0].map((ratio) => {
-              const val = Math.round(maxPemeriksaan * ratio);
-              return (
-                <div key={val} className="d-flex align-items-center w-100">
-                  <span className="text-muted text-end pe-2" style={{ width: "40px", fontSize: "0.725rem" }}>
-                    {val}
-                  </span>
-                  <div className="flex-grow-1 border-top border-light-subtle" style={{ borderStyle: "dashed" }} />
-                </div>
-              );
-            })}
-          </div>
-
-          {/* SVG bar chart */}
-          <div className="position-relative" style={{ height: `${chartHeight + 35}px`, marginLeft: "45px", marginRight: "20px" }}>
-            <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 35}`} className="w-100 h-100" style={{ overflow: "visible" }}>
-              <defs>
-                <linearGradient id="barGradientPuskesmas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#428A75" stopOpacity="0.95" />
-                  <stop offset="100%" stopColor="#428A75" stopOpacity="0.65" />
-                </linearGradient>
-              </defs>
-
-              {/* 1. Bar Columns (Pemeriksaan Sasaran) */}
-              {chartData.map((d, i) => {
-                const xCenter = paddingX + i * stepX;
-                const barWidth = Math.min(36, Math.max(18, plotWidth / (chartData.length * 2)));
-                const barH = (d.pemeriksaan / maxPemeriksaan) * (chartHeight - 30);
-                const barY = chartHeight - barH - 10;
-                const isHovered = activeTooltip?.index === i;
-
-                return (
-                  <g key={`bar-${i}`} onMouseEnter={() => setActiveTooltip({ index: i, ...d })} onMouseLeave={() => setActiveTooltip(null)} style={{ cursor: "pointer" }}>
-                    {/* Hover highlight background pillar */}
-                    <rect x={xCenter - barWidth} y={5} width={barWidth * 2} height={chartHeight - 10} fill={isHovered ? "rgba(66, 138, 117, 0.1)" : "transparent"} rx="6" />
-
-                    {/* Actual Bar */}
-                    <rect x={xCenter - barWidth / 2} y={barY} width={barWidth} height={barH} fill="url(#barGradientPuskesmas)" rx="5" opacity={isHovered ? 1 : 0.88} style={{ transition: "all 0.2s ease" }} />
-
-                    {/* X-Axis Label */}
-                    <text x={xCenter} y={chartHeight + 18} textAnchor="middle" fill="#64748b" fontSize="11.5" fontWeight={isHovered ? "bold" : "normal"}>
-                      {d.periode}
-                    </text>
-                  </g>
-                );
-              })}
-
-            </svg>
-
-            {/* Interactive Tooltip Card */}
-            {activeTooltip && (
-              <div
-                className="position-absolute bg-white border rounded-3 p-2.5 shadow-sm text-dark"
-                style={{
-                  left: `${(activeTooltip.index / (chartData.length - 1)) * 80 + 10}%`,
-                  top: "15px",
-                  fontSize: "0.785rem",
-                  zIndex: 10,
-                  pointerEvents: "none",
-                  minWidth: "160px",
-                }}
-              >
-                <div className="fw-bold border-bottom pb-1 mb-1 text-dark">Periode: {activeTooltip.periode}</div>
-                <div className="d-flex align-items-center justify-content-between gap-2 text-muted">
-                  <span>Pemeriksaan:</span>
-                  <strong className="text-dark" style={{ color: "#428A75" }}>
-                    {activeTooltip.pemeriksaan} Sasaran
-                  </strong>
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="position-relative w-100 overflow-hidden" style={{ height: "300px", marginTop: "1rem" }}>
+          {chartData.length > 0 ? (
+            <Bar data={chartDataConfig} options={chartOptions} />
+          ) : (
+            <div className="d-flex align-items-center justify-content-center h-100 text-muted">
+              Tidak ada data pemeriksaan
+            </div>
+          )}
         </div>
 
         {/* Footer Summary Insight */}
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 pt-3 border-top mt-2">
           <div className="text-muted small" style={{ fontSize: "0.8rem" }}>
-            Tren dihitung dari rekaman pemeriksaan yang tersimpan pada backend.
+            Tren dihitung dari rekaman pemeriksaan yang tersimpan pada sistem.
           </div>
           <button
             className="btn btn-sm btn-light border text-dark fw-bold d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 align-self-start align-self-sm-auto"

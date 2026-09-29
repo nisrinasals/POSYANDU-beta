@@ -243,8 +243,8 @@ export default function LoginPage({ onLoginSuccess, onNavigateToRegister }) {
         {/* Top Header Bar */}
         <div className="d-flex align-items-center justify-content-between mb-4">
           <div className="d-flex align-items-center gap-2.5">
-            <img src={logoPosyandu} alt="Posyandu Care" style={{ width: "30px", height: "30px", objectFit: "contain" }} />
-            <span className="fw-bold text-dark fs-5">Posyandu Care</span>
+            <img src={logoPosyandu} alt="SENGKUYUNG KATRESNAN" style={{ width: "30px", height: "30px", objectFit: "contain" }} />
+            <span className="fw-bold text-dark fs-5">SENGKUYUNG KATRESNAN</span>
           </div>
 
           <button type="button" className="btn btn-sm btn-link text-decoration-none text-muted p-0 small fw-medium" style={{ fontSize: "0.82rem" }} onClick={() => setShowHelpModal(true)}>
@@ -423,7 +423,7 @@ export default function LoginPage({ onLoginSuccess, onNavigateToRegister }) {
 
         {/* Footer info */}
         <div className="text-center text-muted small mt-4" style={{ fontSize: "0.74rem" }}>
-          &copy; 2026 Posyandu Care • Terintegrasi Standar Layanan Primer Kemenkes RI
+          &copy; 2026 SENGKUYUNG KATRESNAN • Terintegrasi Standar Layanan Primer Kemenkes RI
         </div>
       </div>
 
