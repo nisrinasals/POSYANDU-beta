@@ -10,17 +10,20 @@ const getAgeMonths = (tanggalLahir, tanggalPemeriksaan = new Date()) => {
   return months;
 };
 
-<<<<<<< HEAD
 const getExaminationMonth = (tanggalPemeriksaan = new Date()) => {
   const reference = new Date(tanggalPemeriksaan instanceof Date ? tanggalPemeriksaan : `${String(tanggalPemeriksaan).slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(reference.getTime())) return null;
   return reference.getUTCMonth() + 1;
 };
 
-const getScreeningEligibility = (tanggalLahir, tanggalPemeriksaan = new Date(), config) => {
-  if (!config) {
-    throw new Error("Screening configuration is required");
-  }
+const getScreeningEligibility = (tanggalLahir, tanggalPemeriksaan = new Date(), config = null) => {
+  const activeConfig = {
+    asi_eksklusif_months: config?.asi_eksklusif_months ?? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    mpasi_min_age_months: config?.mpasi_min_age_months ?? 6,
+    mpasi_max_age_months: config?.mpasi_max_age_months ?? 11,
+    vitamin_a_months: config?.vitamin_a_months ?? [2, 8],
+    obat_cacing_months: config?.obat_cacing_months ?? [2, 8],
+  };
 
   const ageMonths = getAgeMonths(tanggalLahir, tanggalPemeriksaan);
   const month = getExaminationMonth(tanggalPemeriksaan);
@@ -36,20 +39,10 @@ const getScreeningEligibility = (tanggalLahir, tanggalPemeriksaan = new Date(), 
   }
   return {
     age_months: ageMonths,
-    is_asi_eksklusif_active: ageMonths >= 0 && ageMonths <= 6 && config.asi_eksklusif_months.includes(month),
-    is_mpasi_active: ageMonths >= config.mpasi_min_age_months && ageMonths <= config.mpasi_max_age_months,
-    is_vitamin_a_active: config.vitamin_a_months.includes(month),
-    is_obat_cacing_active: config.obat_cacing_months.includes(month),
-=======
-const getScreeningEligibility = (tanggalLahir, tanggalPemeriksaan = new Date()) => {
-  const ageMonths = getAgeMonths(tanggalLahir, tanggalPemeriksaan);
-  const month = new Date(tanggalPemeriksaan instanceof Date ? tanggalPemeriksaan : `${String(tanggalPemeriksaan).slice(0, 10)}T00:00:00Z`).getUTCMonth() + 1;
-  return {
-    age_months: ageMonths,
-    is_asi_eksklusif_active: ageMonths !== null && ageMonths >= 0 && ageMonths <= 6,
-    is_mpasi_active: ageMonths !== null && ageMonths >= 6 && ageMonths <= 11,
-    is_vitamin_a_active: month === 2 || month === 8,
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
+    is_asi_eksklusif_active: ageMonths >= 0 && ageMonths <= 6 && activeConfig.asi_eksklusif_months.includes(month),
+    is_mpasi_active: ageMonths >= activeConfig.mpasi_min_age_months && ageMonths <= activeConfig.mpasi_max_age_months,
+    is_vitamin_a_active: activeConfig.vitamin_a_months.includes(month),
+    is_obat_cacing_active: activeConfig.obat_cacing_months.includes(month),
   };
 };
 
@@ -58,8 +51,4 @@ const validateIrreversibleAsi = (existingValue, incomingValue) => {
   return null;
 };
 
-<<<<<<< HEAD
 module.exports = { getAgeMonths, getExaminationMonth, getScreeningEligibility, validateIrreversibleAsi };
-=======
-module.exports = { getAgeMonths, getScreeningEligibility, validateIrreversibleAsi };
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

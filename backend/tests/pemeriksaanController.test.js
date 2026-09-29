@@ -2,11 +2,8 @@
 
 const assert = require("assert");
 const test = require("node:test");
-<<<<<<< HEAD
 const ExcelJS = require("exceljs");
 const { Op } = require("sequelize");
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const { Pemeriksaan, KunjunganPosyandu, SesiPosyandu, Rujukan, AuditLog } = require("../models");
 const controller = require("../controllers/pemeriksaanController");
 const { evaluasiBBU, STANDAR_PLOT } = require("../utils/plotHelper");
@@ -19,10 +16,7 @@ const recentSessionDate = new Date(Date.now() - 2 * 86400000).toISOString().slic
 const response = () => ({
   statusCode: 200,
   body: null,
-<<<<<<< HEAD
   headers: {},
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   status(code) {
     this.statusCode = code;
     return this;
@@ -31,15 +25,12 @@ const response = () => ({
     this.body = body;
     return this;
   },
-<<<<<<< HEAD
   setHeader(key, value) {
     this.headers[key] = value;
   },
   end() {
     this.ended = true;
   },
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 });
 
 const request = (body = {}, user = sa, id = 1) => ({ body, user, params: { id: String(id) } });
@@ -54,7 +45,6 @@ const invoke = async (handler, req) => {
   return res;
 };
 
-<<<<<<< HEAD
 test("monthly examination statistics returns aggregate month counts without resident data", async () => {
   const originalFindAll = Pemeriksaan.findAll;
   let queryOptions;
@@ -191,8 +181,6 @@ test("selected rekap template filters source categories and exports only its wor
   }
 });
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const makeKunjungan = (status = "langkah_1", session = { tanggal_pelaksanaan: recentSessionDate, status: "open", posyandu }) => ({
   id: 10,
   warga_id: 20,

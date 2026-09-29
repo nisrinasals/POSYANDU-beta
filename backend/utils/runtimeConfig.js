@@ -3,26 +3,6 @@
 const productionRequiredEnv = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_DIALECT", "JWT_SECRET", "CORS_ORIGIN", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"];
 
 const getCorsOptions = () => {
-<<<<<<< HEAD
-  const configuredOrigins = (process.env.CORS_ORIGIN || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-  if (process.env.NODE_ENV === "production" && configuredOrigins.length === 0) {
-    throw new Error("CORS_ORIGIN wajib diisi pada environment production.");
-  }
-
-  if (configuredOrigins.length === 0) return { origin: true };
-
-  return {
-    origin: (origin, callback) => {
-      if (!origin || configuredOrigins.includes("*") || configuredOrigins.includes(origin)) return callback(null, true);
-      const error = new Error("Origin tidak diizinkan oleh kebijakan CORS.");
-      error.statusCode = 403;
-      return callback(error);
-    },
-=======
   if (process.env.NODE_ENV === "production") {
     const configuredOrigins = (process.env.CORS_ORIGIN || "")
       .split(",")
@@ -55,7 +35,6 @@ const getCorsOptions = () => {
       return callback(null, true);
     },
     credentials: true,
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   };
 };
 

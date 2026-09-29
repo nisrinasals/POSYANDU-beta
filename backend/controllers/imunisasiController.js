@@ -3,10 +3,7 @@
 const { Imunisasi, Warga } = require("../models");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
-<<<<<<< HEAD
 const { IMUNISASI_MASTER, TEMPAT_IMUNISASI } = require("../middleware/validators/imunisasiValidators");
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
 const getScopedWarga = (req, wargaId) =>
   Warga.findOne({
@@ -14,7 +11,6 @@ const getScopedWarga = (req, wargaId) =>
     include: [getPosyanduInclude(req.user)],
   });
 
-<<<<<<< HEAD
 const normalizeRecord = (record, fallbackGiven = true) => {
   const isDiberikan = record.is_diberikan === undefined ? fallbackGiven : Boolean(record.is_diberikan);
   if (!IMUNISASI_MASTER.includes(record.jenis_imunisasi)) throw Object.assign(new Error("jenis_imunisasi tidak termasuk master imunisasi."), { statusCode: 400 });
@@ -33,8 +29,6 @@ const normalizeRecord = (record, fallbackGiven = true) => {
   };
 };
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const getImunisasiByWarga = async (req, res, next) => {
   try {
     const warga = await getScopedWarga(req, req.params.warga_id);
@@ -70,26 +64,14 @@ const createImunisasi = async (req, res, next) => {
     const warga = await getScopedWarga(req, req.body.warga_id);
     if (!warga) return res.status(404).json({ success: false, message: "Data warga tidak ditemukan atau Anda tidak memiliki hak akses." });
 
-<<<<<<< HEAD
     const data = await Imunisasi.create({ warga_id: warga.id, ...normalizeRecord(req.body) });
-=======
-    const data = await Imunisasi.create({
-      warga_id: warga.id,
-      jenis_imunisasi: req.body.jenis_imunisasi,
-      tanggal_imunisasi: req.body.tanggal_imunisasi,
-    });
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     await createAuditLog({
       userId: req.user?.id ?? null,
       action: AUDIT_ACTIONS.IMUNISASI_CREATE,
       tableName: "imunisasi",
       recordId: data.id,
       oldValue: null,
-<<<<<<< HEAD
       newValue: { id: data.id, warga_id: data.warga_id, jenis_imunisasi: data.jenis_imunisasi, is_diberikan: data.is_diberikan, tanggal_imunisasi: data.tanggal_imunisasi, tempat: data.tempat },
-=======
-      newValue: { id: data.id, warga_id: data.warga_id, jenis_imunisasi: data.jenis_imunisasi, tanggal_imunisasi: data.tanggal_imunisasi },
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     });
     return res.status(201).json({ success: true, message: "Data imunisasi berhasil ditambahkan.", data });
   } catch (error) {
@@ -104,7 +86,6 @@ const updateImunisasi = async (req, res, next) => {
     });
     if (!data) return res.status(404).json({ success: false, message: "Data imunisasi tidak ditemukan atau Anda tidak memiliki hak akses." });
 
-<<<<<<< HEAD
     const payload = normalizeRecord(
       {
         jenis_imunisasi: req.body.jenis_imunisasi ?? data.jenis_imunisasi,
@@ -116,12 +97,6 @@ const updateImunisasi = async (req, res, next) => {
       Boolean(data.is_diberikan),
     );
     const oldValue = { jenis_imunisasi: data.jenis_imunisasi, is_diberikan: data.is_diberikan, tanggal_imunisasi: data.tanggal_imunisasi, tempat: data.tempat };
-=======
-    const payload = {};
-    if (req.body.jenis_imunisasi !== undefined) payload.jenis_imunisasi = req.body.jenis_imunisasi;
-    if (req.body.tanggal_imunisasi !== undefined) payload.tanggal_imunisasi = req.body.tanggal_imunisasi;
-    const oldValue = { jenis_imunisasi: data.jenis_imunisasi, tanggal_imunisasi: data.tanggal_imunisasi };
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     await data.update(payload);
     await createAuditLog({
       userId: req.user?.id ?? null,
@@ -129,11 +104,7 @@ const updateImunisasi = async (req, res, next) => {
       tableName: "imunisasi",
       recordId: data.id,
       oldValue,
-<<<<<<< HEAD
       newValue: { jenis_imunisasi: data.jenis_imunisasi, is_diberikan: data.is_diberikan, tanggal_imunisasi: data.tanggal_imunisasi, tempat: data.tempat },
-=======
-      newValue: { jenis_imunisasi: data.jenis_imunisasi, tanggal_imunisasi: data.tanggal_imunisasi },
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     });
     return res.status(200).json({ success: true, message: "Data imunisasi berhasil diperbarui.", data });
   } catch (error) {
@@ -141,7 +112,6 @@ const updateImunisasi = async (req, res, next) => {
   }
 };
 
-<<<<<<< HEAD
 const bulkUpsertImunisasi = async (req, res, next) => {
   let transaction;
   try {
@@ -170,6 +140,3 @@ const bulkUpsertImunisasi = async (req, res, next) => {
 };
 
 module.exports = { createImunisasi, updateImunisasi, bulkUpsertImunisasi, getImunisasiByWarga, getImunisasiById };
-=======
-module.exports = { createImunisasi, updateImunisasi, getImunisasiByWarga, getImunisasiById };
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

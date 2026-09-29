@@ -1,11 +1,5 @@
 # POSYANDU API Documentation
 
-<<<<<<< HEAD
-=======
-> Source: branch `nisrn` of `nisrinasals/POSYANDU-beta`.
-> Dokumentasi ini mengikuti route, middleware, validator, dan controller yang ada pada branch tersebut.
-
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 ## Base URL
 
 ```text
@@ -1088,7 +1082,6 @@ Mengikuti `validator.pemeriksaan.listFilters`.
 
 Mengembalikan daftar pemeriksaan sesuai filter dan pagination controller.
 
-<<<<<<< HEAD
 ## GET /pemeriksaan/statistik-bulanan
 
 Mengembalikan jumlah rekaman pemeriksaan per bulan dan tahun yang tersedia tanpa data identitas warga. Hasil dibatasi otomatis sesuai scope Posyandu/Puskesmas akun.
@@ -1101,8 +1094,6 @@ Mengembalikan jumlah rekaman pemeriksaan per bulan dan tahun yang tersedia tanpa
 
 Mengembalikan kolom template dan baris agregat bulanan sesuai scope Posyandu/Puskesmas akun, tanpa identitas warga.
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 ## GET /pemeriksaan/:id
 
 Mengembalikan detail pemeriksaan.
@@ -1148,11 +1139,7 @@ Berhasil mengisi Step 2 menghasilkan `step2_completed_at`.
 
 Menyimpan screening sesuai kategori sasaran.
 
-<<<<<<< HEAD
 Screening tahunan untuk `dewasa`, `lansia`, dan kategori remaja memiliki gate tahunan. Jika sudah ada pada tahun yang sama:
-=======
-Screening tahunan untuk `dewasa`/`lansia` memiliki gate tahunan. Jika sudah ada pada tahun yang sama:
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
 ```text
 409 — Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut.
@@ -1160,11 +1147,8 @@ Screening tahunan untuk `dewasa`/`lansia` memiliki gate tahunan. Jika sudah ada 
 
 Berhasil mengisi Step 4 menghasilkan `step4_completed_at`.
 
-<<<<<<< HEAD
 Kirim `is_skrining_6_bulanan: true` jika pemeriksaan penglihatan dan pendengaran 6-bulanan benar-benar dilakukan. Backend menolak pengulangan sebelum enam bulan kalender berlalu (`409`) dan menyimpan marker ini bersama `detail_skrining`; pengisian skrining lain tidak menandai pemeriksaan 6-bulanan.
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 ## POST /pemeriksaan/step-5
 
 Menyimpan:
@@ -1219,11 +1203,8 @@ Route ini memakai authentication umum dan digunakan untuk rekap.
 
 Mengikuti `validator.pemeriksaan.listFilters`.
 
-<<<<<<< HEAD
 Gunakan `template_rekap` (`bumil_nifas_menyusui`, `bayi_balita_apras`, `usia_sekolah_remaja`, atau `dewasa_lansia`) untuk mengekspor satu template. Tanpa parameter tersebut, workbook memuat semua template.
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 Untuk role Dinkes, controller membatasi akses personal/search dan menghasilkan rekap agregat.
 
 ### Response
@@ -1319,7 +1300,6 @@ Kategori Sasaran
 
 ---
 
-<<<<<<< HEAD
 # 12. Screening Config
 
 Kedua endpoint berikut memerlukan JWT dan hanya mengizinkan role `dinkesAdmin` atau `sa`.
@@ -1365,8 +1345,6 @@ Kegagalan controller: `500`, `{ "success": false, "message": "Gagal memperbarui 
 
 ---
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 # 12. Application Flow
 
 ## Registrasi Kader
@@ -1498,13 +1476,9 @@ hasil plot dengan is_merah
 | PATCH  | `/kunjungan/:id/status-langkah`      | Personal        |
 | DELETE | `/kunjungan/:id`                     | Personal        |
 | GET    | `/pemeriksaan`                       | Personal        |
-<<<<<<< HEAD
 | GET    | `/pemeriksaan/rekapitulasi`          | Authenticated   |
 | GET    | `/pemeriksaan/export`                | Authenticated   |
 | GET    | `/pemeriksaan/statistik-bulanan`     | Authenticated   |
-=======
-| GET    | `/pemeriksaan/export`                | Authenticated   |
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 | GET    | `/pemeriksaan/:id/step-3`            | Personal        |
 | GET    | `/pemeriksaan/:id/screening-history` | Personal        |
 | GET    | `/pemeriksaan/:id`                   | Personal        |
@@ -1517,12 +1491,7 @@ hasil plot dengan is_merah
 | GET    | `/rujukan`                           | Personal        |
 | GET    | `/rujukan/:id/export`                | Personal        |
 | GET    | `/rujukan/:id`                       | Personal        |
-<<<<<<< HEAD
 | GET    | `/screening-config`                  | Dinkes Admin/SA |
 | PUT    | `/screening-config/:id`              | Dinkes Admin/SA |
 
 **Total: 68 endpoint** pada `/api`. Health check `GET /health` berada di luar router API.
-=======
-
-**Total: 63 endpoint.**
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

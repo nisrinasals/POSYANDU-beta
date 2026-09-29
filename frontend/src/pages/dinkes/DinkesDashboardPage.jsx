@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import React, { useEffect, useState, useMemo } from "react";
 import { userService, posyanduService, pemeriksaanService } from "../../services";
 import { Building2, Users, Layers, Calendar, FileSpreadsheet, UserCheck, ChevronRight, TrendingUp, Download, Activity } from "lucide-react";
@@ -110,63 +109,6 @@ export default function DinkesDashboardPage({ onNavigate, user, globalStatistikS
 
   // SVG Scaler calculations for full-width curved spline area chart
   const maxVal = Math.max(1, ...cityChartData.map((d) => d.pemeriksaan));
-=======
-import React, { useState, useMemo } from 'react';
-import { 
-  Building2, 
-  Users, 
-  Layers, 
-  Calendar, 
-  FileSpreadsheet, 
-  UserCheck, 
-  ChevronRight,
-  TrendingUp,
-  Download,
-  Activity
-} from 'lucide-react';
-import { trenPemeriksaanDanKunjungan } from '../../data/mockData';
-
-export default function DinkesDashboardPage({ 
-  onNavigate, 
-  user, 
-  globalSasaranList = [], 
-  globalPemeriksaanData = {} 
-}) {
-  const themeColor = '#1e3a8a';
-  const [periodeGrafik, setPeriodeGrafik] = useState('6bulan');
-  const [activeTooltip, setActiveTooltip] = useState(null);
-
-  // Dynamic calculations based on global list from Posyandu/Puskesmas
-  const totalSasaranKota = globalSasaranList ? globalSasaranList.length : 0;
-
-  // Real-time calculation of examined citizens
-  const totalExaminedKota = useMemo(() => {
-    const examined = (globalSasaranList || []).filter(s => 
-      s.statusPemeriksaan === 'Sudah' || s.status === 'Sudah' || !!globalPemeriksaanData?.[s.id] || !!globalPemeriksaanData?.[String(s.id)]
-    ).length;
-    return examined;
-  }, [globalSasaranList, globalPemeriksaanData]);
-
-  // Scaled aggregate data for city chart
-  const cityChartData = useMemo(() => {
-    const base = trenPemeriksaanDanKunjungan[periodeGrafik] || trenPemeriksaanDanKunjungan['6bulan'];
-    if (totalSasaranKota === 0 && totalExaminedKota === 0) {
-      return base.map(item => ({
-        periode: item.periode,
-        pemeriksaan: 0,
-        kunjungan: 0
-      }));
-    }
-    return base.map(item => ({
-      periode: item.periode,
-      pemeriksaan: item.pemeriksaan,
-      kunjungan: item.kunjungan
-    }));
-  }, [periodeGrafik]);
-
-  // SVG Scaler calculations for full-width curved spline area chart
-  const maxVal = 2500;
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   const chartHeight = 220;
   const chartWidth = 980;
   const paddingX = 50;
@@ -184,19 +126,11 @@ export default function DinkesDashboardPage({
 
   // Smooth Catmull-Rom / Cubic Bezier curve algorithm
   const { linePathD, areaPathD } = useMemo(() => {
-<<<<<<< HEAD
     if (points.length === 0) return { linePathD: "", areaPathD: "" };
     if (points.length === 1) {
       return {
         linePathD: `M ${points[0].x} ${points[0].y}`,
         areaPathD: `M ${points[0].x} ${points[0].y} L ${points[0].x} ${chartHeight} Z`,
-=======
-    if (points.length === 0) return { linePathD: '', areaPathD: '' };
-    if (points.length === 1) {
-      return {
-        linePathD: `M ${points[0].x} ${points[0].y}`,
-        areaPathD: `M ${points[0].x} ${points[0].y} L ${points[0].x} ${chartHeight} Z`
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       };
     }
 
@@ -224,15 +158,10 @@ export default function DinkesDashboardPage({
 
   return (
     <div className="d-flex flex-column gap-4 pb-4">
-<<<<<<< HEAD
-=======
-
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       {/* ========================================================================= */}
       {/* 1. RINGKASAN EKSEKUTIF UTAMA KOTA (4 Top Metric Cards)                    */}
       {/* ========================================================================= */}
       <div className="row g-3 g-xl-3.5">
-<<<<<<< HEAD
         {/* Card 1: Puskesmas dengan data sasaran */}
         <div className="col-12 col-sm-6 col-xl-3">
           <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: themeColor, cursor: "pointer" }} onClick={() => onNavigate("verifikasi-akun", "puskesmas")}>
@@ -241,177 +170,78 @@ export default function DinkesDashboardPage({
                 PUSKESMAS PADA DIREKTORI POSYANDU
               </span>
               <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(30, 58, 138, 0.1)", color: themeColor, width: "42px", height: "42px" }}>
-=======
-        {/* Card 1: 18 Puskesmas Se-Kota */}
-        <div className="col-12 col-sm-6 col-xl-3">
-          <div 
-            className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" 
-            style={{ borderLeftColor: themeColor, cursor: 'pointer' }}
-            onClick={() => onNavigate('verifikasi-akun', 'puskesmas')}
-          >
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.05em', fontSize: '0.725rem' }}>
-                FASYANKES PUSKESMAS
-              </span>
-              <div 
-                className="rounded-3 d-flex align-items-center justify-content-center" 
-                style={{ backgroundColor: 'rgba(30, 58, 138, 0.1)', color: themeColor, width: '42px', height: '42px' }}
-              >
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 <Building2 size={20} />
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-<<<<<<< HEAD
               <span className="fw-bolder text-dark fs-2 mb-0">{totalPuskesmasKota}</span>
               <span className="text-muted fw-medium small">Puskesmas</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
               Puskesmas dengan Data Sasaran
-=======
-              <span className="fw-bolder text-dark fs-2 mb-0">18</span>
-              <span className="text-muted fw-medium small">Puskesmas</span>
-            </div>
-            <div className="text-muted small mt-1" style={{ fontSize: '0.78rem' }}>
-              Puskesmas Se-Kota Terdaftar
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             </div>
           </div>
         </div>
 
         {/* Card 2: Jumlah Posyandu Se-Kota */}
         <div className="col-12 col-sm-6 col-xl-3">
-<<<<<<< HEAD
           <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#0284c7", cursor: "pointer" }} onClick={() => onNavigate("jadwal-monitoring")}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
                 TOTAL POSYANDU
               </span>
               <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(2, 132, 199, 0.1)", color: "#0284c7", width: "42px", height: "42px" }}>
-=======
-          <div 
-            className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" 
-            style={{ borderLeftColor: '#0284c7', cursor: 'pointer' }}
-            onClick={() => onNavigate('jadwal-monitoring')}
-          >
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.05em', fontSize: '0.725rem' }}>
-                TOTAL POSYANDU
-              </span>
-              <div 
-                className="rounded-3 d-flex align-items-center justify-content-center" 
-                style={{ backgroundColor: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', width: '42px', height: '42px' }}
-              >
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 <Layers size={20} />
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-<<<<<<< HEAD
               <span className="fw-bolder text-dark fs-2 mb-0">{totalPosyanduKota}</span>
               <span className="text-muted fw-medium small">Posyandu</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
               Posyandu Terdaftar
-=======
-              <span className="fw-bolder text-dark fs-2 mb-0">186</span>
-              <span className="text-muted fw-medium small">Posyandu</span>
-            </div>
-            <div className="text-muted small mt-1" style={{ fontSize: '0.78rem' }}>
-              Posyandu Terintegrasi Se-Kota
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             </div>
           </div>
         </div>
 
         {/* Card 3: Verifikasi Manajemen Akun */}
         <div className="col-12 col-sm-6 col-xl-3">
-<<<<<<< HEAD
           <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#f59e0b", cursor: "pointer" }} onClick={() => onNavigate("verifikasi-akun", "puskesmas")}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
                 VERIFIKASI MANAJEMEN AKUN
               </span>
               <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(245, 158, 11, 0.12)", color: "#f59e0b", width: "42px", height: "42px" }}>
-=======
-          <div 
-            className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" 
-            style={{ borderLeftColor: '#f59e0b', cursor: 'pointer' }}
-            onClick={() => onNavigate('verifikasi-akun', 'puskesmas')}
-          >
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.05em', fontSize: '0.725rem' }}>
-                VERIFIKASI MANAJEMEN AKUN
-              </span>
-              <div 
-                className="rounded-3 d-flex align-items-center justify-content-center" 
-                style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b', width: '42px', height: '42px' }}
-              >
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 <UserCheck size={20} />
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-<<<<<<< HEAD
               <span className="fw-bolder text-warning-emphasis fs-2 mb-0">{pendingAccountCount}</span>
               <span className="text-muted fw-medium small">Pengajuan Baru</span>
             </div>
             <div className="text-muted small mt-1 d-flex align-items-center gap-1.5" style={{ fontSize: "0.78rem" }}>
               <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill px-2 py-0.5 fw-semibold">Perlu Otorisasi</span>
               <span>Data berasal dari akun pending di backend</span>
-=======
-              <span className="fw-bolder text-warning-emphasis fs-2 mb-0">4</span>
-              <span className="text-muted fw-medium small">Pengajuan Baru</span>
-            </div>
-            <div className="text-muted small mt-1 d-flex align-items-center gap-1.5" style={{ fontSize: '0.78rem' }}>
-              <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill px-2 py-0.5 fw-semibold">
-                Perlu Otorisasi
-              </span>
-              <span>2 Faskes • 2 Staf</span>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             </div>
           </div>
         </div>
 
         {/* Card 4: Total Sasaran Se-Kota */}
         <div className="col-12 col-sm-6 col-xl-3">
-<<<<<<< HEAD
           <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#10b981", cursor: "pointer" }} onClick={() => onNavigate("data-sasaran")}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
                 TOTAL SASARAN KOTA
               </span>
               <div className="rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(16, 185, 129, 0.1)", color: "#10b981", width: "42px", height: "42px" }}>
-=======
-          <div 
-            className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" 
-            style={{ borderLeftColor: '#10b981', cursor: 'pointer' }}
-            onClick={() => onNavigate('data-sasaran')}
-          >
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.05em', fontSize: '0.725rem' }}>
-                TOTAL SASARAN KOTA
-              </span>
-              <div 
-                className="rounded-3 d-flex align-items-center justify-content-center" 
-                style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', width: '42px', height: '42px' }}
-              >
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 <Users size={20} />
               </div>
             </div>
             <div className="d-flex align-items-baseline gap-2 mb-1">
-<<<<<<< HEAD
               <span className="fw-bolder text-dark fs-2 mb-0">{isGlobalStatistikLoading ? "..." : totalSasaranKota.toLocaleString("id-ID")}</span>
               <span className="text-muted fw-medium small">Jiwa</span>
             </div>
             <div className="text-muted small mt-1" style={{ fontSize: "0.78rem" }}>
-=======
-              <span className="fw-bolder text-dark fs-2 mb-0">{totalSasaranKota.toLocaleString('id-ID')}</span>
-              <span className="text-muted fw-medium small">Jiwa</span>
-            </div>
-            <div className="text-muted small mt-1" style={{ fontSize: '0.78rem' }}>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               9 Kategori Siklus Hidup ILP
             </div>
           </div>
@@ -429,34 +259,23 @@ export default function DinkesDashboardPage({
               <TrendingUp size={20} style={{ color: themeColor }} />
               <span>Grafik Pemantauan &amp; Perkembangan Layanan Kesehatan Se-Kota</span>
             </h5>
-<<<<<<< HEAD
             <p className="text-muted small mb-0" style={{ fontSize: "0.825rem" }}>
               Grafik menampilkan jumlah pemeriksaan per bulan dari agregasi backend tanpa identitas warga.
-=======
-            <p className="text-muted small mb-0" style={{ fontSize: '0.825rem' }}>
-              Statistik agregat pemeriksaan berkala dan tren pelayanan dari 18 Puskesmas serta 186 Posyandu di seluruh wilayah Kota.
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             </p>
           </div>
 
           <div className="d-flex align-items-center gap-3 flex-wrap">
             {/* Legend */}
             <div className="d-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border">
-<<<<<<< HEAD
               <span className="d-inline-block rounded-circle" style={{ width: "10px", height: "10px", backgroundColor: themeColor }}></span>
               <span className="text-dark fw-semibold small" style={{ fontSize: "0.78rem" }}>
                 Rekaman Pemeriksaan
               </span>
-=======
-              <span className="d-inline-block rounded-circle" style={{ width: '10px', height: '10px', backgroundColor: themeColor }}></span>
-              <span className="text-dark fw-semibold small" style={{ fontSize: '0.78rem' }}>Skrining Warga (Spline Area)</span>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             </div>
 
             {/* Filter Periode */}
             <div className="d-flex align-items-center gap-2">
               <Calendar size={16} className="text-muted" />
-<<<<<<< HEAD
               <select
                 className="form-select form-select-sm bg-light text-dark fw-semibold rounded-3 border-0 shadow-none"
                 value={periodeGrafik}
@@ -469,24 +288,12 @@ export default function DinkesDashboardPage({
                     Tahun {year}
                   </option>
                 ))}
-=======
-              <select 
-                className="form-select form-select-sm bg-light text-dark fw-semibold rounded-3 border-0 shadow-none"
-                value={periodeGrafik}
-                onChange={(e) => setPeriodeGrafik(e.target.value)}
-                style={{ fontSize: '0.825rem', minWidth: '150px', height: '36px' }}
-              >
-                <option value="6bulan">6 Bulan Terakhir</option>
-                <option value="2026">Tahun 2026</option>
-                <option value="2025">Tahun 2025</option>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               </select>
             </div>
           </div>
         </div>
 
         {/* Chart Canvas */}
-<<<<<<< HEAD
         <div className="position-relative w-100 overflow-hidden" style={{ minHeight: "260px" }}>
           {/* Y-Axis Gridlines */}
           <div className="position-absolute start-0 end-0 top-0 bottom-0 d-flex flex-column justify-content-between pe-2" style={{ pointerEvents: "none", height: `${chartHeight}px` }}>
@@ -506,28 +313,6 @@ export default function DinkesDashboardPage({
           {/* SVG Canvas */}
           <div className="position-relative" style={{ height: `${chartHeight + 35}px`, marginLeft: "60px", marginRight: "20px" }}>
             <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 35}`} className="w-100 h-100" style={{ overflow: "visible" }}>
-=======
-        <div className="position-relative w-100 overflow-hidden" style={{ minHeight: '260px' }}>
-          {/* Y-Axis Gridlines */}
-          <div className="position-absolute start-0 end-0 top-0 bottom-0 d-flex flex-column justify-content-between pe-2" style={{ pointerEvents: 'none', height: `${chartHeight}px` }}>
-            {[2400, 1800, 1200, 600, 0].map((val) => (
-              <div key={val} className="d-flex align-items-center w-100">
-                <span className="text-muted text-end pe-3 font-monospace" style={{ width: '55px', fontSize: '0.75rem' }}>
-                  {val.toLocaleString('id-ID')}
-                </span>
-                <div className="flex-grow-1 border-top border-light-subtle" style={{ borderStyle: 'dashed' }} />
-              </div>
-            ))}
-          </div>
-
-          {/* SVG Canvas */}
-          <div className="position-relative" style={{ height: `${chartHeight + 35}px`, marginLeft: '60px', marginRight: '20px' }}>
-            <svg 
-              viewBox={`0 0 ${chartWidth} ${chartHeight + 35}`} 
-              className="w-100 h-100" 
-              style={{ overflow: 'visible' }}
-            >
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               <defs>
                 {/* Modern Deep Gradient Area Fill */}
                 <linearGradient id="dinkesWaveGradient" x1="0" y1="0" x2="0" y2="1">
@@ -544,62 +329,23 @@ export default function DinkesDashboardPage({
               </defs>
 
               {/* 1. Curved Area Wave */}
-<<<<<<< HEAD
               <path d={areaPathD} fill="url(#dinkesWaveGradient)" />
 
               {/* 2. Smooth Spline Stroke */}
               <path d={linePathD} fill="none" stroke="url(#dinkesStrokeGradient)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-=======
-              <path 
-                d={areaPathD} 
-                fill="url(#dinkesWaveGradient)" 
-              />
-
-              {/* 2. Smooth Spline Stroke */}
-              <path 
-                d={linePathD} 
-                fill="none" 
-                stroke="url(#dinkesStrokeGradient)" 
-                strokeWidth="3.5" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-              />
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
               {/* 3. Interactive Data Points and Hover Pillars */}
               {points.map((pt, i) => {
                 const isHovered = activeTooltip?.index === i;
                 return (
-<<<<<<< HEAD
                   <g key={`point-${i}`} onMouseEnter={() => setActiveTooltip({ index: i, ...pt })} onMouseLeave={() => setActiveTooltip(null)} style={{ cursor: "pointer" }}>
                     {/* Hover vertical dotted line */}
                     {isHovered && <line x1={pt.x} y1={pt.y} x2={pt.x} y2={chartHeight} stroke="#1e3a8a" strokeWidth="1.5" strokeDasharray="4 4" />}
-=======
-                  <g 
-                    key={`point-${i}`}
-                    onMouseEnter={() => setActiveTooltip({ index: i, ...pt })}
-                    onMouseLeave={() => setActiveTooltip(null)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {/* Hover vertical dotted line */}
-                    {isHovered && (
-                      <line 
-                        x1={pt.x} 
-                        y1={pt.y} 
-                        x2={pt.x} 
-                        y2={chartHeight} 
-                        stroke="#1e3a8a" 
-                        strokeWidth="1.5" 
-                        strokeDasharray="4 4" 
-                      />
-                    )}
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
                     {/* Transparent touch area */}
                     <circle cx={pt.x} cy={pt.y} r="18" fill="transparent" />
 
                     {/* Outer pulse halo */}
-<<<<<<< HEAD
                     <circle cx={pt.x} cy={pt.y} r={isHovered ? "10" : "6"} fill="rgba(30, 58, 138, 0.15)" style={{ transition: "all 0.2s ease" }} />
 
                     {/* Inner core circle */}
@@ -607,36 +353,6 @@ export default function DinkesDashboardPage({
 
                     {/* X-Axis Month Label */}
                     <text x={pt.x} y={chartHeight + 20} textAnchor="middle" fill={isHovered ? "#1e3a8a" : "#64748b"} fontSize="12" fontWeight={isHovered ? "bold" : "normal"}>
-=======
-                    <circle 
-                      cx={pt.x} 
-                      cy={pt.y} 
-                      r={isHovered ? "10" : "6"} 
-                      fill="rgba(30, 58, 138, 0.15)" 
-                      style={{ transition: 'all 0.2s ease' }}
-                    />
-
-                    {/* Inner core circle */}
-                    <circle 
-                      cx={pt.x} 
-                      cy={pt.y} 
-                      r={isHovered ? "6" : "4"} 
-                      fill="#ffffff" 
-                      stroke="#1e3a8a" 
-                      strokeWidth="3" 
-                      style={{ transition: 'all 0.2s ease' }}
-                    />
-
-                    {/* X-Axis Month Label */}
-                    <text 
-                      x={pt.x} 
-                      y={chartHeight + 20} 
-                      textAnchor="middle" 
-                      fill={isHovered ? '#1e3a8a' : '#64748b'} 
-                      fontSize="12" 
-                      fontWeight={isHovered ? 'bold' : 'normal'}
-                    >
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                       {pt.periode}
                     </text>
                   </g>
@@ -646,7 +362,6 @@ export default function DinkesDashboardPage({
 
             {/* Hover Tooltip Popup */}
             {activeTooltip && (
-<<<<<<< HEAD
               <div
                 className="position-absolute bg-white border rounded-3 p-2.5 shadow text-dark"
                 style={{
@@ -663,32 +378,6 @@ export default function DinkesDashboardPage({
                   <span>Pemeriksaan:</span>
                   <strong className="text-dark" style={{ color: themeColor }}>
                     {activeTooltip.pemeriksaan.toLocaleString("id-ID")}
-=======
-              <div 
-                className="position-absolute bg-white border rounded-3 p-2.5 shadow text-dark"
-                style={{ 
-                  left: `${(activeTooltip.index / (cityChartData.length - 1)) * 80 + 8}%`, 
-                  top: '10px', 
-                  fontSize: '0.8rem',
-                  zIndex: 10,
-                  pointerEvents: 'none',
-                  minWidth: '170px'
-                }}
-              >
-                <div className="fw-bold border-bottom pb-1 mb-1.5 text-dark">
-                  Periode: {activeTooltip.periode}
-                </div>
-                <div className="d-flex align-items-center justify-content-between gap-2 text-muted mb-0.5">
-                  <span>Skrining:</span>
-                  <strong className="text-dark" style={{ color: themeColor }}>
-                    {activeTooltip.pemeriksaan.toLocaleString('id-ID')} Jiwa
-                  </strong>
-                </div>
-                <div className="d-flex align-items-center justify-content-between gap-2 text-muted">
-                  <span>Sesi Posyandu:</span>
-                  <strong style={{ color: '#0284c7' }}>
-                    {activeTooltip.kunjungan} Sesi Aktif
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   </strong>
                 </div>
               </div>
@@ -698,7 +387,6 @@ export default function DinkesDashboardPage({
 
         {/* Footer Summary Bar */}
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 pt-3 border-top mt-2">
-<<<<<<< HEAD
           <div className="text-muted small" style={{ fontSize: "0.825rem" }}>
             <span>
               {monthlyStatsLoading
@@ -714,25 +402,12 @@ export default function DinkesDashboardPage({
             className="btn btn-sm btn-light border text-dark fw-bold d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 align-self-start align-self-sm-auto shadow-none"
             onClick={() => onNavigate("laporan-ekspor")}
             style={{ fontSize: "0.785rem" }}
-=======
-          <div className="text-muted small" style={{ fontSize: '0.825rem' }}>
-            💡 Total akumulasi skrining warga terverifikasi se-Kota mencapai <strong>{totalExaminedKota.toLocaleString('id-ID')} Jiwa</strong> (Capaian ILP Aktual).
-          </div>
-          <button 
-            className="btn btn-sm btn-light border text-dark fw-bold d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 align-self-start align-self-sm-auto shadow-none"
-            onClick={() => onNavigate('laporan-ekspor')}
-            style={{ fontSize: '0.785rem' }}
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
           >
             <Download size={14} />
             <span>Unduh Rekapitulasi (.xlsx)</span>
           </button>
         </div>
       </div>
-<<<<<<< HEAD
-=======
-
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     </div>
   );
 }

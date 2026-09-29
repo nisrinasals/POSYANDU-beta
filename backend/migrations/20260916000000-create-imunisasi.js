@@ -24,7 +24,6 @@ module.exports = {
         type: Sequelize.STRING(100),
         allowNull: false,
       },
-<<<<<<< HEAD
       is_diberikan: {
         type: Sequelize.BOOLEAN,
         allowNull: false,
@@ -57,16 +56,6 @@ module.exports = {
     await queryInterface.addIndex("imunisasi", ["warga_id", "jenis_imunisasi"], {
       unique: true,
       name: "uq_imunisasi_warga_jenis",
-=======
-      tanggal_imunisasi: {
-        type: Sequelize.DATEONLY,
-        allowNull: false,
-      },
-    });
-
-    await queryInterface.addIndex("imunisasi", ["warga_id", "tanggal_imunisasi"], {
-      name: "idx_imunisasi_warga_tanggal",
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     });
   },
 

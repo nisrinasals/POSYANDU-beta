@@ -28,7 +28,6 @@ const updateMyProfile = [
     .withMessage("NIK harus terdiri dari 16 digit angka."),
 ];
 
-<<<<<<< HEAD
 const changePassword = [
   body("old_password").notEmpty().withMessage("Password lama wajib diisi."),
   body("new_password")
@@ -55,6 +54,3 @@ const changePassword = [
 
 module.exports = { getUsers, getUserById, changeUserRole, changeUserStatus, updateMyProfile, changePassword, verifyUser, replacePuskesmasAdmin, replaceDinkesAdmin, deactivateUser };
 
-=======
-module.exports = { getUsers, getUserById, changeUserRole, changeUserStatus, updateMyProfile, verifyUser, replacePuskesmasAdmin, replaceDinkesAdmin, deactivateUser };
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

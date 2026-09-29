@@ -1,9 +1,5 @@
 const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan, Rujukan, Imunisasi } = require("../models");
-<<<<<<< HEAD
 const { Op, fn, col } = require("sequelize");
-=======
-const { Op } = require("sequelize");
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const ExcelJS = require("exceljs");
 const { tentukanKategoriAktif, tentukanPeriodePemeriksaan, getLatestPregnancyProfile, hitungUmur } = require("../utils/kategoriHelper");
 const { formatDetailSkrining, validateDetailSkrining } = require("../utils/detailSkriningHelper");
@@ -17,12 +13,8 @@ const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../u
 const { calculateGrowthZScores } = require("../utils/growthZScoreHelper");
 const { calculatePregnancyAge, validateHphtAgainstDate } = require("../utils/pregnancyHelper");
 const { getScreeningEligibility, validateIrreversibleAsi } = require("../utils/screeningEligibilityHelper");
-<<<<<<< HEAD
 const { checkSudahSkriningTahunan, checkSudahSkrining6Bulanan, getPreviousAnnualScreening } = require("../utils/skriningChecker");
 const { getScreeningConfig } = require("../utils/screeningConfig");
-=======
-const { checkSudahSkriningTahunan, getPreviousAnnualScreening } = require("../utils/skriningChecker");
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
 // Daftar 9 Kategori Sasaran Resmi Posyandu ILP
 const VALID_KATEGORI = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
@@ -36,7 +28,6 @@ const MEASUREMENT_LIMITS = {
   td_diastole: 300,
   kadar_gula: 9999,
 };
-<<<<<<< HEAD
 const REKAP_TITLES = {
   bumil_nifas_menyusui: "Ibu Hamil, Nifas & Menyusui",
   bayi_balita_apras: "Bayi, Balita & Anak Pra-Sekolah",
@@ -90,8 +81,6 @@ const getExportMonthPeriods = (records, startDate, endDate) => {
   }
   return periods;
 };
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
 const getMeasurementError = (payload) => {
   for (const [field, max] of Object.entries(MEASUREMENT_LIMITS)) {
@@ -263,15 +252,12 @@ const getAllPemeriksaan = async (req, res, next) => {
                   as: "posyandu",
                   attributes: ["id", "nama_posyandu"],
                 },
-<<<<<<< HEAD
                 {
                   model: Imunisasi,
                   as: "imunisasi",
                   required: false,
                   attributes: ["id", "jenis_imunisasi", "is_diberikan", "tanggal_imunisasi", "tempat"],
                 },
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               ],
             },
             {
@@ -302,7 +288,6 @@ const getAllPemeriksaan = async (req, res, next) => {
   }
 };
 
-<<<<<<< HEAD
 const getPemeriksaanStatistikBulanan = async (req, res, next) => {
   try {
     const monthExpression = fn("to_char", fn("date_trunc", "month", col("Pemeriksaan.tanggal")), "YYYY-MM");
@@ -427,11 +412,6 @@ const exportPemeriksaanExcel = async (req, res, next) => {
     if (template_rekap && kategori_sasaran) {
       return res.status(400).json({ success: false, message: "Pilih template rekap atau satu kategori, bukan keduanya." });
     }
-=======
-const exportPemeriksaanExcel = async (req, res, next) => {
-  try {
-    const { page, limit, search, kategori_sasaran, sesi_posyandu_id, posyandu_id, start_date, end_date } = req.query;
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     if (["dinkes", "dinkesAdmin"].includes(req.user?.role)) {
       if (search || req.query.warga_id) {
@@ -447,10 +427,7 @@ const exportPemeriksaanExcel = async (req, res, next) => {
     const wargaWhere = {};
 
     if (kategori_sasaran) pemeriksaanWhere.kategori_sasaran = kategori_sasaran;
-<<<<<<< HEAD
     else if (template_rekap) pemeriksaanWhere.kategori_sasaran = { [Op.in]: REKAP_GROUPS[template_rekap] };
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     if (start_date && end_date) pemeriksaanWhere.tanggal = { [Op.between]: [new Date(start_date), new Date(end_date)] };
     if (sesi_posyandu_id) sesiWhere.id = sesi_posyandu_id;
     if (posyandu_id) wargaWhere.posyandu_id = posyandu_id;
@@ -493,7 +470,6 @@ const exportPemeriksaanExcel = async (req, res, next) => {
     });
 
     const workbook = new ExcelJS.Workbook();
-<<<<<<< HEAD
     const screeningConfig = await getScreeningConfig();
     const exportGroups = template_rekap ? [template_rekap] : Object.keys(REKAP_GROUPS);
     for (const group of exportGroups) {
@@ -509,14 +485,15 @@ const exportPemeriksaanExcel = async (req, res, next) => {
       worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle" };
       worksheet.getRow(1).height = 24;
 
-      worksheet.addRow(["POSYANDU"]);
+      const userPosyandu = req.user?.posyandu?.nama_posyandu || "POSYANDU";
+      worksheet.addRow([userPosyandu.toUpperCase()]);
       worksheet.mergeCells(2, 1, 2, columns.length);
       worksheet.getRow(2).font = { bold: true };
       worksheet.getRow(2).alignment = { horizontal: "center", vertical: "middle" };
       worksheet.addRow([]);
-      worksheet.addRow(["Dusun / RT / RW", ":", ""]);
-      worksheet.addRow(["Desa / Kelurahan / Nagari", ":", ""]);
-      worksheet.addRow(["Kecamatan", ":", ""]);
+      worksheet.addRow(["Dusun / RT / RW", ":", req.user?.posyandu?.dusun || ""]);
+      worksheet.addRow(["Desa / Kelurahan / Nagari", ":", req.user?.posyandu?.desa_kelurahan || ""]);
+      worksheet.addRow(["Kecamatan", ":", req.user?.posyandu?.kecamatan || ""]);
 
       const aggregateRows = aggregateRekapRows(plainRows, group, screeningConfig);
       const rowsByPeriod = new Map(aggregateRows.map((row) => [row.bulan_tahun, row]));
@@ -542,7 +519,7 @@ const exportPemeriksaanExcel = async (req, res, next) => {
       groupHeader.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       groupHeader.height = 34;
 
-      const columnHeader = worksheet.addRow([]);
+      const columnHeader = worksheet.getRow(8);
       columns.slice(1).forEach((column, index) => {
         columnHeader.getCell(index + 2).value = column.label;
       });
@@ -559,16 +536,6 @@ const exportPemeriksaanExcel = async (req, res, next) => {
 
       worksheet.views = [{ state: "frozen", xSplit: 1, ySplit: 8, topLeftCell: "B9" }];
       worksheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
-=======
-    for (const group of Object.keys(REKAP_GROUPS)) {
-      const worksheet = workbook.addWorksheet(group);
-      const columns = REKAP_EXPORT_COLUMNS[group];
-      worksheet.columns = columns.map(({ key, label }) => ({ header: label, key, width: Math.min(Math.max(label.length + 2, 14), 32) }));
-      worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFF" } };
-      worksheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "1E40AF" } };
-      const plainRows = rows.map((row) => (typeof row.get === "function" ? row.get({ plain: true }) : row));
-      worksheet.addRows(aggregateRekapRows(plainRows, group));
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     }
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -629,13 +596,7 @@ const getPemeriksaanById = async (req, res, next) => {
     }
 
     const targetYear = new Date(pemeriksaan.tanggal).getFullYear();
-<<<<<<< HEAD
     const prevAnnual = pemeriksaan.kunjungan?.warga_id ? await getPreviousAnnualScreening(pemeriksaan.kunjungan.warga_id, targetYear, pemeriksaan.id) : null;
-=======
-    const prevAnnual = pemeriksaan.kunjungan?.warga_id
-      ? await getPreviousAnnualScreening(pemeriksaan.kunjungan.warga_id, targetYear, pemeriksaan.id)
-      : null;
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const isAnnualCompleted = Boolean(prevAnnual || pemeriksaan.detail_skrining?.is_skrining_tahunan === true);
 
     return res.status(200).json({
@@ -669,13 +630,7 @@ const getScreeningHistory = async (req, res, next) => {
     if (!current) return res.status(404).json({ success: false, message: "Data pemeriksaan tidak ditemukan." });
     const history = (Array.isArray(current.screening_history) ? current.screening_history : []).sort((left, right) => new Date(right.tanggal) - new Date(left.tanggal));
     const targetYear = new Date(current.tanggal).getFullYear();
-<<<<<<< HEAD
     const prevAnnual = current.kunjungan?.warga_id ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id) : null;
-=======
-    const prevAnnual = current.kunjungan?.warga_id
-      ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id)
-      : null;
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const isAnnualCompleted = Boolean(prevAnnual || current.detail_skrining?.is_skrining_tahunan === true || history.some((h) => h.hasil?.is_skrining_tahunan === true));
 
     return res.status(200).json({
@@ -736,14 +691,10 @@ const getStep3Pemeriksaan = async (req, res, next) => {
               as: "warga",
               required: true,
               attributes: ["id", "nik", "nama_lengkap", "tanggal_lahir", "jenis_kelamin"],
-<<<<<<< HEAD
               include: [
                 { model: ProfileKehamilan, as: "profileKehamilan", required: false, attributes: ["id", "hpht", "tanggal_persalinan", "status_kehamilan", "is_menyusui"] },
                 { model: Imunisasi, as: "imunisasi", required: false, attributes: ["id", "jenis_imunisasi", "is_diberikan", "tanggal_imunisasi", "tempat"] },
               ],
-=======
-              include: [{ model: ProfileKehamilan, as: "profileKehamilan", required: false, attributes: ["id", "hpht", "tanggal_persalinan", "status_kehamilan", "is_menyusui"] }],
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             },
             {
               model: SesiPosyandu,
@@ -828,17 +779,10 @@ const getStep3Pemeriksaan = async (req, res, next) => {
     const periode = tentukanPeriodePemeriksaan(current.kategori_sasaran, current.tanggal, periodeAcuan);
 
     const targetYear = new Date(current.tanggal).getFullYear();
-<<<<<<< HEAD
     const prevAnnual = current.kunjungan?.warga_id ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id) : null;
     const isAnnualCompleted = Boolean(prevAnnual || current.detail_skrining?.is_skrining_tahunan === true);
     const config = await getScreeningConfig();
     const referralReasons = getCombinedReferralReasons(current.detail_skrining, plotData);
-=======
-    const prevAnnual = current.kunjungan?.warga_id
-      ? await getPreviousAnnualScreening(current.kunjungan.warga_id, targetYear, current.id)
-      : null;
-    const isAnnualCompleted = Boolean(prevAnnual || current.detail_skrining?.is_skrining_tahunan === true);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     return res.status(200).json({
       success: true,
@@ -861,18 +805,11 @@ const getStep3Pemeriksaan = async (req, res, next) => {
         },
         standar_plot: STANDAR_PLOT[current.kategori_sasaran] || null,
         hasil_plot: plotData,
-<<<<<<< HEAD
         referral_reasons: referralReasons,
         historis: history,
         growth_history: history,
         usia_kehamilan: calculatePregnancyAge(periodeAcuan?.hpht, current.tanggal),
         screening_eligibility: getScreeningEligibility(current.kunjungan.warga.tanggal_lahir, current.tanggal, config),
-=======
-        historis: history,
-        growth_history: history,
-        usia_kehamilan: calculatePregnancyAge(periodeAcuan?.hpht, current.tanggal),
-        screening_eligibility: getScreeningEligibility(current.kunjungan.warga.tanggal_lahir, current.tanggal),
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
         is_annual_screening_completed: isAnnualCompleted,
         previous_annual_screening: prevAnnual ? { id: prevAnnual.id, tanggal: prevAnnual.tanggal, detail_skrining: prevAnnual.detail_skrining } : null,
       },
@@ -894,10 +831,7 @@ const createPemeriksaan = async (req, res, next) => {
       kategori_sasaran: kategoriInput,
       tanggal,
       is_skrining_tahunan,
-<<<<<<< HEAD
       is_skrining_6_bulanan,
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       // Measurement Fields
       bb_kg,
       tb_cm,
@@ -929,7 +863,6 @@ const createPemeriksaan = async (req, res, next) => {
     }
 
     const kategoriAkhir = kategoriFix;
-<<<<<<< HEAD
     const kategoriSkrining6Bulanan = ["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"];
     if (is_skrining_6_bulanan && !kategoriSkrining6Bulanan.includes(kategoriAkhir)) {
       return res.status(400).json({ success: false, message: "Skrining 6 bulanan hanya berlaku untuk kategori dewasa, lansia, dan remaja." });
@@ -938,24 +871,15 @@ const createPemeriksaan = async (req, res, next) => {
     // Pengecekan skrining berkala per warga.
     let isTahunanFix = false;
     if (["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriAkhir)) {
-=======
-
-    // Pengecekan Skrining Tahunan (Khusus Dewasa & Lansia)
-    let isTahunanFix = false;
-    if (["dewasa", "lansia"].includes(kategoriAkhir)) {
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       const targetYear = new Date(tglPemeriksaan).getFullYear();
       if (is_skrining_tahunan && (await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear, pemeriksaan.id))) {
         return res.status(409).json({ success: false, message: "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut." });
       }
       isTahunanFix = Boolean(is_skrining_tahunan);
     }
-<<<<<<< HEAD
     if (is_skrining_6_bulanan && (await checkSudahSkrining6Bulanan(kunjungan.warga_id, tglPemeriksaan, pemeriksaan.id))) {
       return res.status(409).json({ success: false, message: "Skrining 6 bulanan untuk warga ini belum jatuh tempo." });
     }
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     // Format & Sanitasi Payload JSONB detail_skrining
     const screeningError = getScreeningError(kategoriAkhir, detail_skrining);
@@ -970,10 +894,7 @@ const createPemeriksaan = async (req, res, next) => {
       jiwaProvided: Boolean(detail_skrining?.skrining_kesehatan_jiwa),
     });
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
-<<<<<<< HEAD
     scoredSkrining.detail.is_skrining_6_bulanan = Boolean(is_skrining_6_bulanan);
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     const growthScores = getGrowthZScores(kunjungan.warga, { tanggal: tglPemeriksaan, bb_kg, tb_cm });
     const plotData = evaluasiPemeriksaan({
@@ -993,7 +914,6 @@ const createPemeriksaan = async (req, res, next) => {
     });
 
     const autoReasons = getCombinedReferralReasons(scoredSkrining.detail, plotData);
-<<<<<<< HEAD
     const manualReason = String(alasan_rujukan ?? "").trim();
     const isPerluRujukanDecision = autoReasons.length > 0 || is_perlu_rujukan === true;
     if (isPerluRujukanDecision) {
@@ -1004,14 +924,6 @@ const createPemeriksaan = async (req, res, next) => {
           success: false,
           message: "Alasan rujukan wajib diisi jika rujukan dipilih.",
         });
-=======
-    const isPerluRujukanDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true);
-
-    if (isPerluRujukanDecision) {
-      const referralReason = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || "").trim();
-      if (!referralReason) {
-        return res.status(400).json({ success: false, message: "alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening." });
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       }
     }
 
@@ -1041,7 +953,6 @@ const createPemeriksaan = async (req, res, next) => {
     });
 
     if (isPerluRujukanDecision) {
-<<<<<<< HEAD
       const referralReason = [...autoReasons, ...(manualReason ? [manualReason] : [])].join("; ");
 
       const puskesmasId = kunjungan.warga?.posyandu?.puskesmas_id;
@@ -1091,27 +1002,6 @@ const createPemeriksaan = async (req, res, next) => {
       if (existingRef) {
         await existingRef.destroy();
       }
-=======
-      const referralReason = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || "").trim();
-      const puskesmasId = kunjungan.warga?.posyandu?.puskesmas_id;
-      if (puskesmasId) {
-        const existingRef = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id } });
-        const refPayload = {
-          warga_id: kunjungan.warga_id,
-          pemeriksaan_id: pemeriksaan.id,
-          puskesmas_id: puskesmasId,
-          kader_id: req.user?.id || 1,
-          tanggal_rujukan: existingRef?.tanggal_rujukan || new Date(),
-          alasan_rujukan: referralReason,
-          status_kehadiran_rujukan: status_kehadiran_rujukan ?? existingRef?.status_kehadiran_rujukan ?? null,
-        };
-        if (existingRef) await existingRef.update(refPayload);
-        else await Rujukan.create(refPayload);
-      }
-    } else {
-      const existingRef = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id } });
-      if (existingRef) await existingRef.destroy();
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     }
 
     // Update status kunjungan ke langkah 5 (Selesai)
@@ -1147,16 +1037,7 @@ const saveStep2 = async (req, res, next) => {
     const { kunjungan_id, bb_kg, tb_cm, lingkar_kepala_cm, lila_cm, lingkar_perut_cm, td_sistole, td_diastole, kadar_gula } = req.body;
 
     const measurementError = getMeasurementError(req.body);
-<<<<<<< HEAD
-    if (measurementError) {
-      return res.status(400).json({
-        success: false,
-        message: measurementError,
-      });
-    }
-=======
     if (measurementError) return res.status(400).json({ success: false, message: measurementError });
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     const { kunjungan, pemeriksaan } = await preparePemeriksaanContext(kunjungan_id, req.user);
     const growthScores = getGrowthZScores(kunjungan.warga, {
@@ -1178,18 +1059,8 @@ const saveStep2 = async (req, res, next) => {
       step2_completed_at: new Date(),
     });
 
-<<<<<<< HEAD
-    // Update status kunjungan ke langkah 2
-    // jika saat ini masih berada di langkah 1
-    if (["langkah_1"].includes(kunjungan.status_langkah)) {
-      await kunjungan.update({
-        status_langkah: "langkah_2",
-      });
-=======
-    // Update status ke langkah 2 jika belum melebihi langkah 2
     if (["langkah_1"].includes(kunjungan.status_langkah)) {
       await kunjungan.update({ status_langkah: "langkah_2" });
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     }
 
     return res.status(200).json({
@@ -1199,14 +1070,10 @@ const saveStep2 = async (req, res, next) => {
     });
   } catch (error) {
     if (error.statusCode) {
-<<<<<<< HEAD
       return res.status(error.statusCode).json({
         success: false,
         message: error.message,
       });
-=======
-      return res.status(error.statusCode).json({ success: false, message: error.message });
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     }
     next(error);
   }
@@ -1217,18 +1084,12 @@ const saveStep2 = async (req, res, next) => {
  */
 const saveStep4 = async (req, res, next) => {
   try {
-<<<<<<< HEAD
     const { kunjungan_id, detail_skrining, is_skrining_tahunan, is_skrining_6_bulanan, profile_kehamilan_id } = req.body;
 
     const { kunjungan, pemeriksaan, tglPemeriksaan, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user);
     if (is_skrining_6_bulanan && !["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriFix)) {
       return res.status(400).json({ success: false, message: "Skrining 6 bulanan hanya berlaku untuk kategori dewasa, lansia, dan remaja." });
     }
-=======
-    const { kunjungan_id, detail_skrining, is_skrining_tahunan, profile_kehamilan_id } = req.body;
-
-    const { kunjungan, pemeriksaan, tglPemeriksaan, kategoriFix } = await preparePemeriksaanContext(kunjungan_id, req.user);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     if (profile_kehamilan_id) {
       const selectedProfile = await ProfileKehamilan.findOne({ where: { id: profile_kehamilan_id, warga_id: kunjungan.warga_id } });
       if (!selectedProfile) return res.status(400).json({ success: false, message: "profile_kehamilan_id tidak dimiliki oleh warga pada pemeriksaan ini." });
@@ -1239,23 +1100,16 @@ const saveStep4 = async (req, res, next) => {
 
     // Pengecekan Skrining Tahunan
     let isTahunanFix = false;
-<<<<<<< HEAD
     if (["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriFix)) {
-=======
-    if (["dewasa", "lansia"].includes(kategoriFix)) {
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       const targetYear = new Date(tglPemeriksaan).getFullYear();
       if (is_skrining_tahunan && (await checkSudahSkriningTahunan(kunjungan.warga_id, targetYear, pemeriksaan.id))) {
         return res.status(409).json({ success: false, message: "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut." });
       }
       isTahunanFix = Boolean(is_skrining_tahunan);
     }
-<<<<<<< HEAD
     if (is_skrining_6_bulanan && (await checkSudahSkrining6Bulanan(kunjungan.warga_id, tglPemeriksaan, pemeriksaan.id))) {
       return res.status(409).json({ success: false, message: "Skrining 6 bulanan untuk warga ini belum jatuh tempo." });
     }
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     const formattedSkrining = formatDetailSkrining(kategoriFix, detail_skrining, isTahunanFix, pemeriksaan.detail_skrining);
     const asiTransitionError = validateIrreversibleAsi(pemeriksaan.detail_skrining?.pelayanan_kesehatan?.is_asi_eksklusif, detail_skrining?.pelayanan_kesehatan?.is_asi_eksklusif);
@@ -1267,10 +1121,7 @@ const saveStep4 = async (req, res, next) => {
       jiwaProvided: Boolean(detail_skrining?.skrining_kesehatan_jiwa),
     });
     if (scoredSkrining.errors.length) return res.status(400).json({ success: false, message: scoredSkrining.errors.join(" ") });
-<<<<<<< HEAD
     scoredSkrining.detail.is_skrining_6_bulanan = Boolean(is_skrining_6_bulanan);
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     await pemeriksaan.update({
       profile_kehamilan_id: profile_kehamilan_id !== undefined ? profile_kehamilan_id : pemeriksaan.profile_kehamilan_id,
@@ -1279,13 +1130,10 @@ const saveStep4 = async (req, res, next) => {
       step4_completed_at: new Date(),
     });
 
-<<<<<<< HEAD
     const screeningReferralReasons = getScreeningReferralReasons(scoredSkrining.detail);
     const screeningConfig = await getScreeningConfig();
     const screeningEligibility = getScreeningEligibility(kunjungan.warga.tanggal_lahir, tglPemeriksaan, screeningConfig);
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     // Update status ke langkah 4 jika belum mencapai langkah 5
     if (["langkah_1", "langkah_2", "langkah_3"].includes(kunjungan.status_langkah)) {
       await kunjungan.update({ status_langkah: "langkah_4" });
@@ -1295,11 +1143,7 @@ const saveStep4 = async (req, res, next) => {
       success: true,
       message: "Data skrining (Step 4) berhasil disimpan.",
       data: pemeriksaan,
-<<<<<<< HEAD
       screening_eligibility: screeningEligibility,
-=======
-      screening_eligibility: getScreeningEligibility(kunjungan.warga.tanggal_lahir, tglPemeriksaan),
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     });
   } catch (error) {
     if (error.statusCode) {
@@ -1343,7 +1187,6 @@ const saveStep5 = async (req, res, next) => {
       },
     });
 
-<<<<<<< HEAD
     const automaticReasons = getCombinedReferralReasons(pemeriksaan.detail_skrining, plotData);
     const manualReason = String(alasan_rujukan ?? "").trim();
     const keputusanRujukan = automaticReasons.length > 0 || is_perlu_rujukan === true;
@@ -1369,26 +1212,12 @@ const saveStep5 = async (req, res, next) => {
           success: false,
           message: "Alasan rujukan wajib diisi jika rujukan dipilih.",
         });
-=======
-    const autoReasons = getCombinedReferralReasons(pemeriksaan.detail_skrining, plotData);
-    const keputusanRujukan = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true);
-    const oldReferral = await Rujukan.findOne({ where: { pemeriksaan_id: pemeriksaan.id }, transaction });
-    let referral = null;
-
-    if (keputusanRujukan) {
-      const alasan = autoReasons.length > 0 ? autoReasons.join("; ") : String(alasan_rujukan || oldReferral?.alasan_rujukan || "").trim();
-      if (!alasan) {
-        await transaction.rollback();
-        transaction = null;
-        return res.status(400).json({ success: false, message: "alasan_rujukan wajib diisi jika rujukan dipilih tanpa trigger screening." });
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       }
 
       const puskesmasId = kunjungan.warga?.posyandu?.puskesmas_id;
       if (!puskesmasId) {
         await transaction.rollback();
         transaction = null;
-<<<<<<< HEAD
 
         return res.status(400).json({
           success: false,
@@ -1406,17 +1235,10 @@ const saveStep5 = async (req, res, next) => {
         });
       }
 
-=======
-        return res.status(400).json({ success: false, message: "Puskesmas warga tidak ditemukan." });
-      }
-
-      referral = oldReferral;
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       const referralPayload = {
         warga_id: kunjungan.warga_id,
         pemeriksaan_id: pemeriksaan.id,
         puskesmas_id: puskesmasId,
-<<<<<<< HEAD
         kader_id: req.user.id,
         tanggal_rujukan: oldReferral?.tanggal_rujukan || new Date(),
         alasan_rujukan: alasanFinal,
@@ -1438,21 +1260,6 @@ const saveStep5 = async (req, res, next) => {
       }
 
       referral = null;
-=======
-        kader_id: req.user?.id || 1,
-        tanggal_rujukan: new Date(),
-        alasan_rujukan: alasan,
-        status_kehadiran_rujukan: status_kehadiran_rujukan ?? oldReferral?.status_kehadiran_rujukan ?? null,
-      };
-      if (referral) await referral.update(referralPayload, { transaction });
-      else referral = await Rujukan.create(referralPayload, { transaction });
-    } else {
-      referral = oldReferral;
-      if (referral) {
-        await referral.destroy({ transaction });
-        referral = null;
-      }
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     }
 
     await pemeriksaan.update(
@@ -1464,7 +1271,6 @@ const saveStep5 = async (req, res, next) => {
       { transaction },
     );
 
-<<<<<<< HEAD
     await kunjungan.update(
       {
         status_langkah: "langkah_5",
@@ -1503,15 +1309,10 @@ const saveStep5 = async (req, res, next) => {
         transaction,
       });
     }
-=======
-    // Tandai status pemeriksaan kunjungan selesai
-    await kunjungan.update({ status_langkah: "langkah_5" }, { transaction });
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     await transaction.commit();
     transaction = null;
 
-<<<<<<< HEAD
     return res.status(200).json({
       success: true,
       message: "Data edukasi & rujukan (Step 5) berhasil disimpan. Pemeriksaan selesai.",
@@ -1533,34 +1334,10 @@ const saveStep5 = async (req, res, next) => {
         success: false,
         message: error.message,
       });
-=======
-    if (!oldReferral && referral) {
-      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_CREATE, tableName: "rujukan", recordId: referral.id, oldValue: null, newValue: rujukanAuditSnapshot(referral) });
-    } else if (oldReferral && referral) {
-      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_UPDATE, tableName: "rujukan", recordId: referral.id, oldValue: rujukanAuditSnapshot(oldReferral), newValue: rujukanAuditSnapshot(referral) });
-    } else if (oldReferral && !referral) {
-      await createAuditLog({ userId: req.user?.id ?? null, action: AUDIT_ACTIONS.RUJUKAN_DELETE, tableName: "rujukan", recordId: oldReferral.id, oldValue: rujukanAuditSnapshot(oldReferral), newValue: null });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Data edukasi & rujukan (Step 5) berhasil disimpan. Pemeriksaan Selesai.",
-      data: pemeriksaan,
-      rujukan: referral,
-    });
-  } catch (error) {
-    if (transaction) await transaction.rollback();
-    if (error.statusCode) {
-      return res.status(error.statusCode).json({ success: false, message: error.message });
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     }
     next(error);
   }
 };
-<<<<<<< HEAD
-=======
-
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 /**
  * 7. UPDATE PEMERIKSAAN
  */
@@ -1572,10 +1349,7 @@ const updatePemeriksaan = async (req, res, next) => {
       kategori_sasaran,
       tanggal,
       is_skrining_tahunan,
-<<<<<<< HEAD
       is_skrining_6_bulanan,
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       bb_kg,
       tb_cm,
       lingkar_kepala_cm,
@@ -1640,12 +1414,9 @@ const updatePemeriksaan = async (req, res, next) => {
     }
 
     const kategoriAktif = tentukanKategoriAktif(pemeriksaan.kunjungan.warga.tanggal_lahir, pemeriksaan.kunjungan.warga.profileKehamilan, targetTanggal);
-<<<<<<< HEAD
     if (is_skrining_6_bulanan && !["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriAktif)) {
       throw createPemeriksaanError(400, "Skrining 6 bulanan hanya berlaku untuk kategori dewasa, lansia, dan remaja.");
     }
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const selectedProfile = profile_kehamilan_id ? await ProfileKehamilan.findOne({ where: { id: profile_kehamilan_id, warga_id: pemeriksaan.kunjungan.warga_id }, transaction }) : null;
     if (profile_kehamilan_id && !selectedProfile) throw createPemeriksaanError(400, "profile_kehamilan_id tidak dimiliki oleh warga pada pemeriksaan ini.");
     const profileForDate = selectedProfile || getLatestPregnancyProfile(pemeriksaan.kunjungan.warga.profileKehamilan || []);
@@ -1654,16 +1425,11 @@ const updatePemeriksaan = async (req, res, next) => {
 
     // Format ulang detail_skrining jika ada update payload JSONB
     let updatedDetailSkrining = pemeriksaan.detail_skrining;
-<<<<<<< HEAD
     if (detail_skrining !== undefined || is_skrining_tahunan !== undefined || is_skrining_6_bulanan !== undefined) {
-=======
-    if (detail_skrining !== undefined || is_skrining_tahunan !== undefined) {
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       const screeningInput = detail_skrining !== undefined ? detail_skrining : pemeriksaan.detail_skrining || {};
       const screeningError = getScreeningError(kategoriAktif, screeningInput);
       if (screeningError) throw createPemeriksaanError(400, screeningError);
       let isTahunan = false;
-<<<<<<< HEAD
       if (["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(kategoriAktif)) isTahunan = Boolean(is_skrining_tahunan ?? pemeriksaan.detail_skrining?.is_skrining_tahunan);
       if (isTahunan && (await checkSudahSkriningTahunan(pemeriksaan.kunjungan.warga_id, new Date(targetTanggal).getFullYear(), pemeriksaan.id))) {
         throw createPemeriksaanError(409, "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut.");
@@ -1672,12 +1438,6 @@ const updatePemeriksaan = async (req, res, next) => {
       if (isSixMonthScreening && (await checkSudahSkrining6Bulanan(pemeriksaan.kunjungan.warga_id, targetTanggal, pemeriksaan.id))) {
         throw createPemeriksaanError(409, "Skrining 6 bulanan untuk warga ini belum jatuh tempo.");
       }
-=======
-      if (["dewasa", "lansia"].includes(kategoriAktif)) isTahunan = Boolean(is_skrining_tahunan ?? pemeriksaan.detail_skrining?.is_skrining_tahunan);
-      if (isTahunan && (await checkSudahSkriningTahunan(pemeriksaan.kunjungan.warga_id, new Date(targetTanggal).getFullYear(), pemeriksaan.id))) {
-        throw createPemeriksaanError(409, "Skrining tahunan untuk warga ini sudah diisi pada tahun tersebut.");
-      }
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
       updatedDetailSkrining = formatDetailSkrining(kategoriAktif, screeningInput, isTahunan, pemeriksaan.detail_skrining);
       const scoredSkrining = finalizeScreeningScores(kategoriAktif, updatedDetailSkrining, pemeriksaan.kunjungan.warga, {
@@ -1687,30 +1447,14 @@ const updatePemeriksaan = async (req, res, next) => {
         jiwaProvided: Boolean(screeningInput?.skrining_kesehatan_jiwa),
       });
       if (scoredSkrining.errors.length) throw createPemeriksaanError(400, scoredSkrining.errors.join(" "));
-<<<<<<< HEAD
       updatedDetailSkrining = { ...scoredSkrining.detail, is_skrining_6_bulanan: isSixMonthScreening };
-=======
-      updatedDetailSkrining = scoredSkrining.detail;
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       const asiTransitionError = validateIrreversibleAsi(pemeriksaan.detail_skrining?.pelayanan_kesehatan?.is_asi_eksklusif, detail_skrining?.pelayanan_kesehatan?.is_asi_eksklusif);
       if (asiTransitionError) throw createPemeriksaanError(400, asiTransitionError);
     }
 
     const isStep2Edited =
-<<<<<<< HEAD
       bb_kg !== undefined || tb_cm !== undefined || lingkar_kepala_cm !== undefined || lila_cm !== undefined || lingkar_perut_cm !== undefined || td_sistole !== undefined || td_diastole !== undefined || kadar_gula !== undefined;
     const isStep4Edited = detail_skrining !== undefined || is_skrining_tahunan !== undefined || is_skrining_6_bulanan !== undefined;
-=======
-      bb_kg !== undefined ||
-      tb_cm !== undefined ||
-      lingkar_kepala_cm !== undefined ||
-      lila_cm !== undefined ||
-      lingkar_perut_cm !== undefined ||
-      td_sistole !== undefined ||
-      td_diastole !== undefined ||
-      kadar_gula !== undefined;
-    const isStep4Edited = detail_skrining !== undefined || is_skrining_tahunan !== undefined;
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const isStep5Edited = topik_penyuluhan !== undefined || is_perlu_rujukan !== undefined || alasan_rujukan !== undefined || status_kehadiran_rujukan !== undefined;
 
     const oldValue = pemeriksaanAuditSnapshot(pemeriksaan);
@@ -1739,11 +1483,7 @@ const updatePemeriksaan = async (req, res, next) => {
     });
 
     const autoReasons = getCombinedReferralReasons(updatedDetailSkrining, plotData);
-<<<<<<< HEAD
     const referralDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : autoReasons.length > 0 || plotData.is_perlu_rujukan === true || Boolean(oldReferral);
-=======
-    const referralDecision = is_perlu_rujukan !== undefined ? is_perlu_rujukan : (autoReasons.length > 0 || plotData.is_perlu_rujukan === true || Boolean(oldReferral));
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     await pemeriksaan.update(
       {
@@ -1876,11 +1616,8 @@ const deletePemeriksaan = async (req, res, next) => {
 
 module.exports = {
   getAllPemeriksaan,
-<<<<<<< HEAD
   getRekapitulasiPemeriksaan,
   getPemeriksaanStatistikBulanan,
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   exportPemeriksaanExcel,
   getPemeriksaanById,
   getScreeningHistory,

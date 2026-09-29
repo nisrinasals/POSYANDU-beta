@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: false,
       },
-<<<<<<< HEAD
+
       is_diberikan: {
         type: DataTypes.BOOLEAN,
         allowNull: false,
@@ -45,20 +45,15 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DATE,
         allowNull: false,
         defaultValue: sequelize.literal("CURRENT_TIMESTAMP"),
-=======
-      tanggal_imunisasi: {
-        type: DataTypes.DATEONLY,
-        allowNull: false,
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       },
     },
     {
       tableName: "imunisasi",
       timestamps: false,
-<<<<<<< HEAD
+
       indexes: [{ unique: true, fields: ["warga_id", "jenis_imunisasi"], name: "uq_imunisasi_warga_jenis" }],
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
+
+
     },
   );
 

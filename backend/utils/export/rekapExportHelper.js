@@ -185,7 +185,6 @@ const recordsForGroup = (records, group) => records.filter((record) => REKAP_GRO
 const hasImmunizationInPeriod = (record, period) => (record?.kunjungan?.warga?.imunisasi || []).some((item) => periodOf({ tanggal: item.tanggal_imunisasi }) === period);
 const finishRow = (columns, row) => Object.fromEntries(columns.map(({ key }) => [key, row[key] === undefined ? "" : row[key]]));
 
-<<<<<<< HEAD
 const getEligibilitySafe = (record, config = null) => {
   if (
     !config ||
@@ -205,8 +204,6 @@ const getEligibilitySafe = (record, config = null) => {
   }
 };
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const mapPregnancyRow = (records, period) => {
   const bumil = recordsForCategory(records, "bumil");
   const nifasMenyusui = recordsForCategory(records, "busui");
@@ -219,10 +216,7 @@ const mapPregnancyRow = (records, period) => {
   row.mendapatkan_edukasi = countTrue(records, educationGiven);
   row.dirujuk_ibu_hamil = countTrue(bumil, isReferred);
   row.dirujuk_ibu_nifas_menyusui = countTrue(nifasMenyusui, isReferred);
-<<<<<<< HEAD
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   for (const record of bumil) {
     const service = getDetail(record, "pelayanan_kesehatan") || {};
     increment(row, "ibu_hamil_mendapatkan_ttd", Number(service.jumlah_ttd_given) > 0);
@@ -232,10 +226,7 @@ const mapPregnancyRow = (records, period) => {
     increment(row, "ibu_hamil_pmt_setiap_hari", service.is_rutin_mt_kek === true);
     increment(row, "ibu_hamil_pmt_tidak_setiap_hari", service.is_rutin_mt_kek === false);
   }
-<<<<<<< HEAD
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   for (const record of nifasMenyusui) {
     const service = getDetail(record, "pelayanan_kesehatan") || {};
     increment(row, "ibu_nifas_mendapatkan_vitamin_a_ya", service.is_vit_a_given === true);
@@ -243,7 +234,6 @@ const mapPregnancyRow = (records, period) => {
     increment(row, "ibu_nifas_menyusui_kb_ya", service.is_kb_pasca_persalinan === true);
     increment(row, "ibu_nifas_menyusui_kb_tidak", service.is_kb_pasca_persalinan === false);
   }
-<<<<<<< HEAD
 
   return finishRow(REKAP_EXPORT_COLUMNS.bumil_nifas_menyusui, row);
 };
@@ -251,20 +241,12 @@ const mapPregnancyRow = (records, period) => {
 const mapChildRow = (records, period, config = null) => {
   const row = { bulan_tahun: period };
 
-=======
-  return finishRow(REKAP_EXPORT_COLUMNS.bumil_nifas_menyusui, row);
-};
-
-const mapChildRow = (records, period) => {
-  const row = { bulan_tahun: period };
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   for (const category of ["bayi", "balita", "apras"]) {
     const categoryRecords = recordsForCategory(records, category);
     row[`jumlah_${category}`] = categoryRecords.length || "";
     row[`${category}_datang`] = categoryRecords.length || "";
     row[`dirujuk_${category}`] = countTrue(categoryRecords, isReferred);
   }
-<<<<<<< HEAD
 
   row.bergejala_tbc = countTrue(records, tbcTriggered);
   row.mendapatkan_edukasi = countTrue(records, educationGiven);
@@ -279,16 +261,6 @@ const mapChildRow = (records, period) => {
   row.pmt_pangan_lokal = countTrue(records, (record) => getDetail(record, "pelayanan_kesehatan.is_pmt_lokal_pemulihan") === true);
   row.imunisasi = countTrue(records, (record) => hasImmunizationInPeriod(record, period));
 
-=======
-  row.bergejala_tbc = countTrue(records, tbcTriggered);
-  row.mendapatkan_edukasi = countTrue(records, educationGiven);
-  row.asi_eksklusif = countTrue(records, (record) => getScreeningEligibility(record.kunjungan?.warga?.tanggal_lahir, record.tanggal).is_asi_eksklusif_active && getDetail(record, "pelayanan_kesehatan.is_asi_eksklusif") === true);
-  row.mpasi = countTrue(records, (record) => getScreeningEligibility(record.kunjungan?.warga?.tanggal_lahir, record.tanggal).is_mpasi_active && getDetail(record, "pelayanan_kesehatan.is_mp_asi") === true);
-  row.vitamin_a = countTrue(records, (record) => getScreeningEligibility(record.kunjungan?.warga?.tanggal_lahir, record.tanggal).is_vitamin_a_active && getDetail(record, "pelayanan_kesehatan.is_vit_a_given") === true);
-  row.obat_cacing = countTrue(records, (record) => getDetail(record, "pelayanan_kesehatan.is_obat_cacing_given") === true);
-  row.pmt_pangan_lokal = countTrue(records, (record) => getDetail(record, "pelayanan_kesehatan.is_pmt_lokal_pemulihan") === true);
-  row.imunisasi = countTrue(records, (record) => hasImmunizationInPeriod(record, period));
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   return finishRow(REKAP_EXPORT_COLUMNS.bayi_balita_apras, row);
 };
 
@@ -296,10 +268,7 @@ const mapSchoolRow = (records, period) => {
   const row = { bulan_tahun: period };
   const school = recordsForCategory(records, "uskrem_6_14");
   const teens = recordsForCategory(records, "uskrem_15_18");
-<<<<<<< HEAD
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   row.jumlah_usia_sekolah = school.length || "";
   row.jumlah_remaja = teens.length || "";
   row.usia_sekolah_datang = school.length || "";
@@ -309,10 +278,7 @@ const mapSchoolRow = (records, period) => {
   row.skrining_jiwa_ge_6 = countTrue(records, isMentalHigh);
   row.mendapatkan_edukasi = countTrue(records, educationGiven);
   row.dirujuk = countTrue(records, isReferred);
-<<<<<<< HEAD
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   return finishRow(REKAP_EXPORT_COLUMNS.usia_sekolah_remaja, row);
 };
 
@@ -320,15 +286,11 @@ const mapAdultRow = (records, period) => {
   const row = { bulan_tahun: period };
   const adults = recordsForCategory(records, "dewasa");
   const elderly = recordsForCategory(records, "lansia");
-<<<<<<< HEAD
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   row.jumlah_dewasa = adults.length || "";
   row.jumlah_lansia = elderly.length || "";
   row.dewasa_datang = adults.length || "";
   row.lansia_datang = elderly.length || "";
-<<<<<<< HEAD
 
   for (const record of [...adults, ...elderly]) {
     const waist = Number(record.lingkar_perut_cm);
@@ -340,19 +302,11 @@ const mapAdultRow = (records, period) => {
     }
   }
 
-=======
-  for (const record of [...adults, ...elderly]) {
-    const waist = Number(record.lingkar_perut_cm);
-    if (Number.isFinite(waist) && record.kunjungan?.warga?.jenis_kelamin === "L" && waist > 90) increment(row, "lingkar_perut_laki_laki");
-    if (Number.isFinite(waist) && record.kunjungan?.warga?.jenis_kelamin === "P" && waist > 80) increment(row, "lingkar_perut_perempuan");
-  }
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   row.skrining_jiwa_le_5 = countTrue(records, isMentalLow);
   row.skrining_jiwa_ge_6 = countTrue(records, isMentalHigh);
   row.skrining_jiwa_pertanyaan_17_ya = countTrue(records, (record) => getDetail(record, "skrining_kesehatan_jiwa.is_rujukan_jiwa") === true);
   row.puma_normal = countTrue(adults, (record) => getDetail(record, "skrining_ppok_puma.status_risiko_puma") === "risiko_rendah");
   row.puma_tinggi = countTrue(adults, (record) => getDetail(record, "skrining_ppok_puma.status_risiko_puma") === "risiko_tinggi");
-<<<<<<< HEAD
 
   for (const record of elderly) {
     const code = getDetail(record, "aks_aktifitas_harian.kode_aks");
@@ -360,11 +314,6 @@ const mapAdultRow = (records, period) => {
       increment(row, `aks_${code.toLowerCase()}`);
     }
 
-=======
-  for (const record of elderly) {
-    const code = getDetail(record, "aks_aktifitas_harian.kode_aks");
-    if (["M", "R", "S", "B", "T"].includes(code)) increment(row, `aks_${code.toLowerCase()}`);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const skilas = getDetail(record, "skilas") || {};
     const checks = {
       kognitif: Object.values(skilas.kognitif_dan_mobilisasi || {}).some(Boolean),
@@ -374,7 +323,6 @@ const mapAdultRow = (records, period) => {
       penglihatan: Object.values(skilas.gangguan_penglihatan || {}).some(Boolean),
       depresi: Object.values(skilas.gejala_depresi || {}).some(Boolean),
     };
-<<<<<<< HEAD
 
     for (const [key, value] of Object.entries(checks)) {
       increment(row, `skilas_${key}_${value ? "ya" : "tidak"}`);
@@ -392,24 +340,10 @@ const mapAdultRow = (records, period) => {
 const mapGroupRow = (records, group, period, config = null) => {
   if (group === "bumil_nifas_menyusui") return mapPregnancyRow(records, period);
   if (group === "bayi_balita_apras") return mapChildRow(records, period, config);
-=======
-    for (const [key, value] of Object.entries(checks)) increment(row, `skilas_${key}_${value ? "ya" : "tidak"}`);
-    increment(row, "imunisasi_covid19", skilas.is_imunisasi_covid19 === true);
-  }
-  row.mendapatkan_edukasi = countTrue(records, educationGiven);
-  row.dirujuk = countTrue(records, isReferred);
-  return finishRow(REKAP_EXPORT_COLUMNS.dewasa_lansia, row);
-};
-
-const mapGroupRow = (records, group, period) => {
-  if (group === "bumil_nifas_menyusui") return mapPregnancyRow(records, period);
-  if (group === "bayi_balita_apras") return mapChildRow(records, period);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   if (group === "usia_sekolah_remaja") return mapSchoolRow(records, period);
   return mapAdultRow(records, period);
 };
 
-<<<<<<< HEAD
 const aggregateRekapRows = (records = [], group, config = null) => {
   const grouped = new Map();
 
@@ -437,22 +371,3 @@ module.exports = {
   getRekapGroup,
   mapPemeriksaanToRekap,
 };
-=======
-const aggregateRekapRows = (records = [], group) => {
-  const grouped = new Map();
-  for (const record of recordsForGroup(records, group)) {
-    const period = periodOf(record);
-    if (!period) continue;
-    if (!grouped.has(period)) grouped.set(period, []);
-    grouped.get(period).push(record);
-  }
-  return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([period, periodRecords]) => mapGroupRow(periodRecords, group, period));
-};
-
-const mapPemeriksaanToRekap = (pemeriksaan = {}, category = pemeriksaan.kategori_sasaran) => {
-  const group = getRekapGroup(category);
-  return group ? mapGroupRow([{ ...pemeriksaan, kategori_sasaran: category }], group, periodOf(pemeriksaan)) : null;
-};
-
-module.exports = { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows, getNestedValue, getRekapGroup, mapPemeriksaanToRekap };
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

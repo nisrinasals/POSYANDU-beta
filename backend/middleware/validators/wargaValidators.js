@@ -6,7 +6,6 @@ const { positiveId, pagination } = require("./common");
 const kategori = ["bumil", "busui", "bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia"];
 const statusDomisili = ["aktif", "pindah", "meninggal"];
 
-<<<<<<< HEAD
 const VALID_RIWAYAT_KEYS = ["hipertensi", "DM", "stroke", "jantung", "asma"];
 const VALID_PERILAKU_KEYS = ["merokok", "konsumsi_tinggi_gula", "garam", "lemak", "konsumsi_tinggi_garam", "konsumsi_tinggi_lemak"];
 
@@ -43,8 +42,6 @@ const validateProfilKesehatanPayload = (value) => {
   return true;
 };
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const listFilters = [
   ...pagination,
   query("search").optional().trim().isLength({ max: 100 }).withMessage("search maksimal 100 karakter."),
@@ -85,11 +82,8 @@ const makeFields = (includePosyandu = true) => [
   body("bb_lahir_kg").optional().isFloat({ min: 0, max: 99.99 }).withMessage("bb_lahir_kg harus berupa angka 0 sampai 99.99.").toFloat(),
   body("tb_lahir_cm").optional().isFloat({ min: 0, max: 999.99 }).withMessage("tb_lahir_cm harus berupa angka valid.").toFloat(),
   body("status_domisili").optional().isIn(statusDomisili).withMessage("status_domisili tidak valid."),
-<<<<<<< HEAD
   body("profil_kesehatan").optional().custom(validateProfilKesehatanPayload),
   body("profil_kesehatan_warga").optional().custom(validateProfilKesehatanPayload),
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 ];
 
 const createWarga = makeFields();

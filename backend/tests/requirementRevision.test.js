@@ -5,11 +5,7 @@ const jwt = require("jsonwebtoken");
 const request = require("supertest");
 const test = require("node:test");
 const referenceTable = require("../utils/reference/referenceTableAdapter");
-<<<<<<< HEAD
 const { app } = require("../../server");
-=======
-const { app } = require("../server");
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const { User, Pemeriksaan, Rujukan } = require("../models");
 const pemeriksaanController = require("../controllers/pemeriksaanController");
 const { calculateGrowthZScores, zScoreFromRow } = require("../utils/growthZScoreHelper");

@@ -20,10 +20,7 @@ const commonBody = [body("kunjungan_id").isInt({ min: 1 }).withMessage("kunjunga
 const screeningFields = [
   body("detail_skrining").optional().isObject().withMessage("detail_skrining harus berupa objek JSON."),
   body("is_skrining_tahunan").optional().isBoolean().withMessage("is_skrining_tahunan harus berupa boolean.").toBoolean(),
-<<<<<<< HEAD
   body("is_skrining_6_bulanan").optional().isBoolean().withMessage("is_skrining_6_bulanan harus berupa boolean.").toBoolean(),
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   body("profile_kehamilan_id").optional({ nullable: true }).isInt({ min: 1 }).withMessage("profile_kehamilan_id harus berupa ID positif.").toInt(),
 ];
 const outputFields = [
@@ -37,10 +34,7 @@ const listFilters = [
   ...pagination,
   query("search").optional().trim().isLength({ max: 100 }).withMessage("search maksimal 100 karakter."),
   query("kategori_sasaran").optional().isIn(kategori).withMessage("kategori_sasaran tidak valid."),
-<<<<<<< HEAD
   query("template_rekap").optional().isIn(["bumil_nifas_menyusui", "bayi_balita_apras", "usia_sekolah_remaja", "dewasa_lansia"]).withMessage("template_rekap tidak valid."),
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   query("sesi_posyandu_id").optional().isInt({ min: 1 }).withMessage("sesi_posyandu_id harus berupa ID positif.").toInt(),
   query("posyandu_id").optional().isInt({ min: 1 }).withMessage("posyandu_id harus berupa ID positif.").toInt(),
   query("warga_id").optional().isInt({ min: 1 }).withMessage("warga_id harus berupa ID positif.").toInt(),
@@ -48,15 +42,12 @@ const listFilters = [
   optionalDate("end_date"),
 ];
 
-<<<<<<< HEAD
 const rekapFilters = [
   query("template_rekap").isIn(["bumil_nifas_menyusui", "bayi_balita_apras", "usia_sekolah_remaja", "dewasa_lansia"]).withMessage("template_rekap tidak valid."),
   optionalDate("start_date"),
   optionalDate("end_date"),
 ];
 
-=======
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 const createPemeriksaan = [
   ...commonBody,
   body("kategori_sasaran").optional().isIn(kategori).withMessage("kategori_sasaran tidak valid."),
@@ -79,8 +70,4 @@ const updatePemeriksaan = [
 ];
 const idOnly = [positiveId()];
 
-<<<<<<< HEAD
 module.exports = { listFilters, rekapFilters, createPemeriksaan, saveStep2, saveStep4, saveStep5, updatePemeriksaan, idOnly };
-=======
-module.exports = { listFilters, createPemeriksaan, saveStep2, saveStep4, saveStep5, updatePemeriksaan, idOnly };
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66

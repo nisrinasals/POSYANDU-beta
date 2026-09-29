@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import React, { useState } from "react";
 import { Search, Filter, Check, X, Clock, UserCheck, UserX, UserCog, RefreshCw, Building2, Shield, CheckCircle2, PowerOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNotification } from "../../context/NotificationContext";
@@ -7,31 +6,6 @@ import { formatDateId } from "../../utils/dataMappers";
 
 export default function DinkesVerifikasiAkunPage({
   activeSubmenu = "puskesmas",
-=======
-import React, { useState } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Check, 
-  X, 
-  Clock, 
-  UserCheck, 
-  UserX,
-  UserCog,
-  RefreshCw, 
-  Building2, 
-  Shield, 
-  CheckCircle2, 
-  PowerOff,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
-import { useNotification } from '../../context/NotificationContext';
-import { userService } from '../../services';
-
-export default function DinkesVerifikasiAkunPage({ 
-  activeSubmenu = 'puskesmas',
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
   staffList: propStaffList,
   puskesmasList: propPuskesmasList,
   puskesmasStaffList: propPuskesmasStaffList,
@@ -42,7 +16,6 @@ export default function DinkesVerifikasiAkunPage({
   onRejectPuskesmas: propOnRejectPuskesmas,
   onTogglePuskesmasStatus: propOnTogglePuskesmasStatus,
   onTogglePuskesmasStaffStatus: propOnTogglePuskesmasStaffStatus,
-<<<<<<< HEAD
   onRefreshData,
 }) {
   const { showConfirm, showSuccess, showWarning } = useNotification();
@@ -58,23 +31,6 @@ export default function DinkesVerifikasiAkunPage({
   const [searchQuery, setSearchQuery] = useState("");
   const [filterKategori, setFilterKategori] = useState("Semua");
   const [tipeAkunFilter, setTipeAkunFilter] = useState("Semua");
-=======
-  onRefreshData
-}) {
-  const { showConfirm, showSuccess, showWarning } = useNotification();
-  const isPuskesmas = activeSubmenu === 'puskesmas';
-  const isStaf = activeSubmenu === 'staf';
-  const isKelola = activeSubmenu === 'kelola';
-
-  // Status tab for verifikasi: 'pending' | 'active' | 'rejected'
-  const [statusTab, setStatusTab] = useState('pending');
-  // Status tab for kelola akun: 'all' | 'active' | 'inactive'
-  const [kelolaTab, setKelolaTab] = useState('all');
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterKategori, setFilterKategori] = useState('Semua');
-  const [tipeAkunFilter, setTipeAkunFilter] = useState('Semua');
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
   const [localPuskesmasList, setLocalPuskesmasList] = useState([]);
   const [localStaffList, setLocalStaffList] = useState([]);
@@ -86,7 +42,6 @@ export default function DinkesVerifikasiAkunPage({
         if (res?.data && Array.isArray(res.data)) {
           const pusks = [];
           const staffs = [];
-<<<<<<< HEAD
           res.data.forEach((u) => {
             const role = (u.role || "").toLowerCase();
             const initials = (u.nama_lengkap || u.nama || "U")
@@ -112,33 +67,6 @@ export default function DinkesVerifikasiAkunPage({
             if (role.includes("puskesmas")) {
               pusks.push(mapped);
             } else if (role.includes("dinkes")) {
-=======
-          res.data.forEach(u => {
-            const role = (u.role || '').toLowerCase();
-            const initials = (u.nama_lengkap || u.nama || 'U')
-              .split(' ')
-              .map(n => n[0])
-              .slice(0, 2)
-              .join('')
-              .toUpperCase();
-            const mapped = {
-              id: u.id,
-              namaPendaftar: u.nama_lengkap || u.nama || 'Pendaftar Faskes',
-              namaPetugas: u.nama_lengkap || u.nama || 'Nama Petugas',
-              namaPuskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas || 'Puskesmas Sukamaju',
-              initials: initials,
-              nik: u.nik || '-',
-              email: u.email || '-',
-              telepon: u.no_telepon || u.telepon || '-',
-              bidangJabatan: u.jabatan || u.bidangJabatan || 'Bidang Kesmas',
-              jabatan: u.jabatan || 'Staf Dinas Kesehatan',
-              tglDaftar: u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : 'Hari ini',
-              status: u.is_verified ? 'active' : (u.status || 'pending')
-            };
-            if (role.includes('puskesmas')) {
-              pusks.push(mapped);
-            } else if (role.includes('dinkes')) {
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               staffs.push(mapped);
             }
           });
@@ -146,11 +74,7 @@ export default function DinkesVerifikasiAkunPage({
           setLocalStaffList(staffs);
         }
       } catch (err) {
-<<<<<<< HEAD
         console.info("Load dinkes users error:", err);
-=======
-        console.info('Load dinkes users error:', err);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       }
     };
     fetchUsers();
@@ -163,7 +87,6 @@ export default function DinkesVerifikasiAkunPage({
   const currentVerifList = isPuskesmas ? puskesmasList : staffList;
 
   // Counts for Verifikasi Tabs
-<<<<<<< HEAD
   const pendingCount = currentVerifList.filter((item) => item.status === "pending").length;
   const activeCount = currentVerifList.filter((item) => item.status === "active").length;
   const rejectedCount = currentVerifList.filter((item) => item.status === "rejected" || item.status === "inactive").length;
@@ -183,25 +106,6 @@ export default function DinkesVerifikasiAkunPage({
 
   // Filtered list for Verifikasi Puskesmas & Verifikasi Staf
   const filteredData = currentVerifList.filter((item) => {
-=======
-  const pendingCount = currentVerifList.filter(item => item.status === 'pending').length;
-  const activeCount = currentVerifList.filter(item => item.status === 'active').length + (isPuskesmas ? 24 : 15);
-  const rejectedCount = currentVerifList.filter(item => item.status === 'rejected' || item.status === 'inactive').length;
-  const totalCount = pendingCount + activeCount + rejectedCount;
-
-  // Kelola Akun — gabungan Dinkes Staf, Admin Puskesmas, dan Staf Puskesmas
-  const verifiedDinkesStaf = staffList.filter(s => s.status === 'active' || s.status === 'inactive').map(s => ({ ...s, tipeAkun: 'staf-dinkes', nama: s.namaPetugas, jabatanRender: s.jabatan }));
-  const verifiedAdminPuskesmas = puskesmasList.filter(p => p.status === 'active' || p.status === 'inactive').map(p => ({ ...p, tipeAkun: 'admin-puskesmas', nama: p.namaPendaftar, jabatanRender: 'Admin ' + p.namaPuskesmas, telepon: p.telepon || '-' }));
-  const verifiedStafPuskesmas = puskesmasStaffList.filter(s => s.status === 'active' || s.status === 'inactive').map(s => ({ ...s, tipeAkun: 'staf-puskesmas', nama: s.nama, jabatanRender: s.bidangJabatan + ' (' + s.puskesmas + ')' }));
-  
-  const kelolaAkunList = [...verifiedDinkesStaf, ...verifiedAdminPuskesmas, ...verifiedStafPuskesmas];
-  const kelolaDinkesTotal = kelolaAkunList.length;
-  const kelolaDinkesActive = kelolaAkunList.filter(s => s.status === 'active').length;
-  const kelolaDinkesInactive = kelolaAkunList.filter(s => s.status === 'inactive').length;
-
-  // Filtered list for Verifikasi Puskesmas & Verifikasi Staf
-  const filteredData = currentVerifList.filter(item => {
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const matchStatus = item.status === statusTab;
     const matchSearch = isPuskesmas
       ? (item.namaPendaftar && item.namaPendaftar.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -211,159 +115,77 @@ export default function DinkesVerifikasiAkunPage({
         (item.bidangJabatan && item.bidangJabatan.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (item.email && item.email.toLowerCase().includes(searchQuery.toLowerCase()));
 
-<<<<<<< HEAD
     const matchKategori = filterKategori === "Semua" || (isPuskesmas ? item.namaPuskesmas.includes(filterKategori) : item.bidangJabatan && item.bidangJabatan.includes(filterKategori));
-=======
-    const matchKategori = 
-      filterKategori === 'Semua' || 
-      (isPuskesmas ? item.namaPuskesmas.includes(filterKategori) : (item.bidangJabatan && item.bidangJabatan.includes(filterKategori)));
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     return matchStatus && matchSearch && matchKategori;
   });
 
   // Filtered list for Kelola Akun
-<<<<<<< HEAD
   const filteredKelolaDinkes = kelolaAkunList.filter((item) => {
     let matchTab = true;
     if (kelolaTab === "active") matchTab = item.status === "active";
     else if (kelolaTab === "inactive") matchTab = item.status === "inactive";
 
     const matchSearch =
-=======
-  const filteredKelolaDinkes = kelolaAkunList.filter(item => {
-    let matchTab = true;
-    if (kelolaTab === 'active') matchTab = item.status === 'active';
-    else if (kelolaTab === 'inactive') matchTab = item.status === 'inactive';
-
-    const matchSearch = 
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       (item.nama && item.nama.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.jabatanRender && item.jabatanRender.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.email && item.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.nik && item.nik.includes(searchQuery));
 
-<<<<<<< HEAD
     const matchTipe = tipeAkunFilter === "Semua" || item.tipeAkun === tipeAkunFilter;
-=======
-    const matchTipe = 
-      tipeAkunFilter === 'Semua' || 
-      item.tipeAkun === tipeAkunFilter;
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
 
     return matchTab && matchSearch && matchTipe;
   });
 
-<<<<<<< HEAD
   // Action Handlers
   const handleApprove = async (id, name) => {
     const targetStaff = localStaffList.find((s) => s.id === id);
     const targetPuskesmas = localPuskesmasList.find((p) => p.id === id);
-=======
-  // Dynamic Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeSubmenu, statusTab, kelolaTab, tipeAkunFilter, filterKategori, searchQuery]);
-
-  const activeTotalList = isKelola ? filteredKelolaDinkes : filteredData;
-  const totalPages = Math.ceil(activeTotalList.length / itemsPerPage) || 1;
-
-  const paginatedData = useMemo(() => {
-    return filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  }, [filteredData, currentPage, itemsPerPage]);
-
-  const paginatedKelolaDinkes = useMemo(() => {
-    return filteredKelolaDinkes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  }, [filteredKelolaDinkes, currentPage, itemsPerPage]);
-
-  // Action Handlers
-  const handleApprove = async (id, name) => {
-    const targetStaff = localStaffList.find(s => s.id === id);
-    const targetPuskesmas = localPuskesmasList.find(p => p.id === id);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const targetEmail = isPuskesmas ? targetPuskesmas?.email : targetStaff?.email;
 
     const confirmed = await showConfirm({
       title: "Setujui Pendaftaran?",
-<<<<<<< HEAD
       message: `Setujui permohonan verifikasi akun ${name}? Notifikasi aktivasi akan dikirimkan ke email ${targetEmail || "pengguna"}.`,
       confirmText: "Setujui & Kirim Notifikasi",
       cancelText: "Batal",
       type: "success",
-=======
-      message: `Setujui permohonan verifikasi akun ${name}? Notifikasi aktivasi akan dikirimkan ke email ${targetEmail || 'pengguna'}.`,
-      confirmText: "Setujui & Kirim Notifikasi",
-      cancelText: "Batal",
-      type: "success"
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     });
 
     if (confirmed) {
       try {
         await userService.verifyUser(id);
       } catch (err) {
-<<<<<<< HEAD
         showWarning("Perubahan Gagal", err.message || "Perubahan akun gagal disimpan ke backend.");
         return;
-=======
-        console.info('Backend verify user notice:', err);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       }
 
       if (isPuskesmas) {
         if (propOnApprovePuskesmas) {
           propOnApprovePuskesmas(id, name);
         } else {
-<<<<<<< HEAD
           const nextList = localPuskesmasList.map((item) => (item.id === id ? { ...item, status: "active" } : item));
-=======
-          const nextList = localPuskesmasList.map(item => item.id === id ? { ...item, status: 'active' } : item);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
           setLocalPuskesmasList(nextList);
         }
       } else {
         if (propOnApproveStaff) {
           propOnApproveStaff(id, name);
         } else {
-<<<<<<< HEAD
           const nextList = localStaffList.map((item) => (item.id === id ? { ...item, status: "active" } : item));
           setLocalStaffList(nextList);
         }
       }
       showSuccess("Pendaftaran Disetujui & Email Terkirim", `Pendaftaran akun ${name} berhasil disetujui. Email notifikasi aktivasi telah dikirimkan ke ${targetEmail || "pengguna"}.`);
-=======
-          const nextList = localStaffList.map(item => item.id === id ? { ...item, status: 'active' } : item);
-          setLocalStaffList(nextList);
-          try {
-            localStorage.setItem('posyandu_dinkes_staf_list', JSON.stringify(nextList));
-            const regUsers = JSON.parse(localStorage.getItem('posyandu_registered_users') || '[]');
-            const updated = regUsers.map(u => u.email?.toLowerCase() === targetEmail?.toLowerCase() ? { ...u, status: 'active' } : u);
-            localStorage.setItem('posyandu_registered_users', JSON.stringify(updated));
-          } catch (e) {}
-        }
-      }
-      showSuccess("Pendaftaran Disetujui & Email Terkirim", `Pendaftaran akun ${name} berhasil disetujui. Email notifikasi aktivasi telah dikirimkan ke ${targetEmail || 'pengguna'}.`);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       onRefreshData?.();
     }
   };
 
   const handleReject = async (id, name) => {
-<<<<<<< HEAD
     const targetStaff = localStaffList.find((s) => s.id === id);
     const targetPuskesmas = localPuskesmasList.find((p) => p.id === id);
-=======
-    const targetStaff = localStaffList.find(s => s.id === id);
-    const targetPuskesmas = localPuskesmasList.find(p => p.id === id);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const targetEmail = isPuskesmas ? targetPuskesmas?.email : targetStaff?.email;
 
     const confirmed = await showConfirm({
       title: "Tolak Pendaftaran?",
-<<<<<<< HEAD
       message: `Tolak permohonan pendaftaran akun ${name}? Email pemberitahuan penolakan akan dikirimkan ke ${targetEmail || "pengguna"}.`,
       confirmText: "Tolak Pendaftaran",
       cancelText: "Batal",
@@ -380,72 +202,36 @@ export default function DinkesVerifikasiAkunPage({
       } catch (err) {
         showWarning("Perubahan Gagal", err.message || "Perubahan akun gagal disimpan ke backend.");
         return;
-=======
-      message: `Tolak permohonan pendaftaran akun ${name}? Email pemberitahuan penolakan akan dikirimkan ke ${targetEmail || 'pengguna'}.`,
-      confirmText: "Tolak Pendaftaran",
-      cancelText: "Batal",
-      type: "danger"
-    });
-
-    if (confirmed) {
-      try {
-        await userService.deactivateUser(id);
-      } catch (err) {
-        console.info('Backend deactivate user notice:', err);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       }
 
       if (isPuskesmas) {
         if (propOnRejectPuskesmas) {
           propOnRejectPuskesmas(id, name);
         } else {
-<<<<<<< HEAD
           const nextList = localPuskesmasList.map((item) => (item.id === id ? { ...item, status: "rejected" } : item));
-=======
-          const nextList = localPuskesmasList.map(item => item.id === id ? { ...item, status: 'rejected' } : item);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
           setLocalPuskesmasList(nextList);
         }
       } else {
         if (propOnRejectStaff) {
           propOnRejectStaff(id, name);
         } else {
-<<<<<<< HEAD
           const nextList = localStaffList.map((item) => (item.id === id ? { ...item, status: "rejected" } : item));
           setLocalStaffList(nextList);
         }
       }
       showWarning("Pendaftaran Ditolak", `Pendaftaran akun ${name} telah ditolak. Notifikasi email telah dikirimkan ke ${targetEmail || "pengguna"}.`);
-=======
-          const nextList = localStaffList.map(item => item.id === id ? { ...item, status: 'rejected' } : item);
-          setLocalStaffList(nextList);
-          try {
-            localStorage.setItem('posyandu_dinkes_staf_list', JSON.stringify(nextList));
-            const regUsers = JSON.parse(localStorage.getItem('posyandu_registered_users') || '[]');
-            const updated = regUsers.map(u => u.email?.toLowerCase() === targetEmail?.toLowerCase() ? { ...u, status: 'rejected' } : u);
-            localStorage.setItem('posyandu_registered_users', JSON.stringify(updated));
-          } catch (e) {}
-        }
-      }
-      showWarning("Pendaftaran Ditolak", `Pendaftaran akun ${name} telah ditolak. Notifikasi email telah dikirimkan ke ${targetEmail || 'pengguna'}.`);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       onRefreshData?.();
     }
   };
 
   // Toggle Status for Kelola Akun (Nonaktifkan / Aktifkan)
   const handleToggleKelolaStatus = async (item, newStatus) => {
-<<<<<<< HEAD
     const labelAction = newStatus === "inactive" ? "Non-Aktifkan" : "Aktifkan";
-=======
-    const labelAction = newStatus === 'inactive' ? 'Non-Aktifkan' : 'Aktifkan';
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
     const confirmed = await showConfirm({
       title: `${labelAction} Akun?`,
       message: `${labelAction} akun "${item.nama}"?`,
       confirmText: labelAction,
       cancelText: "Batal",
-<<<<<<< HEAD
       type: newStatus === "inactive" ? "warning" : "success",
     });
 
@@ -472,30 +258,6 @@ export default function DinkesVerifikasiAkunPage({
         if (propOnTogglePuskesmasStaffStatus) propOnTogglePuskesmasStaffStatus(item.id, newStatus);
       }
       showSuccess("Status Diperbarui", `Akun ${item.nama} kini berstatus ${newStatus === "inactive" ? "Non-Aktif" : "Aktif"}.`);
-=======
-      type: newStatus === 'inactive' ? "warning" : "success"
-    });
-
-    if (confirmed) {
-      try {
-        await userService.changeUserStatus(item.id, {
-          status: newStatus === 'inactive' ? 'nonaktif' : 'aktif'
-        });
-      } catch (err) {
-        console.info('Backend change user status notice:', err);
-      }
-
-      if (item.tipeAkun === 'staf-dinkes') {
-        if (propOnToggleStaffStatus) propOnToggleStaffStatus(item.id, newStatus);
-        else setLocalStaffList(prev => prev.map(i => i.id === item.id ? { ...i, status: newStatus } : i));
-      } else if (item.tipeAkun === 'admin-puskesmas') {
-        if (propOnTogglePuskesmasStatus) propOnTogglePuskesmasStatus(item.id, newStatus);
-        else setLocalPuskesmasList(prev => prev.map(i => i.id === item.id ? { ...i, status: newStatus } : i));
-      } else if (item.tipeAkun === 'staf-puskesmas') {
-        if (propOnTogglePuskesmasStaffStatus) propOnTogglePuskesmasStaffStatus(item.id, newStatus);
-      }
-      showSuccess("Status Diperbarui", `Akun ${item.nama} kini berstatus ${newStatus === 'inactive' ? 'Non-Aktif' : 'Aktif'}.`);
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
       onRefreshData?.();
     }
   };
@@ -504,17 +266,12 @@ export default function DinkesVerifikasiAkunPage({
     <div className="d-flex flex-column gap-3 pb-4">
       {/* Main Container Card */}
       <div className="card border-0 bg-white shadow-xs rounded-4 p-4">
-<<<<<<< HEAD
-=======
-
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
         {/* ========================================================================= */}
         {/* STATUS TAB FILTERS */}
         {/* ========================================================================= */}
         {!isKelola && (
           <div className="d-flex align-items-center gap-2 mb-4 border-bottom pb-3">
             <button
-<<<<<<< HEAD
               className={`btn btn-sm d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-bold border-0 ${statusTab === "pending" ? "text-white shadow-sm" : "bg-light text-secondary"}`}
               style={{ backgroundColor: statusTab === "pending" ? "#1e3a8a" : undefined }}
               onClick={() => setStatusTab("pending")}
@@ -542,53 +299,6 @@ export default function DinkesVerifikasiAkunPage({
               <X size={16} />
               <span>Ditolak / Non-Aktif</span>
               <span className={`badge rounded-pill ${statusTab === "rejected" ? "bg-white text-dark" : "bg-secondary text-white"}`}>{rejectedCount}</span>
-=======
-              className={`btn btn-sm d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-bold border-0 ${
-                statusTab === 'pending'
-                  ? 'text-white shadow-sm'
-                  : 'bg-light text-secondary'
-              }`}
-              style={{ backgroundColor: statusTab === 'pending' ? '#1e3a8a' : undefined }}
-              onClick={() => setStatusTab('pending')}
-            >
-              <Clock size={16} />
-              <span>Menunggu Persetujuan</span>
-              <span className={`badge rounded-pill ${statusTab === 'pending' ? 'bg-white text-dark' : 'bg-secondary text-white'}`}>
-                {pendingCount}
-              </span>
-            </button>
-
-            <button
-              className={`btn btn-sm d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-bold border-0 ${
-                statusTab === 'active'
-                  ? 'text-white shadow-sm'
-                  : 'bg-light text-secondary'
-              }`}
-              style={{ backgroundColor: statusTab === 'active' ? '#1e3a8a' : undefined }}
-              onClick={() => setStatusTab('active')}
-            >
-              <UserCheck size={16} />
-              <span>{isPuskesmas ? 'Puskesmas Aktif' : 'Staf Aktif'}</span>
-              <span className={`badge rounded-pill ${statusTab === 'active' ? 'bg-white text-dark' : 'bg-secondary text-white'}`}>
-                {activeCount}
-              </span>
-            </button>
-
-            <button
-              className={`btn btn-sm d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-bold border-0 ${
-                statusTab === 'rejected'
-                  ? 'text-white shadow-sm'
-                  : 'bg-light text-secondary'
-              }`}
-              style={{ backgroundColor: statusTab === 'rejected' ? '#1e3a8a' : undefined }}
-              onClick={() => setStatusTab('rejected')}
-            >
-              <X size={16} />
-              <span>Ditolak / Non-Aktif</span>
-              <span className={`badge rounded-pill ${statusTab === 'rejected' ? 'bg-white text-dark' : 'bg-secondary text-white'}`}>
-                {rejectedCount}
-              </span>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             </button>
           </div>
         )}
@@ -598,7 +308,6 @@ export default function DinkesVerifikasiAkunPage({
           <div className={isKelola ? "col-12 col-md-6" : "col-12 col-md-10"}>
             <div className="position-relative">
               <Search className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" size={18} />
-<<<<<<< HEAD
               <input
                 type="text"
                 className="form-control form-control-custom ps-5 bg-light border-0 rounded-3"
@@ -606,36 +315,12 @@ export default function DinkesVerifikasiAkunPage({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{ height: "40px", fontSize: "0.85rem" }}
-=======
-              <input 
-                type="text" 
-                className="form-control form-control-custom ps-5 bg-light border-0 rounded-3" 
-                placeholder={
-                  isPuskesmas 
-                    ? "Cari Nama Pendaftar / Puskesmas / Email..." 
-                    : isStaf 
-                      ? "Cari Nama Staf / Bidang / Email..."
-                      : "Cari Nama Staf, NIK, Email, atau Jabatan..."
-                } 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ height: '40px', fontSize: '0.85rem' }}
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               />
             </div>
           </div>
           {isKelola && (
             <div className="col-12 col-md-4">
-<<<<<<< HEAD
               <select className="form-select form-control-custom bg-light border-0 text-muted fw-semibold rounded-3" value={tipeAkunFilter} onChange={(e) => setTipeAkunFilter(e.target.value)} style={{ height: "40px", fontSize: "0.85rem" }}>
-=======
-              <select 
-                className="form-select form-control-custom bg-light border-0 text-muted fw-semibold rounded-3"
-                value={tipeAkunFilter}
-                onChange={(e) => setTipeAkunFilter(e.target.value)}
-                style={{ height: '40px', fontSize: '0.85rem' }}
-              >
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 <option value="Semua">Semua Tipe Akun</option>
                 <option value="staf-dinkes">Staf Dinas Kesehatan</option>
                 <option value="admin-puskesmas">Admin Puskesmas</option>
@@ -644,7 +329,6 @@ export default function DinkesVerifikasiAkunPage({
             </div>
           )}
           <div className="col-12 col-md-2 d-flex gap-2">
-<<<<<<< HEAD
             <button className="btn text-white w-100 d-flex align-items-center justify-content-center gap-2 fw-semibold rounded-3 shadow-xs" style={{ backgroundColor: "#1e3a8a", height: "40px", fontSize: "0.85rem" }}>
               <Filter size={16} /> <span>Filter</span>
             </button>
@@ -656,19 +340,6 @@ export default function DinkesVerifikasiAkunPage({
                 setFilterKategori("Semua");
               }}
               style={{ height: "40px", width: "40px" }}
-=======
-            <button 
-              className="btn text-white w-100 d-flex align-items-center justify-content-center gap-2 fw-semibold rounded-3 shadow-xs"
-              style={{ backgroundColor: '#1e3a8a', height: '40px', fontSize: '0.85rem' }}
-            >
-              <Filter size={16} /> <span>Filter</span>
-            </button>
-            <button 
-              className="btn btn-light border p-2 rounded-3 text-secondary d-flex align-items-center justify-content-center"
-              title="Reset Filter"
-              onClick={() => { setSearchQuery(''); setFilterKategori('Semua'); }}
-              style={{ height: '40px', width: '40px' }}
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
             >
               <RefreshCw size={16} />
             </button>
@@ -680,7 +351,6 @@ export default function DinkesVerifikasiAkunPage({
         {/* ========================================================================= */}
         {!isKelola && (
           <div className="table-responsive">
-<<<<<<< HEAD
             <table className="table table-hover align-middle mb-0" style={{ fontSize: "0.85rem" }}>
               <thead className="bg-light text-secondary small text-uppercase" style={{ fontSize: "0.74rem", letterSpacing: "0.04em" }}>
                 {isPuskesmas ? (
@@ -688,13 +358,6 @@ export default function DinkesVerifikasiAkunPage({
                     <th className="ps-3 py-3" style={{ width: "48px" }}>
                       NO
                     </th>
-=======
-            <table className="table table-hover align-middle mb-0" style={{ fontSize: '0.85rem' }}>
-              <thead className="bg-light text-secondary small text-uppercase" style={{ fontSize: '0.74rem', letterSpacing: '0.04em' }}>
-                {isPuskesmas ? (
-                  <tr>
-                    <th className="ps-3 py-3" style={{ width: '48px' }}>NO</th>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     <th className="py-3">NAMA PENDAFTAR</th>
                     <th className="py-3">NAMA PUSKESMAS</th>
                     <th className="py-3">EMAIL RESMI</th>
@@ -704,13 +367,9 @@ export default function DinkesVerifikasiAkunPage({
                   </tr>
                 ) : (
                   <tr>
-<<<<<<< HEAD
                     <th className="ps-3 py-3" style={{ width: "48px" }}>
                       NO
                     </th>
-=======
-                    <th className="ps-3 py-3" style={{ width: '48px' }}>NO</th>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                     <th className="py-3">NAMA STAF</th>
                     <th className="py-3">BIDANG / JABATAN</th>
                     <th className="py-3">EMAIL</th>
@@ -721,7 +380,6 @@ export default function DinkesVerifikasiAkunPage({
                 )}
               </thead>
               <tbody className="border-top-0">
-<<<<<<< HEAD
                 {filteredData.length > 0 ? (
                   filteredData.map((item, index) => (
                     <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
@@ -730,44 +388,16 @@ export default function DinkesVerifikasiAkunPage({
                       {/* Kolom 2: Nama */}
                       <td>
                         <div className="fw-bold text-dark">{isPuskesmas ? item.namaPendaftar : item.namaPetugas}</div>
-=======
-                {paginatedData.length > 0 ? (
-                  paginatedData.map((item, index) => {
-                    const rowNo = (currentPage - 1) * itemsPerPage + index + 1;
-                    return (
-                      <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td className="ps-3 text-muted fw-semibold">
-                          {rowNo < 10 ? `0${rowNo}` : rowNo}
-                        </td>
-
-                      {/* Kolom 2: Nama */}
-                      <td>
-                        <div className="fw-bold text-dark">
-                          {isPuskesmas ? item.namaPendaftar : item.namaPetugas}
-                        </div>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                       </td>
 
                       {/* Kolom 3: Puskesmas atau Bidang/Jabatan */}
                       <td>
-<<<<<<< HEAD
                         <div className="text-dark fw-medium">{isPuskesmas ? item.namaPuskesmas : item.bidangJabatan}</div>
-=======
-                        <div className="text-dark fw-medium">
-                          {isPuskesmas ? item.namaPuskesmas : item.bidangJabatan}
-                        </div>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                       </td>
 
                       {/* Kolom 4: Email */}
                       <td>
-<<<<<<< HEAD
                         <div className="text-muted font-monospace small">{item.email}</div>
-=======
-                        <div className="text-muted font-monospace small">
-                          {item.email}
-                        </div>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                       </td>
 
                       {/* Kolom 5: Tanggal Daftar */}
@@ -775,31 +405,19 @@ export default function DinkesVerifikasiAkunPage({
 
                       {/* Kolom 6: Status */}
                       <td className="text-center">
-<<<<<<< HEAD
                         {item.status === "pending" && (
-=======
-                        {item.status === 'pending' && (
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
                             <Clock size={12} />
                             <span>Menunggu</span>
                           </span>
                         )}
-<<<<<<< HEAD
                         {item.status === "active" && (
-=======
-                        {item.status === 'active' && (
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
                             <CheckCircle2 size={12} />
                             <span>Aktif</span>
                           </span>
                         )}
-<<<<<<< HEAD
                         {(item.status === "rejected" || item.status === "inactive") && (
-=======
-                        {(item.status === 'rejected' || item.status === 'inactive') && (
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           <span className="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1">
                             <X size={12} />
                             <span>Ditolak</span>
@@ -809,56 +427,32 @@ export default function DinkesVerifikasiAkunPage({
 
                       {/* Kolom 7: Aksi */}
                       <td className="pe-3 text-end">
-<<<<<<< HEAD
                         {item.status === "pending" ? (
                           <div className="d-flex align-items-center justify-content-end gap-2">
                             <button
                               className="btn btn-sm text-white fw-semibold d-flex align-items-center gap-1 px-3 py-1.5 rounded-2 shadow-xs"
                               style={{ backgroundColor: "#1e3a8a", fontSize: "0.8rem" }}
-=======
-                        {item.status === 'pending' ? (
-                          <div className="d-flex align-items-center justify-content-end gap-2">
-                            <button 
-                              className="btn btn-sm text-white fw-semibold d-flex align-items-center gap-1 px-3 py-1.5 rounded-2 shadow-xs"
-                              style={{ backgroundColor: '#1e3a8a', fontSize: '0.8rem' }}
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               onClick={() => handleApprove(item.id, isPuskesmas ? item.namaPendaftar : item.namaPetugas)}
                             >
                               <Check size={14} /> <span>Setujui</span>
                             </button>
-<<<<<<< HEAD
                             <button
                               className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1 px-2.5 py-1.5 rounded-2"
                               style={{ fontSize: "0.8rem" }}
-=======
-                            <button 
-                              className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1 px-2.5 py-1.5 rounded-2"
-                              style={{ fontSize: '0.8rem' }}
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                               onClick={() => handleReject(item.id, isPuskesmas ? item.namaPendaftar : item.namaPetugas)}
                             >
                               <X size={14} /> <span>Tolak</span>
                             </button>
                           </div>
-<<<<<<< HEAD
                         ) : item.status === "active" ? (
-=======
-                        ) : item.status === 'active' ? (
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                           <span className="badge bg-light text-success border border-success-subtle rounded-pill px-2.5 py-1">Terverifikasi</span>
                         ) : (
                           <span className="badge bg-light text-danger border border-danger-subtle rounded-pill px-2.5 py-1">Ditolak</span>
                         )}
                       </td>
                     </tr>
-<<<<<<< HEAD
                   ))
                 ) : (
-=======
-                  );
-                })
-              ) : (
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   <tr>
                     <td colSpan="7" className="text-center py-5 text-muted">
                       Tidak ada data pendaftaran yang ditemukan pada status ini.
@@ -879,18 +473,13 @@ export default function DinkesVerifikasiAkunPage({
             <table className="table table-hover align-middle mb-0">
               <thead className="table-light text-muted small text-uppercase">
                 <tr>
-<<<<<<< HEAD
                   <th className="fw-semibold py-3" style={{ width: "50px" }}>
                     NO
                   </th>
-=======
-                  <th className="fw-semibold py-3" style={{ width: '50px' }}>NO</th>
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                   <th className="fw-semibold py-3">NAMA PEGAWAI &amp; NIK</th>
                   <th className="fw-semibold py-3">EMAIL &amp; KONTAK</th>
                   <th className="fw-semibold py-3">TANGGAL BERGABUNG</th>
                   <th className="fw-semibold py-3">STATUS AKSES</th>
-<<<<<<< HEAD
                   <th className="fw-semibold py-3 text-end" style={{ width: "180px" }}>
                     AKSI PENGELOLAAN
                   </th>
@@ -967,81 +556,6 @@ export default function DinkesVerifikasiAkunPage({
                       </td>
                     </tr>
                   ))
-=======
-                  <th className="fw-semibold py-3 text-end" style={{ width: '180px' }}>AKSI PENGELOLAAN</th>
-                </tr>
-              </thead>
-              <tbody className="border-top-0">
-                {paginatedKelolaDinkes.length > 0 ? (
-                  paginatedKelolaDinkes.map((item, index) => {
-                    const rowNo = (currentPage - 1) * itemsPerPage + index + 1;
-                    return (
-                      <tr key={item.id} className={item.status === 'inactive' ? 'bg-light bg-opacity-50' : ''}>
-                        <td className="text-muted small fw-bold">
-                          {rowNo < 10 ? `0${rowNo}` : rowNo}
-                        </td>
-
-                        {/* Kolom 2: Nama & NIK */}
-                        <td>
-                          <div className="fw-semibold text-dark">{item.nama}</div>
-                          <div className="text-muted font-monospace" style={{ fontSize: '0.75rem' }}>
-                            {item.nik || '327601XXXXXXXXXX'}
-                          </div>
-                          {item.tipeAkun === 'staf-dinkes' && <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Staf Dinkes</span>}
-                          {item.tipeAkun === 'admin-puskesmas' && <span className="badge bg-info-subtle text-info border border-info-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Admin Puskesmas</span>}
-                          {item.tipeAkun === 'staf-puskesmas' && <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-0.5 mt-1" style={{ fontSize: '0.65rem' }}>Staf Puskesmas</span>}
-                        </td>
-
-                        {/* Kolom 3: Email & Telepon */}
-                        <td>
-                          <div className="text-dark small font-monospace">{item.email}</div>
-                          <div className="text-muted" style={{ fontSize: '0.75rem' }}>{item.telepon || '0812XXXXXXXX'}</div>
-                        </td>
-
-                        {/* Kolom 5: Tgl Daftar */}
-                        <td className="small text-muted">{item.tglDaftar}</td>
-
-                        {/* Kolom 6: Status Akses */}
-                        <td>
-                          {item.status === 'active' ? (
-                            <span className="badge bg-success-subtle text-success border border-success px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
-                              <span className="rounded-circle bg-success" style={{ width: '6px', height: '6px' }}></span>
-                              Aktif
-                            </span>
-                          ) : (
-                            <span className="badge bg-danger-subtle text-danger border border-danger px-2.5 py-1 fw-semibold small d-inline-flex align-items-center gap-1.5">
-                              <span className="rounded-circle bg-danger" style={{ width: '6px', height: '6px' }}></span>
-                              Non-Aktif
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Kolom 7: Aksi */}
-                        <td className="text-end">
-                          {item.status === 'active' ? (
-                            <button 
-                              className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1.5 fw-semibold"
-                              onClick={() => handleToggleKelolaStatus(item, 'inactive')}
-                              title="Nonaktifkan akses akun"
-                            >
-                              <UserX size={14} />
-                              <span>Nonaktifkan</span>
-                            </button>
-                          ) : (
-                            <button 
-                              className="btn btn-sm btn-success text-white d-inline-flex align-items-center gap-1.5 fw-semibold"
-                              onClick={() => handleToggleKelolaStatus(item, 'active')}
-                              title="Aktifkan kembali akses akun"
-                            >
-                              <UserCheck size={14} />
-                              <span>Aktifkan</span>
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
                 ) : (
                   <tr>
                     <td colSpan="7" className="text-center py-4 text-muted">
@@ -1058,7 +572,6 @@ export default function DinkesVerifikasiAkunPage({
         <div className="d-flex flex-column flex-sm-row align-items-center justify-content-between pt-3 border-top mt-3 text-muted small gap-3">
           <div>
             <span>Menampilkan </span>
-<<<<<<< HEAD
             <strong className="text-dark">{isKelola ? filteredKelolaDinkes.length : filteredData.length}</strong>
             <span>{isKelola ? ` dari total ${kelolaDinkesTotal} akun staf Dinas Kesehatan Kota` : ` dari data ${isPuskesmas ? "Puskesmas" : "Staf Dinas"} terdaftar`}</span>
           </div>
@@ -1071,43 +584,6 @@ export default function DinkesVerifikasiAkunPage({
               1
             </button>
             <button className="btn btn-sm btn-light border p-1 rounded-2" disabled>
-=======
-            <strong className="text-dark">
-              {activeTotalList.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, activeTotalList.length)}
-            </strong>
-            <span>
-              {isKelola 
-                ? ` dari total ${kelolaDinkesTotal} akun staf Dinas Kesehatan Kota` 
-                : ` dari data ${isPuskesmas ? 'Puskesmas' : 'Staf Dinas'} terdaftar`}
-            </span>
-          </div>
-
-          <div className="d-flex align-items-center gap-1">
-            <button 
-              className="btn btn-sm btn-light border p-1 rounded-2" 
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              title="Halaman Sebelumnya"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button 
-                key={page}
-                className={`btn btn-sm px-3 py-1 rounded-2 fw-bold ${currentPage === page ? 'text-white' : 'btn-light border text-dark'}`}
-                style={currentPage === page ? { backgroundColor: '#1e3a8a' } : {}}
-                onClick={() => setCurrentPage(page)}
-              >
-                {page}
-              </button>
-            ))}
-            <button 
-              className="btn btn-sm btn-light border p-1 rounded-2" 
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              title="Halaman Berikutnya"
-            >
->>>>>>> 583726282333db082b82d71b2ae65f22c7b16e66
               <ChevronRight size={16} />
             </button>
           </div>
