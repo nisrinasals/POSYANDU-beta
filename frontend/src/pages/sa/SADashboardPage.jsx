@@ -186,7 +186,7 @@ export default function SADashboardPage({ onNavigate, user, globalStatistikSasar
       <div className="row g-3">
         {/* Card 1: Puskesmas */}
         <div className="col-12 col-md-4">
-          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#1e3a8a", cursor: "pointer" }} onClick={() => onNavigate("master-puskesmas")}>
+          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#1e3a8a", cursor: "pointer" }} onClick={() => onNavigate("verifikasi-akun", "puskesmas")}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
                 PUSKESMAS
@@ -207,7 +207,7 @@ export default function SADashboardPage({ onNavigate, user, globalStatistikSasar
 
         {/* Card 2: Posyandu */}
         <div className="col-12 col-md-4">
-          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#0284c7", cursor: "pointer" }} onClick={() => onNavigate("master-posyandu")}>
+          <div className="card border bg-white shadow-xs rounded-4 p-4 h-100 border-start border-4 transition-all" style={{ borderLeftColor: "#0284c7", cursor: "pointer" }} onClick={() => onNavigate("jadwal-monitoring")}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <span className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: "0.05em", fontSize: "0.725rem" }}>
                 POSYANDU

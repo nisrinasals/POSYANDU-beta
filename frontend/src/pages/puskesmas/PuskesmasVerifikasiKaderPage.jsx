@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Users,
   UserCheck,
@@ -52,52 +52,73 @@ export default function PuskesmasVerifikasiKaderPage({
 
   const [localKaderList, setLocalKaderList] = useState([]);
   const [localStafList, setLocalStafList] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
+  const intervalRef = useRef(null);
 
-  React.useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await userService.getAllUsers();
-        if (res?.data && Array.isArray(res.data)) {
-          const kaders = [];
-          const stafs = [];
-          res.data.forEach((u) => {
-            const role = (u.role || "").toLowerCase();
-            const initials = (u.nama_lengkap || u.nama || "")
-              .split(" ")
-              .map((n) => n[0])
-              .slice(0, 2)
-              .join("")
-              .toUpperCase();
-            const mappedUser = {
-              id: u.id,
-              nama: u.nama_lengkap || u.nama || "",
-              initials: initials,
-              nik: u.nik || "",
-              email: u.email || "",
-              telepon: u.no_telepon || u.telepon || "",
-              posyandu: u.posyandu?.nama_posyandu || u.posyandu || "",
-              rw: u.rw || "",
-              tglDaftar: formatDateId(u.email_verified_at || u.verified_at || u.createdAt),
-              status: u.status === "pending_approval" ? "pending" : u.status || "",
-              bidangJabatan: u.jabatan || u.bidangJabatan || "",
-              unitKategori: u.unit || "",
-              puskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas || "",
-            };
-            if (role.includes("kader")) {
-              kaders.push(mappedUser);
-            } else if (role.includes("puskesmas") || role.includes("staf")) {
-              stafs.push(mappedUser);
-            }
-          });
-          setLocalKaderList(kaders);
-          setLocalStafList(stafs);
-        }
-      } catch (err) {
-        console.info("Load users error:", err);
+  const fetchUsers = useCallback(async (silent = false) => {
+    if (!silent) setIsRefreshing(true);
+    try {
+      const res = await userService.getAllUsers();
+      if (res?.data && Array.isArray(res.data)) {
+        const kaders = [];
+        const stafs = [];
+        res.data.forEach((u) => {
+          const role = (u.role || "").toLowerCase();
+          const initials = (u.nama_lengkap || u.nama || "")
+            .split(" ")
+            .map((n) => n[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase();
+          const mappedUser = {
+            id: u.id,
+            nama: u.nama_lengkap || u.nama || "",
+            initials: initials,
+            nik: u.nik || "",
+            email: u.email || "",
+            telepon: u.no_telepon || u.telepon || "",
+            posyandu: u.posyandu?.nama_posyandu || u.posyandu || "",
+            rw: u.rw || "",
+            tglDaftar: formatDateId(u.email_verified_at || u.verified_at || u.createdAt),
+            status: u.status === "pending_approval" ? "pending" : u.status || "",
+            bidangJabatan: u.jabatan || u.bidangJabatan || "",
+            unitKategori: u.unit || "",
+            puskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas || "",
+          };
+          if (role.includes("kader")) {
+            kaders.push(mappedUser);
+          } else if (role.includes("puskesmas") || role.includes("staf")) {
+            stafs.push(mappedUser);
+          }
+        });
+        setLocalKaderList(kaders);
+        setLocalStafList(stafs);
+        setLastRefreshed(new Date());
       }
-    };
-    fetchUsers();
+    } catch (err) {
+      console.info("Load users error:", err);
+    } finally {
+      if (!silent) setIsRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchUsers(false);
+    
+    // Poll every 10 seconds for new registrations
+    intervalRef.current = setInterval(() => fetchUsers(true), 10000);
+    
+    // Also fetch immediately when user returns to this tab
+    const handleFocus = () => fetchUsers(true);
+    window.addEventListener("focus", handleFocus);
+    
+    return () => {
+      clearInterval(intervalRef.current);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [fetchUsers]);
+
 
   const kaderList = propKaderList || localKaderList;
   const stafPuskesmasList = propStafList || localStafList;
@@ -345,7 +366,24 @@ export default function PuskesmasVerifikasiKaderPage({
               <span>{isKader ? "Kader Aktif" : "Staf Aktif"}</span>
               <span className={`badge rounded-pill ${activeTab === "active" ? "bg-white text-dark" : "bg-secondary text-white"}`}>{currentActiveCount}</span>
             </button>
+          </div>
 
+          {/* Refresh Data Button (Moved to top for visibility) */}
+          <div className="d-flex align-items-center gap-3">
+            {lastRefreshed && (
+              <span className="text-muted" style={{ fontSize: "0.8rem", fontWeight: "500" }}>
+                Diperbarui: {lastRefreshed.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+            )}
+            <button
+              className="btn d-flex align-items-center gap-2 fw-semibold rounded-3 bg-white border"
+              style={{ color: "#428A75", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}
+              onClick={() => fetchUsers(false)}
+              disabled={isRefreshing}
+            >
+              <RefreshCw size={16} style={{ animation: isRefreshing ? "spin 1s linear infinite" : "none" }} />
+              {isRefreshing ? "Memuat..." : "Refresh Data"}
+            </button>
           </div>
         </div>
       )}
@@ -396,6 +434,8 @@ export default function PuskesmasVerifikasiKaderPage({
               <RefreshCw size={16} />
             </button>
           </div>
+
+
         </div>
 
         {/* ========================================================================= */}

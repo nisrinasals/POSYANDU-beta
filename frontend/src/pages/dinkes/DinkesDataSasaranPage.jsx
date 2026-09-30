@@ -70,7 +70,14 @@ export default function DinkesDataSasaranPage({
       // 3. Puskesmas / Faskes Filter
       let matchesPuskesmas = true;
       if (selectedPuskesmas !== "Semua Puskesmas") {
-        const itemPusk = (item.puskesmas || item.posyandu || "").toLowerCase();
+        let puskesmasName = item.puskesmas;
+        if (!puskesmasName) {
+           const posyanduData = globalPosyanduList.find(p => p.nama === item.posyandu || p.nama_posyandu === item.posyandu);
+           if (posyanduData) {
+               puskesmasName = posyanduData.puskesmas || posyanduData.puskesmas?.nama_puskesmas;
+           }
+        }
+        const itemPusk = (puskesmasName || item.posyandu || "").toLowerCase();
         matchesPuskesmas = itemPusk.includes(selectedPuskesmas.toLowerCase());
       }
 
@@ -163,7 +170,7 @@ export default function DinkesDataSasaranPage({
       <div className="card border bg-white rounded-4 p-4 shadow-sm" style={{ borderRadius: "20px", borderColor: "#e2e8f0", boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}>
         {/* Search & Filter Bar */}
         <div className="row g-2 mb-4 align-items-center">
-          <div className="col-12 col-md-2">
+          <div className="col-12 col-md-3">
             <select
               className="form-select bg-white text-dark fw-medium shadow-none"
               value={selectedPuskesmas}
@@ -180,23 +187,7 @@ export default function DinkesDataSasaranPage({
               ))}
             </select>
           </div>
-          <div className="col-12 col-md-2">
-            <select
-              className="form-select bg-white text-dark fw-medium shadow-none"
-              value={selectedPosyandu}
-              onChange={(e) => {
-                setSelectedPosyandu(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={{ height: "42px", fontSize: "0.875rem", borderRadius: "10px", borderColor: "#dbe5ee" }}
-            >
-              <option value="Semua Posyandu">Semua Posyandu</option>
-              {availablePosyanduList.map((pos, idx) => (
-                <option key={idx} value={pos}>{pos}</option>
-              ))}
-            </select>
-          </div>
-          <div className="col-12 col-md-2">
+          <div className="col-12 col-md-3">
             <select
               className="form-select bg-white text-dark fw-medium shadow-none"
               value={selectedCategory}
@@ -256,8 +247,8 @@ export default function DinkesDataSasaranPage({
           </div>
           <div className="col-12 col-md-1">
             <button
-              className="btn btn-light border text-danger fw-semibold w-100 d-flex align-items-center justify-content-center gap-1.5 shadow-none"
-              style={{ height: "42px", borderRadius: "10px", borderColor: "#dbe5ee", fontSize: "0.875rem" }}
+              className="btn btn-light border fw-semibold w-100 d-flex align-items-center justify-content-center gap-1.5 shadow-none"
+              style={{ height: "42px", borderRadius: "10px", borderColor: "#dbe5ee", fontSize: "0.875rem", color: themeColor }}
               onClick={handleResetFilter}
               title="Reset Filter"
             >
@@ -357,10 +348,10 @@ export default function DinkesDataSasaranPage({
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                 <button
                   key={page}
-                  className={`btn btn-sm px-3 py-1 rounded-2 fw-semibold ${currentPage === page ? "btn-danger text-white" : "btn-light border text-dark"}`}
+                  className={`btn btn-sm px-3 py-1 rounded-2 fw-semibold ${currentPage === page ? "text-white" : "btn-light border text-dark"}`}
                   style={{
-                    backgroundColor: currentPage === page ? "#e11d48" : undefined,
-                    borderColor: currentPage === page ? "#e11d48" : undefined,
+                    backgroundColor: currentPage === page ? themeColor : undefined,
+                    borderColor: currentPage === page ? themeColor : undefined,
                     fontSize: "0.82rem",
                   }}
                   onClick={() => setCurrentPage(page)}

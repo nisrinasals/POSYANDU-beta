@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Download, Search, Users, CheckCircle, Clock, AlertTriangle, Filter, Calendar, Eye, FileText, Printer } from "lucide-react";
+import { Download, Search, Users, CheckCircle, Clock, AlertTriangle, Filter, Calendar, Eye, FileText, Printer, Heart, Baby, GraduationCap, Activity } from "lucide-react";
 import DetailRekapModal, { resolve5StepDetails } from "../../components/pemeriksaan/DetailRekapModal";
 import ExportRekapModal from "../../components/pemeriksaan/ExportRekapModal";
 import RekapWorksheetPreview from "../../components/pemeriksaan/RekapWorksheetPreview";
@@ -24,6 +24,8 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
   const themeColor = isDinkes ? "#1e3a8a" : "#428A75";
   const roleTitle = isDinkes ? user?.instansi || user?.role || "" : user?.puskesmas || user?.instansi || user?.role || "";
   const [stafTemplateKey, setStafTemplateKey] = useState("bumil_nifas_menyusui");
+  const [stafExportAll, setStafExportAll] = useState(false);
+  const [stafPreviewKey, setStafPreviewKey] = useState(null);
 
   // Filter starts from all backend data; user can narrow it with month/year selectors.
   const [selectedMonthYear, setSelectedMonthYear] = useState("");
@@ -185,83 +187,129 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
     setIsLoadingDetail(false);
   };
 
+  // Staf category definitions
+  const stafCategories = [
+    {
+      key: "bumil_nifas_menyusui",
+      label: "Ibu Hamil, Nifas & Menyusui",
+      desc: "Rekap pemeriksaan ibu hamil, nifas, dan menyusui.",
+      icon: <Heart size={22} />,
+      iconColor: "#e11d48",
+      iconBg: "rgba(225,29,72,0.08)",
+    },
+    {
+      key: "bayi_balita_apras",
+      label: "Bayi, Balita & Anak Pra-Sekolah",
+      desc: "Rekap pemeriksaan bayi, balita, dan anak pra-sekolah.",
+      icon: <Baby size={22} />,
+      iconColor: "#0891b2",
+      iconBg: "rgba(8,145,178,0.08)",
+    },
+    {
+      key: "usia_sekolah_remaja",
+      label: "Anak Usia Sekolah & Remaja (6–18 Tahun)",
+      desc: "Rekap pemeriksaan anak usia sekolah dan remaja.",
+      icon: <GraduationCap size={22} />,
+      iconColor: "#7c3aed",
+      iconBg: "rgba(124,58,237,0.08)",
+    },
+    {
+      key: "dewasa_lansia",
+      label: "Usia Dewasa & Lansia (≥ 19 Tahun)",
+      desc: "Rekap pemeriksaan dewasa dan lansia.",
+      icon: <Activity size={22} />,
+      iconColor: "#059669",
+      iconBg: "rgba(5,150,105,0.08)",
+    },
+  ];
+
   if (isStaf) {
     return (
       <div className="container-fluid p-0">
-        {/* Top Header & Export Action */}
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-          <div>
-            <h4 className="fw-bold text-dark mb-1">Rekapitulasi Pelaporan (Agregat)</h4>
-            <p className="text-muted small mb-0">Format laporan agregat bulanan Excel (.xlsx) untuk verifikasi &amp; pelaporan.</p>
-          </div>
-          <button
-            className="btn btn-sm px-3 py-2 fw-semibold d-flex align-items-center gap-2 rounded-3 shadow-xs text-white"
-            style={{ backgroundColor: themeColor }}
-            onClick={() => setIsExportModalOpen(true)}
-            title="Export Laporan Rekapitulasi ke Excel"
-          >
-            <Download size={16} /> Export Excel
-          </button>
-        </div>
-
-        {/* Filter Bar for Staf */}
+        {/* ── Header Bar ── */}
         <div className="card card-custom p-3 mb-4 bg-white border-0 shadow-sm rounded-4">
-          <div className="row g-3 align-items-center">
-            <div className="col-12 col-md-6">
-              <label className="form-label text-muted small fw-bold mb-1">Pilih Template Kategori Rekap</label>
-              <select
-                className="form-select bg-light text-dark fw-semibold py-2"
-                value={stafTemplateKey}
-                onChange={(e) => setStafTemplateKey(e.target.value)}
+          <div className="d-flex align-items-center justify-content-between gap-3 flex-wrap">
+            <div className="d-flex align-items-center gap-3">
+              <div
+                className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                style={{ width: "46px", height: "46px", backgroundColor: `${themeColor}15`, color: themeColor }}
               >
-                <option value="bumil_nifas_menyusui">Ibu Hamil, Nifas &amp; Menyusui</option>
-                <option value="bayi_balita_apras">Bayi, Balita &amp; Anak Pra-Sekolah</option>
-                <option value="usia_sekolah_remaja">Anak Usia Sekolah &amp; Remaja (6–18 Tahun)</option>
-                <option value="dewasa_lansia">Usia Dewasa &amp; Lansia (≥ 19 Tahun)</option>
-              </select>
+                <FileText size={22} />
+              </div>
+              <div>
+                <div className="fw-bold text-dark" style={{ fontSize: "0.95rem", letterSpacing: "-0.01em" }}>Format Rekapitulasi Pemeriksaan</div>
+                <div className="text-muted" style={{ fontSize: "0.78rem" }}>Pilih template kategori atau ekspor semua template.</div>
+              </div>
             </div>
-
-            <div className="col-12 col-md-4">
-              <label className="form-label text-muted small fw-bold mb-1">Tahun Laporan</label>
-              <select
-                className="form-select bg-light text-dark fw-semibold py-2"
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-              >
-                <option value="Semua">Semua Tahun</option>
-                {[
-                  ...new Set([
-                    ...Object.values(globalPemeriksaanData || {})
-                      .map((exam) => String(exam?.tanggal || "").slice(0, 4))
-                      .filter((year) => /^\d{4}$/.test(year)),
-                    String(new Date().getFullYear()),
-                  ]),
-                ]
-                  .sort((a, b) => Number(b) - Number(a))
-                  .map((year) => (
-                    <option key={year} value={year}>
-                      Tahun {year}
-                    </option>
-                  ))}
-              </select>
-            </div>
+            <button
+              className="btn fw-semibold d-flex align-items-center gap-2 rounded-3 shadow-none text-white px-3 py-2"
+              style={{ backgroundColor: themeColor, fontSize: "0.84rem" }}
+              onClick={() => {
+                setStafTemplateKey("bumil_nifas_menyusui");
+                setStafExportAll(true);
+                setIsExportModalOpen(true);
+              }}
+            >
+              <Download size={15} /> Export Semua Kategori (.xlsx)
+            </button>
           </div>
         </div>
 
-        {/* Aggregate Preview Table Component */}
-        <div className="card card-custom p-3 bg-white border-0 shadow-sm rounded-4 mb-4">
-          <RekapWorksheetPreview
-            templateRekap={stafTemplateKey}
-            year={selectedYear}
-            theme={isDinkes ? "dinkes" : "puskesmas"}
-            roleTitle={roleTitle}
-          />
+        {/* ── 2×2 Category Cards ── */}
+        <div className="row g-3 mb-4">
+          {stafCategories.map((cat) => (
+            <div key={cat.key} className="col-12 col-md-6">
+              <div
+                className="card bg-white border-0 shadow-sm rounded-4 p-3 h-100"
+                style={{ borderColor: "#eef0f4", transition: "box-shadow 0.2s" }}
+              >
+                {/* Card Header */}
+                <div className="mb-2">
+                  <div
+                    className="rounded-3 d-flex align-items-center justify-content-center"
+                    style={{ width: "40px", height: "40px", backgroundColor: cat.iconBg, color: cat.iconColor }}
+                  >
+                    {cat.icon}
+                  </div>
+                </div>
+
+                {/* Card Body */}
+                <div className="fw-bold text-dark mb-1" style={{ fontSize: "0.88rem", letterSpacing: "-0.01em" }}>
+                  {cat.label}
+                </div>
+                <p className="text-muted mb-3" style={{ fontSize: "0.78rem", lineHeight: "1.5" }}>
+                  {cat.desc}
+                </p>
+
+                {/* Footer */}
+                <div className="d-flex align-items-center justify-content-between mt-auto pt-2" style={{ borderTop: "1px solid #f1f4f8" }}>
+                  <div className="d-flex align-items-center gap-1 text-muted" style={{ fontSize: "0.73rem" }}>
+                    <FileText size={12} className="text-danger" />
+                    <span>Microsoft Excel (.xlsx)</span>
+                  </div>
+                  <button
+                    className="btn btn-sm d-flex align-items-center gap-1 fw-semibold rounded-3 text-white"
+                    style={{ fontSize: "0.76rem", backgroundColor: themeColor, padding: "5px 12px" }}
+                    onClick={() => {
+                      setStafTemplateKey(cat.key);
+                      setStafExportAll(false);
+                      setIsExportModalOpen(true);
+                    }}
+                  >
+                    <Download size={13} /> Export Excel
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
+
+
 
         {/* EXPORT REKAP MODAL */}
         <ExportRekapModal
           isOpen={isExportModalOpen}
-          onClose={() => setIsExportModalOpen(false)}
+          onClose={() => { setIsExportModalOpen(false); setStafExportAll(false); }}
           currentCategory={stafTemplateKey}
           currentYear={selectedYear}
           globalSasaranList={globalSasaranList}

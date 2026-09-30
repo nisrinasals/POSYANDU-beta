@@ -138,6 +138,7 @@ export function mapBackendWargaToFrontend(w) {
     posyandu: w.posyandu?.nama_posyandu || w.posyandu || "",
     rw: w.rw || "",
     alamat: w.alamat || "",
+    puskesmas: w.posyandu?.puskesmas?.nama_puskesmas || w.puskesmas || "",
     noHp: w.telepon || w.noHp || "",
     namaIbu: w.nama_ibu || w.namaIbu || "",
     namaAyah: w.nama_ayah || w.namaAyah || "",

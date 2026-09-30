@@ -560,7 +560,10 @@ export default function App() {
           />
         )}
 
-        {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && (
+        {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kader" && (
+          <PuskesmasVerifikasiKaderPage activeSubmenu="kader" onRefreshData={fetchBackendData} />
+        )}
+        {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu !== "kader" && (
           <SAVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} user={user} />
         )}
 
@@ -630,7 +633,12 @@ export default function App() {
           />
         )}
 
-        {isDinkesAdmin && (activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && <DinkesVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} user={user} />}
+        {isDinkesAdmin && (activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kader" && (
+          <PuskesmasVerifikasiKaderPage activeSubmenu="kader" onRefreshData={fetchBackendData} />
+        )}
+        {isDinkesAdmin && (activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu !== "kader" && (
+          <DinkesVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} user={user} />
+        )}
 
         {activeMenu === "data-sasaran" && (
           <DinkesDataSasaranPage

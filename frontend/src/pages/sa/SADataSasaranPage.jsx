@@ -163,7 +163,7 @@ export default function SADataSasaranPage({
       <div className="card border bg-white rounded-4 p-4 shadow-sm" style={{ borderRadius: "20px", borderColor: "#e2e8f0", boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}>
         {/* Search & Filter Bar */}
         <div className="row g-2 mb-4 align-items-center">
-          <div className="col-12 col-md-2">
+          <div className="col-12 col-md-3">
             <select
               className="form-select bg-white text-dark fw-medium shadow-none"
               value={selectedPuskesmas}
@@ -180,23 +180,7 @@ export default function SADataSasaranPage({
               ))}
             </select>
           </div>
-          <div className="col-12 col-md-2">
-            <select
-              className="form-select bg-white text-dark fw-medium shadow-none"
-              value={selectedPosyandu}
-              onChange={(e) => {
-                setSelectedPosyandu(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={{ height: "42px", fontSize: "0.875rem", borderRadius: "10px", borderColor: "#dbe5ee" }}
-            >
-              <option value="Semua Posyandu">Semua Posyandu</option>
-              {availablePosyanduList.map((pos, idx) => (
-                <option key={idx} value={pos}>{pos}</option>
-              ))}
-            </select>
-          </div>
-          <div className="col-12 col-md-2">
+          <div className="col-12 col-md-3">
             <select
               className="form-select bg-white text-dark fw-medium shadow-none"
               value={selectedCategory}

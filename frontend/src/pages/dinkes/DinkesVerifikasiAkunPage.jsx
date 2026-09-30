@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Search, Filter, Check, X, Clock, UserCheck, UserX, UserCog, RefreshCw, Building2, Shield, CheckCircle2, PowerOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNotification } from "../../context/NotificationContext";
 import { userService } from "../../services";
@@ -36,51 +36,66 @@ export default function DinkesVerifikasiAkunPage({
 
   const [localPuskesmasList, setLocalPuskesmasList] = useState([]);
   const [localStaffList, setLocalStaffList] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
+  const intervalRef = useRef(null);
 
-  React.useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await userService.getAllUsers();
-        if (res?.data && Array.isArray(res.data)) {
-          const pusks = [];
-          const staffs = [];
-          res.data.forEach((u) => {
-            const role = (u.role || "").toLowerCase();
-            const initials = (u.nama_lengkap || u.nama || "U")
-              .split(" ")
-              .map((n) => n[0])
-              .slice(0, 2)
-              .join("")
-              .toUpperCase();
-            const mapped = {
-              id: u.id,
-              namaPendaftar: u.nama_lengkap || u.nama || "",
-              namaPetugas: u.nama_lengkap || u.nama || "",
-              namaPuskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas || "",
-              initials: initials,
-              nik: u.nik || "",
-              email: u.email || "",
-              telepon: u.no_telepon || u.telepon || "",
-              bidangJabatan: u.jabatan || u.bidangJabatan || "",
-              jabatan: u.jabatan || "",
-              tglDaftar: formatDateId(u.email_verified_at || u.verified_at || u.createdAt),
-              status: u.status === "pending_approval" ? "pending" : u.status || "",
-            };
-            if (role.includes("puskesmas")) {
-              pusks.push(mapped);
-            } else if (role.includes("dinkes")) {
-              staffs.push(mapped);
-            }
-          });
-          setLocalPuskesmasList(pusks);
-          setLocalStaffList(staffs);
-        }
-      } catch (err) {
-        console.info("Load dinkes users error:", err);
+  const fetchUsers = useCallback(async (silent = false) => {
+    if (!silent) setIsRefreshing(true);
+    try {
+      const res = await userService.getAllUsers();
+      if (res?.data && Array.isArray(res.data)) {
+        const pusks = [];
+        const staffs = [];
+        res.data.forEach((u) => {
+          const role = (u.role || "").toLowerCase();
+          const initials = (u.nama_lengkap || u.nama || "U")
+            .split(" ")
+            .map((n) => n[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase();
+          const mapped = {
+            id: u.id,
+            namaPendaftar: u.nama_lengkap || u.nama || "",
+            namaPetugas: u.nama_lengkap || u.nama || "",
+            namaPuskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas || "",
+            initials: initials,
+            nik: u.nik || "",
+            email: u.email || "",
+            telepon: u.no_telepon || u.telepon || "",
+            bidangJabatan: u.jabatan || u.bidangJabatan || "",
+            jabatan: u.jabatan || "",
+            tglDaftar: formatDateId(u.email_verified_at || u.verified_at || u.createdAt),
+            status: u.status === "pending_approval" ? "pending" : u.status || "",
+          };
+          if (role.includes("puskesmas")) {
+            pusks.push(mapped);
+          } else if (role.includes("dinkes")) {
+            staffs.push(mapped);
+          }
+        });
+        setLocalPuskesmasList(pusks);
+        setLocalStaffList(staffs);
+        setLastRefreshed(new Date());
       }
-    };
-    fetchUsers();
+    } catch (err) {
+      console.info("Load dinkes users error:", err);
+    } finally {
+      if (!silent) setIsRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchUsers(true);
+    intervalRef.current = setInterval(() => fetchUsers(true), 5000);
+    const handleFocus = () => fetchUsers(true);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      clearInterval(intervalRef.current);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [fetchUsers]);
 
   const puskesmasList = propPuskesmasList || localPuskesmasList;
   const staffList = propStaffList || localStaffList;
@@ -337,6 +352,7 @@ export default function DinkesVerifikasiAkunPage({
               <RefreshCw size={16} />
             </button>
           </div>
+
         </div>
 
         {/* ========================================================================= */}

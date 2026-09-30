@@ -184,6 +184,19 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
 
                     {verifikasiDinkesOpen && (
                       <div className="d-flex flex-column my-1">
+                        {/* Submenu 0: Verifikasi Kader Posyandu (For SA/Dinkes) */}
+                        <a
+                          href="#verifikasi-kader"
+                          className={`nav-link-custom submenu-link ${isSA ? "sa-submenu-link" : "dinkes-submenu-link"} ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kader" ? "active" : ""}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onNavigate("verifikasi-akun", "kader");
+                          }}
+                        >
+                          <Users size={15} className="me-1.5 opacity-75" />
+                          <span>Verifikasi Kader</span>
+                        </a>
+
                         {/* Submenu 1: Verifikasi Puskesmas */}
                         <a
                           href="#verifikasi-puskesmas"
