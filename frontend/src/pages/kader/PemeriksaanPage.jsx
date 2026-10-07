@@ -304,12 +304,21 @@ function PeriodicScreeningPanel({ id, title, description, due, loading, checked,
   );
 }
 
-export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData, activePemeriksaanWargaId, onRefreshData }) {
+export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData, activePemeriksaanWargaId, onRefreshData, isModalMode = false, onCloseModal }) {
   const getLocalDateOnly = () => {
     const now = new Date();
     const localMs = now.getTime() - now.getTimezoneOffset() * 60 * 1000;
     return new Date(localMs).toISOString().slice(0, 10);
   };
+
+  useEffect(() => {
+    if (isModalMode && activePemeriksaanWargaId) {
+      setExaminationMode("sequential");
+      setSelectedWargaId(String(activePemeriksaanWargaId));
+      // Give it time to hydrate existing data from globalPemeriksaanData
+      setTimeout(() => setActiveStep(2), 50);
+    }
+  }, [isModalMode, activePemeriksaanWargaId]);
 
   const getLocalDateOffset = (days) => {
     const date = new Date();
@@ -1093,7 +1102,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   const [langkah5Form, setLangkah5Form] = useState({
     topikPenyuluhan: "",
-    mengikutiKelas: "",
     statusRujukan: "",
     alasanRujukan: "",
   });
@@ -1233,7 +1241,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     skilasHilangMinat: "",
     skilasImunisasiCovid: "",
     topikPenyuluhan: "",
-    mengikutiKelas: "",
     statusRujukan: "",
     alasanRujukan: "",
   });
@@ -1306,8 +1313,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       nama: currentSelectedWarga.nama || l1.nama || "",
       tglLahir: currentSelectedWarga.tglLahir || l1.tglLahir || "",
       gender: defaultGen,
-      usiaKehamilan: l1.usiaKehamilan || currentSelectedWarga.usiaKehamilan || "",
-      waktuKunjunganNifas: l1.waktuKunjunganNifas || "",
+      usiaKehamilan: l1.usiaKehamilan || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || currentSelectedWarga.usiaKehamilan || "",
+      waktuKunjunganNifas: l1.waktuKunjunganNifas || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || "",
       usiaBayi: l1.usiaBayi || "",
       usiaBalita: l1.usiaBalita || "",
       usiaApras: l1.usiaApras || "",
@@ -1419,7 +1426,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
     setLangkah5Form({
       topikPenyuluhan: l5.topikPenyuluhan || "",
-      mengikutiKelas: l5.mengikutiKelas || "",
       statusRujukan: l5.statusRujukan || "",
       alasanRujukan: l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || "",
     });
@@ -1435,8 +1441,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       statusPernikahan: currentSelectedWarga.statusPernikahan || l1.statusPernikahan || "",
       sekolah: currentSelectedWarga.sekolah || l1.sekolah || "",
       kelas: currentSelectedWarga.kelas || l1.kelas || "",
-      usiaKehamilan: l1.usiaKehamilan || currentSelectedWarga.usiaKehamilan || "",
-      waktuKunjunganNifas: l1.waktuKunjunganNifas || "",
+      usiaKehamilan: l1.usiaKehamilan || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || currentSelectedWarga.usiaKehamilan || "",
+      waktuKunjunganNifas: l1.waktuKunjunganNifas || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || "",
       usiaBayi: l1.usiaBayi || "",
       usiaBalita: l1.usiaBalita || "",
       usiaApras: l1.usiaApras || "",
@@ -1520,7 +1526,6 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       skilasHilangMinat: l4.skilasHilangMinat || "",
       skilasImunisasiCovid: l4.skilasImunisasiCovid || "",
       topikPenyuluhan: l5.topikPenyuluhan || "",
-      mengikutiKelas: l5.mengikutiKelas || "",
       statusRujukan: l5.statusRujukan || "",
       alasanRujukan: l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || "",
     });
@@ -1623,7 +1628,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         if (!hasAnswer(data?.demamTbc)) missing.push("Gejala Demam TBC");
         if (!hasAnswer(data?.bbTurunTbc)) missing.push("Gejala BB Turun TBC");
         if (!hasAnswer(data?.kontakTbc)) missing.push("Kontak Erat Pasien TBC");
-      } else if (submenu === "usekrem-6-14") {
+      } else if (["usekrem-6-14", "usekrem-15-18"].includes(submenu)) {
         if (!hasAnswer(data?.batukTbc) && !hasAnswer(data?.batukBesarTbc)) missing.push("Gejala Batuk TBC");
         if (!hasAnswer(data?.demamTbc)) missing.push("Gejala Demam TBC");
         if (!hasAnswer(data?.bbTurunTbc)) missing.push("Gejala BB Turun TBC");
@@ -1947,17 +1952,17 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   };
 
   useEffect(() => {
-    if (examinationMode !== "per-step" || !selectedWargaStep3) return undefined;
-
-    const targetId = String(selectedWargaStep3);
-    if (backendPlottingByWarga[targetId]) return undefined;
+    const targetId = examinationMode === "per-step" ? String(selectedWargaStep3 || "") : String(selectedWargaId || "");
+    if (!targetId || backendPlottingByWarga[targetId]) return undefined;
 
     let cancelled = false;
 
     const hydrateStep3Plotting = async () => {
       const plot = await fetchBackendPlottingForWarga(targetId);
       if (cancelled || !plot) return;
-      setSelectedWargaStep3(targetId);
+      if (examinationMode === "per-step") {
+        setSelectedWargaStep3(targetId);
+      }
     };
 
     hydrateStep3Plotting();
@@ -1965,7 +1970,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     return () => {
       cancelled = true;
     };
-  }, [examinationMode, selectedWargaStep3, backendPlottingByWarga, fetchBackendPlottingForWarga]);
+  }, [examinationMode, selectedWargaStep3, selectedWargaId, backendPlottingByWarga, fetchBackendPlottingForWarga]);
 
   const handleSaveLangkah3 = async (e) => {
     e.preventDefault();
@@ -2018,7 +2023,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       await saveImunisasiRows(targetId, imunisasiRowsByWarga[targetId] || emptyImunisasiRows());
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
       setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
-      setStepDataByWarga((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), warga, langkah4: res.data.detail_skrining || screeningPayload } }));
+      setStepDataByWarga((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), warga, langkah4: screeningForm } }));
       setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step4: true } }));
       setBackendStep4CompletedWarga((prev) => ({ ...prev, [targetId]: true }));
       showSuccess("Langkah 4 Tersimpan", `Skrining untuk "${warga?.nama || "Warga"}" berhasil disimpan ke database.`);
@@ -2056,12 +2061,19 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         ...formToSave,
         topikPenyuluhan: res?.data?.topik_penyuluhan ?? formToSave.topikPenyuluhan ?? "",
         statusRujukan: savedRujukanStatus,
-        alasanRujukan: res?.referral_reasons?.manual || formToSave.alasanRujukan || "",
+        alasanRujukan: res?.referral_reasons?.final || res?.referral_reasons?.manual || formToSave.alasanRujukan || "",
       };
 
       setKunjunganIdByWarga((prev) => ({ ...prev, [targetId]: kunjunganId }));
       setPemeriksaanByWarga((prev) => ({ ...prev, [targetId]: res.data.id }));
-      setGlobalPemeriksaanData?.((prev) => ({ ...prev, [targetId]: res.data }));
+      setGlobalPemeriksaanData?.((prev) => ({ 
+        ...prev, 
+        [targetId]: { 
+          ...res.data, 
+          rujukan: res.rujukan,
+          referral_reasons: res.referral_reasons
+        } 
+      }));
       setStepDataByWarga((prev) => ({
         ...prev,
         [targetId]: {
@@ -2173,7 +2185,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         await saveImunisasiRows(selectedWargaId, imunisasiRowsByWarga[String(selectedWargaId)] || emptyImunisasiRows());
         setKunjunganIdByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: kunjunganId }));
         setPemeriksaanByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: res.data.id }));
-        setStepDataByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), langkah4: res.data.detail_skrining || screeningPayload } }));
+        setStepDataByWarga((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), langkah4: screeningForm } }));
         setCompletedSteps((prev) => ({ ...prev, [String(selectedWargaId)]: { ...(prev[String(selectedWargaId)] || {}), step4: true } }));
         setActiveStep(5);
       } catch (err) {
@@ -2229,7 +2241,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   const handleTriggerSequentialPreview = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     const formData = await hydrateSequentialStep2FromBackend();
-    for (const s of [1, 2, 4, 5]) {
+    
+    const targetId = String(selectedWargaId);
+    const step4Done = completedSteps[targetId]?.step4 || backendStep4CompletedWarga[targetId];
+    const stepsToValidate = step4Done ? [1, 2, 5] : [1, 2, 4, 5];
+
+    for (const s of stepsToValidate) {
       const val = validateStepData(s, formData, activeSubmenu);
       if (!val.isValid) {
         showWarning(`Data Langkah ${s} Belum Lengkap`, val.errorMessage);
@@ -2243,7 +2260,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   const handleSaveSequentialAll = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     const formData = await hydrateSequentialStep2FromBackend();
-    for (const s of [1, 2, 4, 5]) {
+    
+    const targetId = String(selectedWargaId);
+    const step4Done = completedSteps[targetId]?.step4 || backendStep4CompletedWarga[targetId];
+    const stepsToValidate = step4Done ? [1, 2, 5] : [1, 2, 4, 5];
+
+    for (const s of stepsToValidate) {
       const val = validateStepData(s, formData, activeSubmenu);
       if (!val.isValid) {
         showWarning(`Data Langkah ${s} Belum Lengkap`, val.errorMessage);
@@ -2379,7 +2401,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     }
   }, [activeStep, activeStep5Plotting, examinationMode, step5AutoReferral]);
 
-  return (
+  const content = (
     <div className="container-fluid p-0">
       {/* Top Banner Header Card (Original Style with Icon & Title) */}
       <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "20px" }}>
@@ -2510,19 +2532,18 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
         {/* Gray Container Form Area */}
         <div className="p-4 p-md-5" style={{ backgroundColor: "#cbd5e1" }}>
-          {/* Target Citizen Identity Indicator - Compact & Clean */}
-          {activeTargetWarga && (
-            <div className="alert alert-light border shadow-xs rounded-3 p-2.5 px-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
-              <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-dark text-white fw-bold px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
-                  Sasaran Diperiksa
+
+
+          {/* Target Citizen Identity Indicator (For Sequential Mode) */}
+          {examinationMode === "sequential" && activeStep > 1 && activeTargetWarga && (
+            <div className="d-flex justify-content-end mb-3">
+              <div className="bg-white px-3 py-2 rounded-3 border-0 shadow-sm d-flex align-items-center gap-2">
+                <span className="fw-bold text-dark small mb-0">Sasaran Diperiksa:</span>
+                <span className="fw-semibold text-primary small d-flex align-items-center gap-1">
+                  {activeTargetWarga.nama}
+                  {activeTargetWarga.nik && <span className="text-muted" style={{ fontSize: "0.7rem" }}>({String(activeTargetWarga.nik).slice(-4)})</span>}
                 </span>
-                <span className="fw-bold text-dark mb-0">{activeTargetWarga.nama}</span>
-                {activeTargetWarga.nik && <span className="text-muted font-monospace small">({activeTargetWarga.nik})</span>}
               </div>
-              <span className="badge bg-secondary text-white small px-2 py-1 rounded-2">
-                Langkah {activeStep} / 5
-              </span>
             </div>
           )}
 
@@ -2972,7 +2993,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         if (examinationMode === "per-step") {
                           setLangkah2Form({ ...langkah2Form, bb: e.target.value });
                         } else {
-                          setSequentialForm({ ...sequentialForm, bb: e.target.value });
+                          setSequentialForm((prev) => ({ ...prev, bb: e.target.value  }));
                         }
                       }}
                       required
@@ -2996,7 +3017,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           if (examinationMode === "per-step") {
                             setLangkah2Form({ ...langkah2Form, tensiSistol: e.target.value });
                           } else {
-                            setSequentialForm({ ...sequentialForm, tensiSistol: e.target.value });
+                            setSequentialForm((prev) => ({ ...prev, tensiSistol: e.target.value  }));
                           }
                         }}
                       />
@@ -3013,7 +3034,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           if (examinationMode === "per-step") {
                             setLangkah2Form({ ...langkah2Form, tensiDiastol: e.target.value });
                           } else {
-                            setSequentialForm({ ...sequentialForm, tensiDiastol: e.target.value });
+                            setSequentialForm((prev) => ({ ...prev, tensiDiastol: e.target.value  }));
                           }
                         }}
                       />
@@ -3039,7 +3060,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           if (examinationMode === "per-step") {
                             setLangkah2Form({ ...langkah2Form, tb: e.target.value });
                           } else {
-                            setSequentialForm({ ...sequentialForm, tb: e.target.value });
+                            setSequentialForm((prev) => ({ ...prev, tb: e.target.value  }));
                           }
                         }}
                       />
@@ -3063,7 +3084,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           if (examinationMode === "per-step") {
                             setLangkah2Form({ ...langkah2Form, lk: e.target.value });
                           } else {
-                            setSequentialForm({ ...sequentialForm, lk: e.target.value });
+                            setSequentialForm((prev) => ({ ...prev, lk: e.target.value  }));
                           }
                         }}
                       />
@@ -3087,7 +3108,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           if (examinationMode === "per-step") {
                             setLangkah2Form({ ...langkah2Form, lila: e.target.value });
                           } else {
-                            setSequentialForm({ ...sequentialForm, lila: e.target.value });
+                            setSequentialForm((prev) => ({ ...prev, lila: e.target.value  }));
                           }
                         }}
                       />
@@ -3111,7 +3132,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           if (examinationMode === "per-step") {
                             setLangkah2Form({ ...langkah2Form, lp: e.target.value });
                           } else {
-                            setSequentialForm({ ...sequentialForm, lp: e.target.value });
+                            setSequentialForm((prev) => ({ ...prev, lp: e.target.value  }));
                           }
                         }}
                       />
@@ -3276,7 +3297,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               if (examinationMode === "per-step") {
                                 setLangkah2Form({ ...langkah2Form, gulaDarah: e.target.value });
                               } else {
-                                setSequentialForm({ ...sequentialForm, gulaDarah: e.target.value });
+                                setSequentialForm((prev) => ({ ...prev, gulaDarah: e.target.value  }));
                               }
                             }}
                           />
@@ -3313,9 +3334,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                             value={examinationMode === "per-step" ? langkah4Form.kolesterol || "" : sequentialForm.kolesterol || ""}
                             onChange={(e) => {
                               if (examinationMode === "per-step") {
-                                setLangkah4Form({ ...langkah4Form, kolesterol: e.target.value });
+                                setLangkah4Form((prev) => ({ ...prev, kolesterol: e.target.value  }));
                               } else {
-                                setSequentialForm({ ...sequentialForm, kolesterol: e.target.value });
+                                setSequentialForm((prev) => ({ ...prev, kolesterol: e.target.value  }));
                               }
                             }}
                           />
@@ -3414,9 +3435,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.mataKanan || "" : sequentialForm.mataKanan || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, mataKanan: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, mataKanan: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, mataKanan: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, mataKanan: e.target.value  }));
                             }
                           }}
                         >
@@ -3433,9 +3454,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.mataKiri || "" : sequentialForm.mataKiri || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, mataKiri: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, mataKiri: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, mataKiri: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, mataKiri: e.target.value  }));
                             }
                           }}
                         >
@@ -3455,9 +3476,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.telingaKanan || "" : sequentialForm.telingaKanan || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, telingaKanan: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, telingaKanan: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, telingaKanan: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, telingaKanan: e.target.value  }));
                             }
                           }}
                         >
@@ -3474,9 +3495,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.telingaKiri || "" : sequentialForm.telingaKiri || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, telingaKiri: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, telingaKiri: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, telingaKiri: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, telingaKiri: e.target.value  }));
                             }
                           }}
                         >
@@ -3600,9 +3621,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               onChange={(e) => {
                                 const val = e.target.value === "" ? "" : parseInt(e.target.value);
                                 if (examinationMode === "per-step") {
-                                  setLangkah4Form({ ...langkah4Form, pumaJk: val });
+                                  setLangkah4Form((prev) => ({ ...prev, pumaJk: val  }));
                                 } else {
-                                  setSequentialForm({ ...sequentialForm, pumaJk: val });
+                                  setSequentialForm((prev) => ({ ...prev, pumaJk: val  }));
                                 }
                               }}
                             >
@@ -3620,9 +3641,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               onChange={(e) => {
                                 const val = e.target.value === "" ? "" : parseInt(e.target.value);
                                 if (examinationMode === "per-step") {
-                                  setLangkah4Form({ ...langkah4Form, pumaUsia: val });
+                                  setLangkah4Form((prev) => ({ ...prev, pumaUsia: val  }));
                                 } else {
-                                  setSequentialForm({ ...sequentialForm, pumaUsia: val });
+                                  setSequentialForm((prev) => ({ ...prev, pumaUsia: val  }));
                                 }
                               }}
                             >
@@ -3641,9 +3662,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               onChange={(e) => {
                                 const val = e.target.value === "" ? "" : parseInt(e.target.value);
                                 if (examinationMode === "per-step") {
-                                  setLangkah4Form({ ...langkah4Form, pumaMerokok: val });
+                                  setLangkah4Form((prev) => ({ ...prev, pumaMerokok: val  }));
                                 } else {
-                                  setSequentialForm({ ...sequentialForm, pumaMerokok: val });
+                                  setSequentialForm((prev) => ({ ...prev, pumaMerokok: val  }));
                                 }
                               }}
                             >
@@ -3710,9 +3731,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                 value={examinationMode === "per-step" ? langkah4Form.jiwaBulan || "" : sequentialForm.jiwaBulan || ""}
                                 onChange={(e) => {
                                   if (examinationMode === "per-step") {
-                                    setLangkah4Form({ ...langkah4Form, jiwaBulan: e.target.value });
+                                    setLangkah4Form((prev) => ({ ...prev, jiwaBulan: e.target.value  }));
                                   } else {
-                                    setSequentialForm({ ...sequentialForm, jiwaBulan: e.target.value });
+                                    setSequentialForm((prev) => ({ ...prev, jiwaBulan: e.target.value  }));
                                   }
                                 }}
                               >
@@ -3791,9 +3812,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                             checked={numVal === optionScore}
                                             onChange={() => {
                                               if (examinationMode === "per-step") {
-                                                setLangkah4Form({ ...langkah4Form, [item.field]: optionScore });
+                                                setLangkah4Form((prev) => ({ ...prev, [item.field]: optionScore  }));
                                               } else {
-                                                setSequentialForm({ ...sequentialForm, [item.field]: optionScore });
+                                                setSequentialForm((prev) => ({ ...prev, [item.field]: optionScore  }));
                                               }
                                             }}
                                             style={{ width: "1.15rem", height: "1.15rem", cursor: "pointer" }}
@@ -3903,8 +3924,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksBab ?? "") : (sequentialForm.aksBab ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksBab: val });
-                                          else setSequentialForm({ ...sequentialForm, aksBab: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksBab: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksBab: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -3924,8 +3945,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksBak ?? "") : (sequentialForm.aksBak ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksBak: val });
-                                          else setSequentialForm({ ...sequentialForm, aksBak: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksBak: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksBak: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -3945,8 +3966,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksCuciMuka ?? "") : (sequentialForm.aksCuciMuka ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksCuciMuka: val });
-                                          else setSequentialForm({ ...sequentialForm, aksCuciMuka: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksCuciMuka: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksCuciMuka: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -3965,8 +3986,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksWc ?? "") : (sequentialForm.aksWc ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksWc: val });
-                                          else setSequentialForm({ ...sequentialForm, aksWc: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksWc: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksWc: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -3986,8 +4007,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksMakan ?? "") : (sequentialForm.aksMakan ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksMakan: val });
-                                          else setSequentialForm({ ...sequentialForm, aksMakan: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksMakan: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksMakan: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -4007,8 +4028,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksPindah ?? "") : (sequentialForm.aksPindah ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksPindah: val });
-                                          else setSequentialForm({ ...sequentialForm, aksPindah: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksPindah: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksPindah: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -4029,8 +4050,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksJalan ?? "") : (sequentialForm.aksJalan ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksJalan: val });
-                                          else setSequentialForm({ ...sequentialForm, aksJalan: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksJalan: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksJalan: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -4051,8 +4072,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksPakaian ?? "") : (sequentialForm.aksPakaian ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksPakaian: val });
-                                          else setSequentialForm({ ...sequentialForm, aksPakaian: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksPakaian: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksPakaian: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -4072,8 +4093,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksTangga ?? "") : (sequentialForm.aksTangga ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksTangga: val });
-                                          else setSequentialForm({ ...sequentialForm, aksTangga: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksTangga: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksTangga: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -4093,8 +4114,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                         value={examinationMode === "per-step" ? (langkah4Form.aksMandi ?? "") : (sequentialForm.aksMandi ?? "")}
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? "" : parseInt(e.target.value);
-                                          if (examinationMode === "per-step") setLangkah4Form({ ...langkah4Form, aksMandi: val });
-                                          else setSequentialForm({ ...sequentialForm, aksMandi: val });
+                                          if (examinationMode === "per-step") setLangkah4Form((prev) => ({ ...prev, aksMandi: val  }));
+                                          else setSequentialForm((prev) => ({ ...prev, aksMandi: val  }));
                                         }}
                                       >
                                         <option value="">-- Pilih Kondisi --</option>
@@ -4353,7 +4374,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               if (examinationMode === "per-step") {
                                 setLangkah2Form({ ...langkah2Form, gulaDarah: e.target.value });
                               } else {
-                                setSequentialForm({ ...sequentialForm, gulaDarah: e.target.value });
+                                setSequentialForm((prev) => ({ ...prev, gulaDarah: e.target.value  }));
                               }
                             }}
                           />
@@ -4363,14 +4384,15 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
                       <div className="col-md-6">
                         <label className="form-label fw-semibold text-dark small mb-1">Plotting Gula Darah</label>
-                        <div className="bg-light p-2 rounded-3 border-0 fw-bold text-dark d-flex align-items-center justify-content-between" style={{ minHeight: "38px" }}>
-                          <span>
-                            {parseInt(examinationMode === "per-step" ? langkah2Form.gulaDarah : sequentialForm.gulaDarah) >= 200
-                              ? "Diabetisi (D) - ≥ 200 mg/dl"
-                              : parseInt(examinationMode === "per-step" ? langkah2Form.gulaDarah : sequentialForm.gulaDarah) >= 140
-                                ? "Prediabetisi (Pd) - 140-199 mg/dl"
-                                : "Normal (N) - 80-140 mg/dl"}
-                          </span>
+                        <div className="bg-light p-2 rounded-3 border-0 fw-bold d-flex align-items-center justify-content-between" style={{ minHeight: "38px" }}>
+                          {(() => {
+                            const gdVal = examinationMode === "per-step" ? langkah2Form.gulaDarah : sequentialForm.gulaDarah;
+                            if (!gdVal) return <span className="text-muted">-</span>;
+                            const num = parseInt(gdVal);
+                            if (num >= 200) return <span className="text-danger">Diabetisi (D) - ≥ 200 mg/dl</span>;
+                            if (num >= 140) return <span className="text-warning text-darken">Prediabetisi (Pd) - 140-199 mg/dl</span>;
+                            return <span className="text-success">Normal (N) - 80-140 mg/dl</span>;
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -4420,9 +4442,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.mataKanan || "" : sequentialForm.mataKanan || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, mataKanan: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, mataKanan: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, mataKanan: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, mataKanan: e.target.value  }));
                             }
                           }}
                         >
@@ -4439,9 +4461,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.mataKiri || "" : sequentialForm.mataKiri || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, mataKiri: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, mataKiri: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, mataKiri: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, mataKiri: e.target.value  }));
                             }
                           }}
                         >
@@ -4461,9 +4483,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.telingaKanan || "" : sequentialForm.telingaKanan || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, telingaKanan: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, telingaKanan: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, telingaKanan: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, telingaKanan: e.target.value  }));
                             }
                           }}
                         >
@@ -4480,9 +4502,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.telingaKiri || "" : sequentialForm.telingaKiri || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, telingaKiri: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, telingaKiri: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, telingaKiri: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, telingaKiri: e.target.value  }));
                             }
                           }}
                         >
@@ -4563,9 +4585,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                             value={examinationMode === "per-step" ? langkah4Form.skriningJiwa || "" : sequentialForm.skriningJiwa || ""}
                             onChange={(e) => {
                               if (examinationMode === "per-step") {
-                                setLangkah4Form({ ...langkah4Form, skriningJiwa: e.target.value });
+                                setLangkah4Form((prev) => ({ ...prev, skriningJiwa: e.target.value  }));
                               } else {
-                                setSequentialForm({ ...sequentialForm, skriningJiwa: e.target.value });
+                                setSequentialForm((prev) => ({ ...prev, skriningJiwa: e.target.value  }));
                               }
                             }}
                           >
@@ -4583,15 +4605,11 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               value={examinationMode === "per-step" ? langkah4Form.periksaHb || "" : sequentialForm.periksaHb || ""}
                               onChange={(e) => {
                                 if (examinationMode === "per-step") {
-                                  setLangkah4Form({
-                                    ...langkah4Form,
-                                    periksaHb: e.target.value,
-                                  });
+                                  setLangkah4Form((prev) => ({ ...prev, periksaHb: e.target.value,
+                                   }));
                                 } else {
-                                  setSequentialForm({
-                                    ...sequentialForm,
-                                    periksaHb: e.target.value,
-                                  });
+                                  setSequentialForm((prev) => ({ ...prev, periksaHb: e.target.value,
+                                   }));
                                 }
                               }}
                             >
@@ -4651,9 +4669,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.mataKanan || "" : sequentialForm.mataKanan || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, mataKanan: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, mataKanan: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, mataKanan: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, mataKanan: e.target.value  }));
                             }
                           }}
                         >
@@ -4670,9 +4688,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.mataKiri || "" : sequentialForm.mataKiri || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, mataKiri: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, mataKiri: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, mataKiri: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, mataKiri: e.target.value  }));
                             }
                           }}
                         >
@@ -4692,9 +4710,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.telingaKanan || "" : sequentialForm.telingaKanan || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, telingaKanan: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, telingaKanan: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, telingaKanan: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, telingaKanan: e.target.value  }));
                             }
                           }}
                         >
@@ -4711,9 +4729,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           value={examinationMode === "per-step" ? langkah4Form.telingaKiri || "" : sequentialForm.telingaKiri || ""}
                           onChange={(e) => {
                             if (examinationMode === "per-step") {
-                              setLangkah4Form({ ...langkah4Form, telingaKiri: e.target.value });
+                              setLangkah4Form((prev) => ({ ...prev, telingaKiri: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, telingaKiri: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, telingaKiri: e.target.value  }));
                             }
                           }}
                         >
@@ -4795,9 +4813,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                             value={examinationMode === "per-step" ? langkah4Form.skriningJiwa || "" : sequentialForm.skriningJiwa || ""}
                             onChange={(e) => {
                               if (examinationMode === "per-step") {
-                                setLangkah4Form({ ...langkah4Form, skriningJiwa: e.target.value });
+                                setLangkah4Form((prev) => ({ ...prev, skriningJiwa: e.target.value  }));
                               } else {
-                                setSequentialForm({ ...sequentialForm, skriningJiwa: e.target.value });
+                                setSequentialForm((prev) => ({ ...prev, skriningJiwa: e.target.value  }));
                               }
                             }}
                           >
@@ -4814,9 +4832,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                               value={examinationMode === "per-step" ? langkah4Form.periksaHb || "" : sequentialForm.periksaHb || ""}
                               onChange={(e) => {
                                 if (examinationMode === "per-step") {
-                                  setLangkah4Form({ ...langkah4Form, periksaHb: e.target.value });
+                                  setLangkah4Form((prev) => ({ ...prev, periksaHb: e.target.value  }));
                                 } else {
-                                  setSequentialForm({ ...sequentialForm, periksaHb: e.target.value });
+                                  setSequentialForm((prev) => ({ ...prev, periksaHb: e.target.value  }));
                                 }
                               }}
                             >
@@ -5316,7 +5334,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           onChange={(e) => {
                             const wId = e.target.value;
                             setSelectedWargaStep5(wId);
-                            setLangkah5Form({ topikPenyuluhan: "", mengikutiKelas: "", statusRujukan: "", alasanRujukan: "" });
+                            setLangkah5Form({ topikPenyuluhan: "", statusRujukan: "", alasanRujukan: "" });
                           }}
                         >
                           {availableWargaStep5.length === 0 ? (
@@ -5357,9 +5375,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         required
                         onChange={(e) => {
                           if (examinationMode === "per-step") {
-                            setLangkah5Form({ ...langkah5Form, topikPenyuluhan: e.target.value });
+                            setLangkah5Form((prev) => ({ ...prev, topikPenyuluhan: e.target.value  }));
                           } else {
-                            setSequentialForm({ ...sequentialForm, topikPenyuluhan: e.target.value });
+                            setSequentialForm((prev) => ({ ...prev, topikPenyuluhan: e.target.value  }));
                           }
                         }}
                       />
@@ -5374,9 +5392,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         onChange={(e) => {
                           if (!step5AutoReferral.perluRujuk && !backendPersistedRujukan) {
                             if (examinationMode === "per-step") {
-                              setLangkah5Form({ ...langkah5Form, statusRujukan: e.target.value });
+                              setLangkah5Form((prev) => ({ ...prev, statusRujukan: e.target.value  }));
                             } else {
-                              setSequentialForm({ ...sequentialForm, statusRujukan: e.target.value });
+                              setSequentialForm((prev) => ({ ...prev, statusRujukan: e.target.value  }));
                             }
                           }
                         }}
@@ -5507,13 +5525,26 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                     };
                   })();
 
+                  const renderColorCoded = (value) => {
+                    if (!value) return <span className="text-muted">-</span>;
+                    const valLower = String(value).toLowerCase();
+                    if (valLower.includes("normal") || valLower.includes("baik") || valLower.includes("aman") || valLower.includes("tidak_terindikasi") || valLower === "n") {
+                      return <span className="text-success fw-bold">{value}</span>;
+                    } else if (valLower.includes("waspada") || valLower.includes("prediab") || valLower.includes("risiko_rendah") || valLower.includes("kuning")) {
+                      return <span className="text-warning fw-bold">{value}</span>;
+                    } else if (valLower.includes("tinggi") || valLower.includes("bahaya") || valLower.includes("diabetisi") || valLower.includes("risiko") || valLower.includes("merah") || valLower.includes("rujukan")) {
+                      return <span className="text-danger fw-bold">{value}</span>;
+                    }
+                    return <span className="fw-semibold text-dark">{value}</span>;
+                  };
+
                   // Kolesterol evaluation
                   const kolesterolEval = (() => {
                     if (!sequentialForm.kolesterol) return "-";
                     const kNum = parseInt(sequentialForm.kolesterol);
                     if (isNaN(kNum)) return sequentialForm.kolesterol;
-                    if (kNum >= 200) return `${kNum} mg/dL (Tinggi ≥ 200 mg/dL)`;
-                    return `${kNum} mg/dL (Normal < 200 mg/dL)`;
+                    if (kNum >= 200) return <span className="text-danger fw-bold">{kNum} mg/dL (Tinggi ≥ 200 mg/dL)</span>;
+                    return <span className="text-success fw-bold">{kNum} mg/dL (Normal &lt; 200 mg/dL)</span>;
                   })();
 
                   // Gula Darah evaluation
@@ -5521,9 +5552,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                     if (!sequentialForm.gulaDarah) return "-";
                     const gNum = parseInt(sequentialForm.gulaDarah);
                     if (isNaN(gNum)) return sequentialForm.gulaDarah;
-                    if (gNum >= 200) return `${gNum} mg/dL (Diabetisi ≥ 200 mg/dL)`;
-                    if (gNum >= 140) return `${gNum} mg/dL (Prediabetisi 140–199 mg/dL)`;
-                    return `${gNum} mg/dL (Normal < 140 mg/dL)`;
+                    if (gNum >= 200) return <span className="text-danger fw-bold">{gNum} mg/dL (Diabetisi ≥ 200 mg/dL)</span>;
+                    if (gNum >= 140) return <span className="text-warning fw-bold">{gNum} mg/dL (Prediabetisi 140–199 mg/dL)</span>;
+                    return <span className="text-success fw-bold">{gNum} mg/dL (Normal &lt; 140 mg/dL)</span>;
                   })();
 
                   // TBC Gejala for Dewasa & Lansia
@@ -5569,12 +5600,31 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                   return (
                     <>
                       {/* LANGKAH 1 */}
+                      <style>{`
+                        .preview-grid > div {
+                          background-color: #f8f9fa !important;
+                          border-radius: 0.5rem;
+                          padding: 0.5rem 0.75rem !important;
+                          border: 2px solid white;
+                        }
+                        .preview-grid strong {
+                          display: block;
+                          font-size: 0.8rem;
+                          color: #6c757d;
+                          margin-bottom: 0.2rem;
+                          font-weight: 500;
+                        }
+                        .preview-grid > div > span:not(.badge):not(.text-muted) {
+                          font-weight: 600;
+                          color: #212529;
+                        }
+                      `}</style>
                       <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
                         <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 1: Identitas Sasaran</h6>
-                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">Pendaftaran</span>
+                          <h6 className="fw-bold text-dark mb-0">Langkah 1: Identitas Sasaran</h6>
+                          <span className="badge bg-light text-secondary border fw-semibold">Pendaftaran</span>
                         </div>
-                        <div className="row g-2 small">
+                        <div className="row g-2 small preview-grid">
                           <div className="col-6">
                             <strong>NIK:</strong> {sequentialForm.nik || previewWarga.nik || ""}
                           </div>
@@ -5588,26 +5638,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                             <strong>Jenis Kelamin:</strong> {["bumil", "nifas"].includes(activeSubmenu) ? "Perempuan" : sequentialForm.gender || previewWarga.gender || ""}
                           </div>
 
-                          {["dewasa", "lansia"].includes(activeSubmenu) && (
-                            <>
-                              <div className="col-6">
-                                <strong>Pekerjaan:</strong> {sequentialForm.pekerjaan || previewWarga.pekerjaan || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Status Pernikahan:</strong> {sequentialForm.statusPernikahan || previewWarga.statusPernikahan || ""}
-                              </div>
-                            </>
-                          )}
-
-                          {["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && (
-                            <>
-                              <div className="col-6">
-                                <strong>Sekolah:</strong> {sequentialForm.sekolah || previewWarga.sekolah || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Kelas:</strong> {sequentialForm.kelas || previewWarga.kelas || ""}
-                              </div>
-                            </>
+                          {["usekrem-15-18", "dewasa", "lansia", "bumil", "nifas"].includes(activeSubmenu) && (
+                            <div className="col-12">
+                              <strong>Status Pernikahan:</strong> {sequentialForm.statusPernikahan || previewWarga.statusPernikahan || ""}
+                            </div>
                           )}
 
                           {activeSubmenu === "bumil" && (
@@ -5634,14 +5668,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       {/* LANGKAH 2 */}
                       <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
                         <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 2: Skrining Penimbangan &amp; Pengukuran</h6>
-                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">Pengukuran Fisik</span>
+                          <h6 className="fw-bold text-dark mb-0">Langkah 2: Skrining Penimbangan &amp; Pengukuran</h6>
+                          <span className="badge bg-light text-secondary border fw-semibold">Pengukuran Fisik</span>
                         </div>
-                        <div className="row g-2 small">
+                        <div className="row g-2 small preview-grid">
                           <div className="col-6">
                             <strong>Berat Badan (BB):</strong> {sequentialForm.bb ? `${sequentialForm.bb} kg` : "-"}
                           </div>
-                          {activeSubmenu !== "nifas" && (
+                          {activeSubmenu !== "nifas" && activeSubmenu !== "bumil" && (
                             <div className="col-6">
                               <strong>{["bayi-0-11", "balita-12-59"].includes(activeSubmenu) ? "Panjang / Tinggi Badan (PB/TB):" : "Tinggi Badan (TB):"}</strong> {sequentialForm.tb ? `${sequentialForm.tb} cm` : "-"}
                             </div>
@@ -5672,23 +5706,23 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       {/* LANGKAH 3 */}
                       <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
                         <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 3: Plotting Evaluasi Otomatis</h6>
-                          <span className="badge bg-success-subtle text-success border border-success-subtle fw-semibold">Hasil Plotting Sistem</span>
+                          <h6 className="fw-bold text-dark mb-0">Langkah 3: Plotting Evaluasi Otomatis</h6>
+                          <span className="badge bg-light text-secondary border fw-semibold">Hasil Plotting Sistem</span>
                         </div>
-                        <div className="row g-2 small">
+                        <div className="row g-2 small preview-grid">
                           {["dewasa", "lansia"].includes(activeSubmenu) && (
                             <>
                               <div className="col-6">
-                                <strong>Plotting IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtDewasaStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                                <strong>Plotting IMT:</strong> {renderColorCoded(plottingResult?.imt?.kategori)} <span className="text-muted">({plottingResult?.imt?.imt ?? "-"} kg/m²)</span>
                               </div>
                               <div className="col-6">
-                                <strong>Plotting LiLA:</strong> <span className="fw-semibold text-dark">{activeSubmenu === "lansia" ? plottingResult?.lilaLansiaStatus || "" : plottingResult?.lilaDewasaStatus || ""}</span>
+                                <strong>Plotting LiLA:</strong> {renderColorCoded(plottingResult?.lila?.kategori)}
                               </div>
                               <div className="col-6">
-                                <strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || ""}</span>
+                                <strong>Tekanan Darah:</strong> {renderColorCoded(plottingResult?.tekanan_darah?.kategori)}
                               </div>
                               <div className="col-6">
-                                <strong>Lingkar Perut:</strong> <span className="fw-semibold text-dark">{plottingResult?.lpPlottingStatus || ""}</span>
+                                <strong>Lingkar Perut:</strong> {renderColorCoded(plottingResult?.lingkar_perut?.kategori)}
                               </div>
                             </>
                           )}
@@ -5696,30 +5730,30 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           {activeSubmenu === "usekrem-15-18" && (
                             <>
                               <div className="col-6">
-                                <strong>Plotting IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtUsekremStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                                <strong>Plotting IMT:</strong> {renderColorCoded(plottingResult?.imt?.kategori || plottingResult?.imtu?.kategori)} <span className="text-muted">({plottingResult?.imt?.imt || plottingResult?.imtu?.nilai_riil || "-"} kg/m²)</span>
                               </div>
                               <div className="col-6">
-                                <strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiRemajaStatus || ""}</span>
+                                <strong>Tekanan Darah:</strong> {renderColorCoded(plottingResult?.tekanan_darah?.kategori)}
                               </div>
                               <div className="col-6">
-                                <strong>Lingkar Perut:</strong> <span className="fw-semibold text-dark">{plottingResult?.lpPlottingStatus || ""}</span>
+                                <strong>Lingkar Perut:</strong> {renderColorCoded(plottingResult?.lingkar_perut?.kategori)}
                               </div>
                             </>
                           )}
 
                           {activeSubmenu === "usekrem-6-14" && (
                             <div className="col-12">
-                              <strong>Plotting IMT/U:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtUsekremStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                              <strong>Plotting IMT/U:</strong> {renderColorCoded(plottingResult?.imtu?.kategori)} <span className="text-muted">({plottingResult?.imtu?.nilai_riil ?? "-"} kg/m²)</span>
                             </div>
                           )}
 
                           {activeSubmenu === "apras" && (
                             <>
                               <div className="col-6">
-                                <strong>Plotting IMT/U:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtAprasStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
+                                <strong>Plotting IMT/U:</strong> {renderColorCoded(plottingResult?.imtu?.kategori)} <span className="text-muted">({plottingResult?.imtu?.nilai_riil ?? "-"} kg/m²)</span>
                               </div>
                               <div className="col-6">
-                                <strong>Plotting LiLA:</strong> <span className="fw-semibold text-dark">{plottingResult?.lilaAprasStatus || ""}</span>
+                                <strong>Plotting LiLA:</strong> {renderColorCoded(plottingResult?.lila?.kategori)}
                               </div>
                             </>
                           )}
@@ -5727,45 +5761,53 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           {["bayi-0-11", "balita-12-59"].includes(activeSubmenu) && (
                             <>
                               <div className="col-6">
-                                <strong>BB / Usia (BB/U):</strong> <span className="fw-semibold text-dark">{plottingResult?.bbUStatus || ""}</span>
+                                <strong>BB / Usia (BB/U):</strong> {renderColorCoded(plottingResult?.bbu?.kategori)}
                               </div>
                               <div className="col-6">
-                                <strong>PB/TB / Usia:</strong> <span className="fw-semibold text-dark">{plottingResult?.pbUStatus || ""}</span>
+                                <strong>PB/TB / Usia:</strong> {renderColorCoded(plottingResult?.tbu?.kategori)}
                               </div>
                               <div className="col-6">
-                                <strong>BB / PB (TB):</strong> <span className="fw-semibold text-dark">{plottingResult?.bbPbStatus || ""}</span>
+                                <strong>BB / PB (TB):</strong> {renderColorCoded(plottingResult?.bb_panjang_tinggi?.kategori)}
                               </div>
                               <div className="col-6">
-                                <strong>Lingkar Kepala:</strong> <span className="fw-semibold text-dark">{plottingResult?.lkStatus || ""}</span>
-                              </div>
-                              <div className="col-12">
-                                <strong>Status LiLA:</strong> <span className="fw-semibold text-dark">{plottingResult?.lilaBayiStatus || ""}</span>
+                                <strong>Status LiLA:</strong> {renderColorCoded(plottingResult?.lila?.kategori)}
                               </div>
                             </>
                           )}
 
                           {activeSubmenu === "bumil" && (
                             <>
-                              <div className="col-6">
-                                <strong>Status IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Status LiLA:</strong> <span className="fw-semibold text-dark">{plottingResult?.lilaStatus || ""}</span>
-                              </div>
-                              <div className="col-12">
-                                <strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || ""}</span>
-                              </div>
+                              {plottingResult?.imt && (
+                                <div className="col-6">
+                                  <strong>Status IMT:</strong> {renderColorCoded(plottingResult.imt.kategori)} <span className="text-muted">({plottingResult.imt.imt ?? "-"} kg/m²)</span>
+                                </div>
+                              )}
+                              {plottingResult?.lila && (
+                                <div className="col-6">
+                                  <strong>Status LiLA:</strong> {renderColorCoded(plottingResult.lila.kategori)}
+                                </div>
+                              )}
+                              {plottingResult?.tekanan_darah && (
+                                <div className="col-12">
+                                  <strong>Tekanan Darah:</strong> {renderColorCoded(plottingResult.tekanan_darah.kategori)}
+                                </div>
+                              )}
                             </>
                           )}
 
+
                           {activeSubmenu === "nifas" && (
                             <>
-                              <div className="col-6">
-                                <strong>Status IMT:</strong> <span className="fw-semibold text-dark">{plottingResult?.imtStatus || ""}</span> <span className="text-muted">({plottingResult?.imt ?? ""} kg/m²)</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Tekanan Darah:</strong> <span className="fw-semibold text-dark">{plottingResult?.tensiStatus || ""}</span>
-                              </div>
+                              {plottingResult?.imt && (
+                                <div className="col-6">
+                                  <strong>Status IMT:</strong> {renderColorCoded(plottingResult.imt.kategori)} <span className="text-muted">({plottingResult.imt.imt ?? "-"} kg/m²)</span>
+                                </div>
+                              )}
+                              {plottingResult?.tekanan_darah && (
+                                <div className="col-6">
+                                  <strong>Tekanan Darah:</strong> {renderColorCoded(plottingResult.tekanan_darah.kategori)}
+                                </div>
+                              )}
                             </>
                           )}
                         </div>
@@ -5774,10 +5816,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       {/* LANGKAH 4 */}
                       <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
                         <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 4: Skrining PTM, TBC &amp; Kesehatan</h6>
-                          <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-semibold">Pelayanan Kesehatan</span>
+                          <h6 className="fw-bold text-dark mb-0">Langkah 4: Skrining PTM, TBC &amp; Kesehatan</h6>
+                          <span className="badge bg-light text-secondary border fw-semibold">Pelayanan Kesehatan</span>
                         </div>
-                        <div className="row g-2 small">
+                        <div className="row g-2 small preview-grid">
                           {activeSubmenu === "lansia" && (
                             <>
                               <div className="col-6">
@@ -5790,10 +5832,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                 <strong>Evaluasi Gejala TBC:</strong> <span className={tbcAdultGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcAdultGejala.text}</span>
                               </div>
                               <div className="col-6">
-                                <strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || ""} • Kiri: {sequentialForm.mataKiri || ""}
+                                <strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || "-"} • Kiri: {sequentialForm.mataKiri || "-"}
                               </div>
                               <div className="col-6">
-                                <strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || ""} • Kiri: {sequentialForm.telingaKiri || ""}
+                                <strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || "-"} • Kiri: {sequentialForm.telingaKiri || "-"}
                               </div>
                               <div className="col-12 pt-2 border-top">
                                 <strong>C.1 Skrining PPOK (PUMA):</strong> <span className={`badge ${pumaEvaluation.isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success"} px-2 py-1 ms-1`}>{pumaEvaluation.text}</span>
@@ -5825,10 +5867,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                 <strong>Evaluasi Gejala TBC:</strong> <span className={tbcAdultGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcAdultGejala.text}</span>
                               </div>
                               <div className="col-6">
-                                <strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || ""} • Kiri: {sequentialForm.mataKiri || ""}
+                                <strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || "-"} • Kiri: {sequentialForm.mataKiri || "-"}
                               </div>
                               <div className="col-6">
-                                <strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || ""} • Kiri: {sequentialForm.telingaKiri || ""}
+                                <strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || "-"} • Kiri: {sequentialForm.telingaKiri || "-"}
                               </div>
                               <div className="col-12 pt-2 border-top">
                                 <strong>C.1 Skrining PPOK (PUMA):</strong> <span className={`badge ${pumaEvaluation.isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success"} px-2 py-1 ms-1`}>{pumaEvaluation.text}</span>
@@ -5842,16 +5884,16 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                 <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
                               </div>
                               <div className="col-6">
-                                <strong>Skrining Penglihatan:</strong> Kanan: {sequentialForm.mataKanan || ""} • Kiri: {sequentialForm.mataKiri || ""}
+                                <strong>Skrining Penglihatan:</strong> Kanan: {sequentialForm.mataKanan || "-"} • Kiri: {sequentialForm.mataKiri || "-"}
                               </div>
                               <div className="col-6">
-                                <strong>Skrining Pendengaran:</strong> Kanan: {sequentialForm.telingaKanan || ""} • Kiri: {sequentialForm.telingaKiri || ""}
+                                <strong>Skrining Pendengaran:</strong> Kanan: {sequentialForm.telingaKanan || "-"} • Kiri: {sequentialForm.telingaKiri || "-"}
                               </div>
                               <div className="col-6">
-                                <strong>Skrining Jiwa:</strong> {sequentialForm.skriningJiwa || ""}
+                                <strong>Skrining Jiwa:</strong> {sequentialForm.skriningJiwa || "-"}
                               </div>
                               <div className="col-6">
-                                <strong>Skrining Anemia / Periksa Hb:</strong> {sequentialForm.periksaHb || ""}
+                                <strong>Skrining Anemia / Periksa Hb:</strong> {sequentialForm.periksaHb || "-"}
                               </div>
                             </>
                           )}
@@ -6008,16 +6050,14 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       {/* LANGKAH 5 */}
                       <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
                         <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-primary mb-0">Langkah 5: Penyuluhan &amp; Rujukan</h6>
-                          <span className="badge bg-secondary-subtle text-secondary border fw-semibold">Tindak Lanjut</span>
+                          <h6 className="fw-bold text-dark mb-0">Langkah 5: Penyuluhan &amp; Rujukan</h6>
+                          <span className="badge bg-light text-secondary border fw-semibold">Tindak Lanjut</span>
                         </div>
-                        <div className="row g-2 small">
+                        <div className="row g-2 small preview-grid">
                           <div className="col-12">
                             <strong>Topik Penyuluhan:</strong> {sequentialForm.topikPenyuluhan || ""}
                           </div>
-                          <div className="col-6">
-                            <strong>Mengikuti Kelas Posyandu:</strong> {sequentialForm.mengikutiKelas || ""}
-                          </div>
+
                           <div className="col-6">
                             <strong>Status Rujukan:</strong> <span className="badge bg-light text-dark border fw-semibold">{sequentialForm.statusRujukan || ""}</span>
                           </div>
@@ -6042,4 +6082,24 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       )}
     </div>
   );
+
+  if (isModalMode) {
+    return (
+      <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}>
+        <div className="modal-dialog modal-fullscreen">
+          <div className="modal-content bg-light">
+            <div className="modal-header bg-white border-bottom shadow-sm z-1">
+               <h5 className="modal-title fw-bold">Edit Pemeriksaan</h5>
+               <button type="button" className="btn-close" onClick={onCloseModal}></button>
+            </div>
+            <div className="modal-body p-0" style={{ overflowY: "auto", position: "relative" }}>
+               {content}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return content;
 }

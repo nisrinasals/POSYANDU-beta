@@ -9,9 +9,12 @@ const SCREENING_LABELS = {
   pelayanan_kesehatan: "Pelayanan Kesehatan",
   pemeriksaan_6_bulanan: "Pemeriksaan 6 Bulanan",
   pemeriksaan_tahunan_remaja_putri: "Pemeriksaan Tahunan Remaja Putri",
+  pemeriksaan_tahunan: "Pemeriksaan Tahunan",
+  skrining_jiwa: "Skrining Kesehatan Jiwa",
   skrining_kesehatan_jiwa: "Skrining Kesehatan Jiwa",
   skrining_ppok_puma: "Skrining PPOK (PUMA)",
   aks_aktifitas_harian: "Aktivitas Kehidupan Sehari-hari (AKS)",
+  jenis_kelamin: "Jenis Kelamin",
   skilas: "Skrining Lansia (SKILAS)",
   tes_penglihatan_hitung_jari: "Tes Penglihatan (Hitung Jari)",
   tes_pendengaran_berbisik: "Tes Pendengaran (Berbisik)",
@@ -22,6 +25,10 @@ const SCREENING_LABELS = {
   gangguan_pendengaran: "Gangguan Pendengaran",
   gejala_depresi: "Gejala Depresi",
   jawaban_skor: "Jawaban Skrining Jiwa",
+  nama_suami: "Nama Suami",
+  nama_istri: "Nama Istri",
+  nama_ibu: "Nama Ibu",
+  nama_ayah: "Nama Ayah",
   has_batuk_menerus: "Batuk Terus-menerus",
   has_batuk_2_minggu: "Batuk 2 Minggu atau Lebih",
   has_batuk_lebih_2_minggu: "Batuk Lebih dari 2 Minggu",
@@ -159,8 +166,23 @@ const formatDisplayValue = (value, fieldKey = "") => {
   if (fieldKey === "status_risiko_puma") return ({ risiko_rendah: "Risiko Rendah", risiko_tinggi: "Risiko Tinggi", ambigu_skor_6: "Skor Perlu Evaluasi" })[value] || String(value);
   if (fieldKey === "status_aks") return String(value).replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
   if (fieldKey === "kode_aks") return ({ M: "Mandiri", R: "Ketergantungan Ringan", S: "Ketergantungan Sedang", B: "Ketergantungan Berat", T: "Ketergantungan Total" })[value] || String(value);
-  if (fieldKey.startsWith("ploting_")) return String(value).replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
-  return String(value);
+  
+  let formattedValue = String(value);
+  if (fieldKey.startsWith("ploting_")) {
+    formattedValue = formattedValue.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  if (fieldKey.toLowerCase().includes("status") || fieldKey.toLowerCase().includes("hasil") || fieldKey.startsWith("ploting_")) {
+    const valLower = String(value).toLowerCase();
+    if (valLower.includes("normal") || valLower.includes("baik") || valLower.includes("aman") || valLower.includes("tidak_terindikasi") || valLower === "n") {
+      return <span className="text-success fw-bold">{formattedValue}</span>;
+    } else if (valLower.includes("waspada") || valLower.includes("prediab") || valLower.includes("risiko_rendah") || valLower.includes("kuning")) {
+      return <span className="text-warning fw-bold">{formattedValue}</span>;
+    } else if (valLower.includes("tinggi") || valLower.includes("bahaya") || valLower.includes("diabetisi") || valLower.includes("risiko") || valLower.includes("merah") || valLower.includes("rujukan")) {
+      return <span className="text-danger fw-bold">{formattedValue}</span>;
+    }
+  }
+  return formattedValue;
 };
 
 const formatMeasurement = (value, unit = "") => {
@@ -180,20 +202,28 @@ export const resolve5StepDetails = (citizen, examData = null) => {
   const zScores = exam?.z_scores || {};
   const plot = exam?.hasil_plot || {};
 
-  const tglPeriksa = formatDateId(exam?.tanggal || citizen.tglPeriksa || source.tanggal || "");
+  const tglPeriksa = formatDateId(exam?.tanggal || exam?.created_at || citizen.tglPeriksa || source.tanggal || source.created_at || new Date());
 
   const isExamined = Boolean(citizen.statusPemeriksaan === "Sudah" || citizen.status === "Sudah" || exam?.kunjungan?.status_langkah === "langkah_5" || !!exam);
 
   const l1 = {
     nik: citizen.nik || source.nik || "",
-    nama: citizen.nama || source.nama_lengkap || "",
+    nama_lengkap: citizen.nama || source.nama_lengkap || "",
     tglLahir: formatDateId(citizen.tglLahir || source.tanggal_lahir || ""),
-    gender: citizen.gender || source.jenis_kelamin || "",
-    keteranganKeluarga: citizen.keteranganIbuSuami || citizen.namaIbu || citizen.namaAyah || citizen.namaSuami || "",
+    jenis_kelamin: citizen.gender || source.jenis_kelamin || "",
     alamat: citizen.alamat || source.alamat || "",
-    posyandu: citizen.posyandu || source.posyandu?.nama_posyandu || source.posyandu || "",
     rw: citizen.rw || source.rw || "",
   };
+
+  const nameHusband = citizen.namaSuami || source.nama_suami;
+  const nameWife = citizen.namaIstri || source.nama_istri;
+  const nameMother = citizen.namaIbu || source.nama_ibu;
+  const nameFather = citizen.namaAyah || source.nama_ayah;
+
+  if (nameHusband) l1.nama_suami = nameHusband;
+  if (nameWife) l1.nama_istri = nameWife;
+  if (nameMother) l1.nama_ibu = nameMother;
+  if (nameFather) l1.nama_ayah = nameFather;
 
   if (exam?.langkah1 && typeof exam.langkah1 === "object") {
     Object.assign(l1, exam.langkah1);
@@ -267,12 +297,38 @@ export const resolve5StepDetails = (citizen, examData = null) => {
     Object.assign(l4, exam.detail_skrining);
   }
 
-  const l5 = {
-    topik_penyuluhan: step5.penyuluhan || step5.topikPenyuluhan || exam?.topik_penyuluhan || "-",
-    tindakan_edukasi: step5.tindakan_edukasi || exam?.tindakan_edukasi || "-",
-    is_perlu_rujukan: exam?.is_perlu_rujukan !== undefined ? (exam.is_perlu_rujukan ? "Ya" : "Tidak") : (step5.is_perlu_rujukan ? "Ya" : "Tidak"),
-    alasan_rujukan: step5.rujukan || step5.statusRujukan || step5.alasan_rujukan || exam?.alasan_rujukan || "-",
-  };
+  if (l4.pemeriksaan_6_bulanan && !l4.is_skrining_6_bulanan) {
+    l4.pemeriksaan_6_bulanan = "-";
+  }
+  if (l4.pemeriksaan_tahunan && !l4.is_skrining_tahunan) {
+    l4.pemeriksaan_tahunan = "-";
+  }
+  if (l4.pemeriksaan_tahunan_remaja_putri && !l4.is_skrining_tahunan) {
+    l4.pemeriksaan_tahunan_remaja_putri = "-";
+  }
+
+  // Bersihkan key boolean raw dari backend agar tidak muncul dobel di UI
+  delete l4.is_skrining_6_bulanan;
+  delete l4.is_skrining_tahunan;
+  delete l4.isSkriningTahunan;
+  delete l4.isSkrining6Bulanan;
+  delete l4.is_skrining_jiwa;
+  delete l4.is_periksa_hb;
+
+  const l5 = {};
+  if (isFilled(step5.penyuluhan) || isFilled(step5.topikPenyuluhan) || isFilled(exam?.topik_penyuluhan)) {
+    l5.topik_penyuluhan = step5.penyuluhan || step5.topikPenyuluhan || exam?.topik_penyuluhan || "-";
+  }
+  if (isFilled(step5.tindakan_edukasi) || isFilled(exam?.tindakan_edukasi)) {
+    l5.tindakan_edukasi = step5.tindakan_edukasi || exam?.tindakan_edukasi || "-";
+  }
+
+  const isRujuk = exam?.is_perlu_rujukan ?? step5.is_perlu_rujukan ?? false;
+  l5.is_perlu_rujukan = isRujuk ? "Ya" : "Tidak";
+
+  if (isRujuk || isFilled(step5.alasanRujukan) || isFilled(step5.statusRujukan) || isFilled(step5.alasan_rujukan) || isFilled(exam?.alasan_rujukan) || isFilled(exam?.rujukan?.alasan_rujukan)) {
+    l5.alasan_rujukan = step5.alasanRujukan || step5.statusRujukan || step5.alasan_rujukan || exam?.rujukan?.alasan_rujukan || exam?.alasan_rujukan || "-";
+  }
 
   return {
     ...citizen,

@@ -4,6 +4,7 @@ import { pemeriksaanService } from "../../services";
 import DetailRekapModal, { resolve5StepDetails } from "../../components/pemeriksaan/DetailRekapModal";
 import ExportRekapModal from "../../components/pemeriksaan/ExportRekapModal";
 import { formatAgeFromMonths, formatDateId } from "../../utils/dataMappers";
+import PemeriksaanPage from "./PemeriksaanPage";
 
 export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData }) {
   const [selectedMonthNum, setSelectedMonthNum] = useState("Semua");
@@ -18,6 +19,7 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
   const [selectedCitizen, setSelectedCitizen] = useState(null);
   const [selectedExamDetail, setSelectedExamDetail] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [editingWarga, setEditingWarga] = useState(null);
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
@@ -302,7 +304,7 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
                         <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => handleOpenDetail(row)} title="Lihat Detail Hasil 5 Langkah">
                           <Eye size={14} /> <span>Detail</span>
                         </button>
-                        <button className="btn btn-sm btn-outline-pink d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => onNavigate("pemeriksaan", row.subKategori, { wargaId: row.id })} title="Edit Data Pemeriksaan">
+                        <button className="btn btn-sm btn-outline-pink d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => setEditingWarga(row)} title="Edit Data Pemeriksaan">
                           <Edit size={14} /> <span>Edit</span>
                         </button>
                       </div>
@@ -353,7 +355,7 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
           theme="kader"
           onEdit={(citizen) => {
             handleCloseDetail();
-            onNavigate("pemeriksaan", citizen.subKategori, { wargaId: citizen.id });
+            setEditingWarga(citizen);
           }}
         />
       )}
@@ -367,6 +369,20 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
         globalPemeriksaanData={globalPemeriksaanData}
         filteredList={filteredList}
       />
+
+      {editingWarga && (
+        <PemeriksaanPage
+          isModalMode={true}
+          activeSubmenu={editingWarga.subKategori}
+          activePemeriksaanWargaId={editingWarga.id}
+          globalSasaranList={globalSasaranList}
+          setGlobalSasaranList={setGlobalSasaranList}
+          globalPemeriksaanData={globalPemeriksaanData}
+          setGlobalPemeriksaanData={setGlobalPemeriksaanData}
+          onCloseModal={() => setEditingWarga(null)}
+          onRefreshData={() => setEditingWarga(null)}
+        />
+      )}
     </div>
   );
 }

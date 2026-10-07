@@ -216,10 +216,7 @@ export default function KaderRiwayatRujukanPage({ globalSasaranList = [], global
                         </span>
                       </td>
                       <td>
-                        <div className="fw-bold text-danger mb-0.5">{item.masalahBadge}</div>
-                        <div className="text-muted small" style={{ fontSize: "0.78rem", lineHeight: "1.35" }}>
-                          {item.masalahSub}
-                        </div>
+                        <div className="text-danger mb-0.5" style={{ fontSize: "0.85rem", lineHeight: "1.4" }}>{item.masalahBadge}</div>
                       </td>
                       <td className="text-center text-nowrap">
                         <button type="button" className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => handleOpenDetail(item)} title="Lihat Detail Rujukan">
@@ -311,9 +308,8 @@ export default function KaderRiwayatRujukanPage({ globalSasaranList = [], global
                   </h6>
 
                   <div className="p-3 bg-danger bg-opacity-10 border border-danger border-opacity-25 rounded-3 mb-3">
-                    <div className="fw-bold text-danger fs-6 mb-1">{selectedReferral.masalahBadge}</div>
-                    <div className="text-dark small" style={{ lineHeight: "1.5" }}>
-                      {selectedReferral.masalahSub}
+                    <div className="text-danger" style={{ fontSize: "0.9rem", lineHeight: "1.4" }}>
+                      {selectedReferral.masalahBadge}
                     </div>
                   </div>
 

@@ -79,7 +79,7 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                 <div className="col-12 col-md-6">
                   <div className="p-3 bg-light rounded-3 h-100">
                     <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                      Nama Lengkap Sasaran
+                      Nama Lengkap
                     </div>
                     <div className="fw-bold text-dark fs-6">{target.nama || ""}</div>
                   </div>
@@ -103,49 +103,76 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                   </div>
                 </div>
 
-                {/* Field Nama Ibu / Keluarga untuk anak / remaja (karena balita ada di section kelahiran, dan dewasa/lansia tidak memerlukan data ini) */}
-                {!isBayiBalita && !isBumil && !isDewasaLansia && (
+                {/* Relasi Keluarga: Tampilkan secara langsung dan lugas */}
+                {!isDewasaLansia && target.namaSuami && (
                   <div className="col-12 col-md-6">
                     <div className="p-3 bg-light rounded-3 h-100">
                       <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                        Nama Ibu Kandung / Keluarga
+                        Nama Suami
                       </div>
-                      <div className="fw-bold text-dark">{target.namaIbu || target.keteranganKeluarga || target.namaAyah || ""}</div>
+                      <div className="fw-bold text-dark">{target.namaSuami}</div>
                     </div>
                   </div>
                 )}
-
-                {/* Status Pernikahan & Pekerjaan: Hanya untuk Kategori Remaja 15+, Dewasa, Lansia, Bumil, Nifas */}
-                {!isChild && !isBumil && (
+                
+                {(!isDewasaLansia && !isBumil && (isBayiBalita || target.namaIbu || target.namaAyah)) && (
                   <>
-                    <div className="col-12 col-md-6">
-                      <div className="p-3 bg-light rounded-3 h-100">
-                        <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                          Status Pernikahan
+                    {(isBayiBalita || target.namaIbu) && (
+                      <div className="col-12 col-md-6">
+                        <div className="p-3 bg-light rounded-3 h-100">
+                          <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                            Nama Ibu
+                          </div>
+                          <div className="fw-bold text-dark">{target.namaIbu || "-"}</div>
                         </div>
-                        <div className="fw-bold text-dark">{target.statusPernikahan || ""}</div>
                       </div>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <div className="p-3 bg-light rounded-3 h-100">
-                        <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                          Pekerjaan
+                    )}
+                    {(isBayiBalita || target.namaAyah) && (
+                      <div className="col-12 col-md-6">
+                        <div className="p-3 bg-light rounded-3 h-100">
+                          <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                            Nama Ayah
+                          </div>
+                          <div className="fw-bold text-dark">{target.namaAyah || "-"}</div>
                         </div>
-                        <div className="fw-bold text-dark">{target.pekerjaan || ""}</div>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
-
-                <div className="col-12 col-md-6">
-                  <div className="p-3 bg-light rounded-3 h-100">
-                    <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                      Nomor Telepon / WhatsApp
+                {/* Status Pernikahan: Hanya untuk Kategori Remaja 15+, Dewasa, Lansia, Bumil, Nifas */}
+                {!isChild && !isBumil && (
+                  <div className="col-12 col-md-6">
+                    <div className="p-3 bg-light rounded-3 h-100">
+                      <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                        Status Pernikahan
+                      </div>
+                      <div className="fw-bold text-dark">{target.statusPernikahan || ""}</div>
                     </div>
-                    <div className="fw-bold text-dark">{target.noHp || ""}</div>
                   </div>
-                </div>
+                )}
+                
+                {/* Pekerjaan: Hanya untuk yang bukan anak */}
+                {!isChild && (
+                  <div className="col-12 col-md-6">
+                    <div className="p-3 bg-light rounded-3 h-100">
+                      <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                        Pekerjaan
+                      </div>
+                      <div className="fw-bold text-dark">{target.pekerjaan || "-"}</div>
+                    </div>
+                  </div>
+                )}
+
+                {!isBayiBalita && (
+                  <div className="col-12 col-md-6">
+                    <div className="p-3 bg-light rounded-3 h-100">
+                      <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                        Nomor Telepon / WhatsApp
+                      </div>
+                      <div className="fw-bold text-dark">{target.noHp || "-"}</div>
+                    </div>
+                  </div>
+                )}
 
                 {target.golDarah && (
                   <div className="col-12 col-md-6">
@@ -198,9 +225,9 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                   <div className="col-12 col-md-6">
                     <div className="p-3 bg-light rounded-3 h-100">
                       <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                        Nama Suami / Ayah
+                        Nama Suami
                       </div>
-                      <div className="fw-bold text-dark">{target.namaAyah || target.namaSuami || ""}</div>
+                      <div className="fw-bold text-dark">{target.namaSuami || target.namaAyah || ""}</div>
                     </div>
                   </div>
                   <div className="col-12 col-md-6">
@@ -305,23 +332,6 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                     </div>
                   </div>
 
-                  <div className="col-12 col-sm-6 col-md-6">
-                    <div className="p-3 bg-light rounded-3 h-100">
-                      <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                        Nama Ibu
-                      </div>
-                      <div className="fw-bold text-dark">{target.namaIbu || ""}</div>
-                    </div>
-                  </div>
-
-                  <div className="col-12 col-sm-6 col-md-6">
-                    <div className="p-3 bg-light rounded-3 h-100">
-                      <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                        Nama Ayah
-                      </div>
-                      <div className="fw-bold text-dark">{target.namaAyah || ""}</div>
-                    </div>
-                  </div>
                 </div>
               </div>
             )}

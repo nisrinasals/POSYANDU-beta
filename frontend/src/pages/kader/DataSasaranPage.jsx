@@ -440,7 +440,7 @@ export default function DataSasaranPage({
 
     // 1. Validasi Nama (Wajib minimal 2 karakter)
     if (!categoryForm.nama || categoryForm.nama.trim().length < 2) {
-      showWarning("Validasi Nama", "Nama lengkap sasaran wajib diisi minimal 2 karakter.");
+      showWarning("Validasi Nama", "Nama lengkap wajib diisi minimal 2 karakter.");
       return;
     }
 
@@ -1274,8 +1274,8 @@ export default function DataSasaranPage({
                   {/* Kolom Kanan */}
                   <div className="col-md-6">
                     <div className="mb-3">
-                      <label className="form-label fw-medium small mb-1">Nama Suami / Ayah</label>
-                      <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama suami/ayah" value={categoryForm.namaAyah} onChange={(e) => setCategoryForm({ ...categoryForm, namaAyah: e.target.value })} />
+                      <label className="form-label fw-medium small mb-1">Nama Suami</label>
+                      <input type="text" className="form-control form-control-custom" placeholder="Masukkan nama suami" value={categoryForm.namaAyah} onChange={(e) => setCategoryForm({ ...categoryForm, namaAyah: e.target.value })} />
                     </div>
 
                     <div className="mb-3">
@@ -1468,11 +1468,12 @@ export default function DataSasaranPage({
                         <div className="mb-3">
                           <label className="form-label fw-medium small mb-1">Status Pernikahan</label>
                           <select className="form-select form-select-custom" value={categoryForm.statusPernikahan} onChange={(e) => setCategoryForm({ ...categoryForm, statusPernikahan: e.target.value })}>
-                            <option value="Tidak Menikah">Tidak Menikah</option>
+                            <option value="Belum Menikah">Belum Menikah</option>
                             <option value="Menikah">Menikah</option>
+                            <option value="Cerai Hidup">Cerai Hidup</option>
+                            <option value="Cerai Mati">Cerai Mati</option>
                           </select>
                         </div>
-
                         <div className="mb-3">
                           <label className="form-label fw-medium small mb-1">Pekerjaan</label>
                           <select className="form-select form-select-custom" value={categoryForm.pekerjaan} onChange={(e) => setCategoryForm({ ...categoryForm, pekerjaan: e.target.value })}>
@@ -1490,18 +1491,18 @@ export default function DataSasaranPage({
                       </>
                     )}
 
-                    {/* KHUSUS NIFAS / MENYUSUI: TANGGAL PERSALINAN WAJIB UNTUK PROFILE BUSUI */}
+                    {/* KHUSUS NIFAS / MENYUSUI: TANGGAL PERSALINAN & CARA PERSALINAN (Opsional) */}
                     {selectedCategory.id === "nifas" && (
                       <div className="mb-3">
                         <label className="form-label fw-bold text-primary small mb-1">Tanggal Persalinan</label>
-                        <input type="date" className="form-control form-control-custom border-primary" value={categoryForm.tglPersalinan} onChange={(e) => setCategoryForm({ ...categoryForm, tglPersalinan: e.target.value })} required />
+                        <input type="date" className="form-control form-control-custom border-primary" value={categoryForm.tglPersalinan} onChange={(e) => setCategoryForm({ ...categoryForm, tglPersalinan: e.target.value })} />
                       </div>
                     )}
 
                     {selectedCategory.id === "nifas" && (
                       <div className="mb-3">
                         <label className="form-label fw-bold text-primary small mb-1">Cara Persalinan</label>
-                        <select className="form-select form-select-custom border-primary" value={categoryForm.caraPersalinan} onChange={(e) => setCategoryForm({ ...categoryForm, caraPersalinan: e.target.value })} required>
+                        <select className="form-select form-select-custom border-primary" value={categoryForm.caraPersalinan} onChange={(e) => setCategoryForm({ ...categoryForm, caraPersalinan: e.target.value })}>
                           <option value="">Pilih cara persalinan</option>
                           <option value="normal">Normal</option>
                           <option value="dengan_tindakan">Tindakan</option>
@@ -2514,16 +2515,16 @@ export default function DataSasaranPage({
                       </>
                     )}
 
-                    {/* KHUSUS NIFAS / MENYUSUI: DITAMBAHKAN SATU FIELD STATUS MENYUSUI */}
+                    {/* KHUSUS NIFAS / MENYUSUI: DITAMBAHKAN FIELD STATUS MENYUSUI, TGL PERSALINAN, CARA PERSALINAN (Opsional) */}
                     {selectedSasaran.kategori?.toLowerCase().includes("nifas") && (
                       <>
                         <div className="mb-3">
                           <label className="form-label fw-bold text-primary small mb-1">Tanggal Persalinan</label>
-                          <input type="date" className="form-control form-control-custom border-primary" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} required />
+                          <input type="date" className="form-control form-control-custom border-primary" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} />
                         </div>
                         <div className="mb-3">
                           <label className="form-label fw-bold text-primary small mb-1">Cara Persalinan</label>
-                          <select className="form-select form-select-custom border-primary" value={selectedSasaran.caraPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, caraPersalinan: e.target.value })} required>
+                          <select className="form-select form-select-custom border-primary" value={selectedSasaran.caraPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, caraPersalinan: e.target.value })}>
                             <option value="">Pilih cara persalinan</option>
                             <option value="normal">Normal</option>
                             <option value="dengan_tindakan">Tindakan</option>

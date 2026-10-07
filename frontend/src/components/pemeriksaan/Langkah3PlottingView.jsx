@@ -363,7 +363,7 @@ const Langkah3PlottingView = ({ activeSubmenu, plottingResult }) => {
       />
       <PlotCard
         title="Plotting Lingkar Perut"
-        subtitle="Batas Gender"
+        subtitle="Batas Jenis Kelamin"
         statusText={evLp ? (evLp.is_merah ? `Berisiko Obesitas Sentral (${evLp.batas})` : `Normal (${evLp.batas})`) : 'Normal'}
         isMerah={evLp?.is_merah}
         mainResult={`${plottingResult?.lp} cm`}

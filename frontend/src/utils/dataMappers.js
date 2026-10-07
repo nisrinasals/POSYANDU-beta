@@ -117,7 +117,7 @@ export function mapBackendWargaToFrontend(w) {
   const namaSuami = latestPregnancyProfile?.nama_suami || w.nama_suami || w.namaSuami || "";
   const keteranganIbuSuami = w.nama_ibu ? `Ibu: ${w.nama_ibu}` : namaSuami ? `Suami: ${namaSuami}` : w.nama_ayah ? `Ayah: ${w.nama_ayah}` : w.keteranganIbuSuami || "";
   const rawMaritalStatus = w.status_perkawinan || w.status_pernikahan || w.statusPernikahan || "";
-  const maritalStatus = rawMaritalStatus === "menikah" ? "Menikah" : rawMaritalStatus === "tidak_menikah" ? "Tidak Menikah" : rawMaritalStatus;
+  const maritalStatus = rawMaritalStatus === "menikah" ? "Menikah" : rawMaritalStatus === "tidak_menikah" ? "Belum Menikah" : rawMaritalStatus;
   const birthWeight = w.bb_lahir_kg ?? w.bbl ?? "";
   const birthHeight = w.tb_lahir_cm ?? w.pbl ?? "";
 

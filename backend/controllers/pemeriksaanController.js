@@ -589,6 +589,11 @@ const getPemeriksaanById = async (req, res, next) => {
           as: "profileKehamilan",
           required: false,
         },
+        {
+          model: Rujukan,
+          as: "rujukan",
+          required: false,
+        },
       ],
     });
 
