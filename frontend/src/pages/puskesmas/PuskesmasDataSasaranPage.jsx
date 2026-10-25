@@ -7,7 +7,7 @@ import { formatDateId } from "../../utils/dataMappers";
 
 export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globalPemeriksaanData = {}, onNavigate, initialCategoryFilter, setCategoryFilterParam, user, userRole = "puskesmas" }) {
   const isDinkes = userRole === "dinkes" || user?.roleType?.includes("dinkes");
-  const themeColor = isDinkes ? "#1e3a8a" : "#428A75";
+  const themeColor = isDinkes ? "#0f2b5c" : "#3b7d6b";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [posyanduFilter, setPosyanduFilter] = useState("Semua Posyandu");
@@ -54,7 +54,10 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
       const matchPosyandu = posyanduFilter === "Semua Posyandu" || posyanduFilter === "all" || (item.posyandu && item.posyandu.toLowerCase().includes(posyanduFilter.toLowerCase()));
 
       const matchStatus =
-        statusFilter === "Semua Status" || statusFilter === "all" || (statusFilter === "Aktif" && item.status === "Aktif") || (statusFilter === "Non-Aktif" && (item.status === "Non-Aktif" || item.status === "Tidak Aktif"));
+        statusFilter === "Semua Status" ||
+        statusFilter === "all" ||
+        (statusFilter === "Aktif" && (item.status === "Aktif" || !item.status)) ||
+        (statusFilter === "Non-Aktif" && (item.status === "Non-Aktif" || item.status === "Tidak Aktif"));
 
       const normItemKat = (item.kategori || "").toLowerCase().replace(/[–—]/g, "-").trim();
       const normSelKat = selectedCategory.toLowerCase().replace(/[–—]/g, "-").trim();
@@ -189,8 +192,8 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
         </div>
       </div>
 
-      {/* Main Table Container with Requested Columns:
-          No | Nama & NIK | Tanggal Lahir | Kategori | Asal Posyandu | Tanggal Periksa | Aksi */}
+      {/* Main Table Container:
+          No | Nama & NIK | Tanggal Lahir | Kategori | Asal Posyandu | Status | Aksi */}
       <div className="card border-0 bg-white shadow-xs rounded-3 overflow-hidden">
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0" style={{ fontSize: "0.86rem" }}>
@@ -211,8 +214,8 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
                 <th className="py-3" style={{ minWidth: "160px" }}>
                   ASAL POSYANDU
                 </th>
-                <th className="py-3 text-center" style={{ minWidth: "150px", whiteSpace: "nowrap" }}>
-                  TANGGAL PEMERIKSAAN
+                <th className="py-3 text-center" style={{ minWidth: "100px" }}>
+                  STATUS
                 </th>
                 <th className="pe-4 py-3 text-center" style={{ width: "110px" }}>
                   AKSI
@@ -248,7 +251,18 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
                         {item.rw ? `Wilayah ${item.rw}` : ""}
                       </div>
                     </td>
-                    <td className="text-center text-secondary fw-medium">{formatDateId(item.tglPeriksa)}</td>
+                    <td className="text-center">
+                      <span
+                        className={`badge rounded-pill px-2.5 py-1 ${
+                          (item.status || "Aktif") === "Aktif"
+                            ? "bg-success-subtle text-success border border-success-subtle"
+                            : "bg-secondary-subtle text-secondary border border-secondary-subtle"
+                        }`}
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        {item.status || "Aktif"}
+                      </span>
+                    </td>
                     <td className="pe-4 text-center text-nowrap">
                       <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => handleOpenDetail(item)} title="Lihat Detail Sasaran">
                         <Eye size={14} />
@@ -278,7 +292,7 @@ export default function PuskesmasDataSasaranPage({ globalSasaranList = [], globa
                   key={page}
                   className={`btn btn-sm px-2.5 py-1 fw-bold ${currentPage === page ? "text-white" : "btn-light border text-dark"}`}
                   style={{
-                    backgroundColor: currentPage === page ? "#428A75" : undefined,
+                    backgroundColor: currentPage === page ? "#3b7d6b" : undefined,
                     fontSize: "0.8rem",
                   }}
                   onClick={() => setCurrentPage(page)}

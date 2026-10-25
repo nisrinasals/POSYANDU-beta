@@ -13,6 +13,8 @@ const getScreeningReferralReasons = (detail = {}) => {
     if (!value || typeof value !== "object") return;
     for (const [key, child] of Object.entries(value)) {
       if (TRIGGER_REASONS[key] && child === true) reasons.push(TRIGGER_REASONS[key]);
+      else if (key === "status_tbc" && (child === "risiko" || child === "rujukan")) reasons.push("Indikasi dari skrining TBC");
+      else if (key === "status_risiko_puma" && child === "risiko_tinggi") reasons.push("Risiko tinggi PPOK (PUMA)");
       else if (child && typeof child === "object") visit(child);
     }
   };

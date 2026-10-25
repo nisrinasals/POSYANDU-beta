@@ -212,8 +212,6 @@ const finalizeScreeningScores = (category, detail, warga, options = {}) => {
       if (calculated.errors) result.errors.push(...calculated.errors);
       else result.detail.aks_aktifitas_harian = { ...aks, ...calculated.scores, total_skor_aks: calculated.total_skor_aks, status_aks: calculated.status_aks, kode_aks: calculated.kode_aks, is_rujukan_aks: calculated.is_rujukan_aks };
     }
-    const skilas = detail.skilas;
-    if (skilas && options.skilasProvided !== false) result.detail.skilas = { ...skilas, ...calculateSkilas(skilas) };
   }
 
   const jiwa = detail.skrining_kesehatan_jiwa;

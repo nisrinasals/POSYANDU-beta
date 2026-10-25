@@ -496,11 +496,12 @@ const classifyReferenceValue = (value, row, kind) => {
 
 const evaluasiTekananDarah = (sistole, diastole, kelompokSasaran) => {
   if (!sistole || !diastole) return null;
-  if (["bumil", "busui"].includes(kelompokSasaran))
+  const kat = String(kelompokSasaran || "").toLowerCase();
+  if (["bumil", "busui", "nifas", "nifas_menyusui"].includes(kat))
     return sistole < 130 && diastole < 85
       ? { indikator: "Tekanan Darah", kategori: "Normal", kode: "N", batas: "Sistol <130 dan diastol <85 mmHg", is_merah: false }
       : { indikator: "Tekanan Darah", kategori: "Risiko", kode: "R", batas: "Sistol ≥130 atau diastol ≥85 mmHg", is_merah: true };
-  if (["uskrem_15_18", "dewasa"].includes(kelompokSasaran)) {
+  if (["uskrem_15_18", "usekrem_15_18", "dewasa"].includes(kat)) {
     if (sistole > 140 && diastole < 90) return { indikator: "Tekanan Darah", kategori: "Hipertensi sistolik terisolasi", kode: "HST", batas: ">140/<90", is_merah: true };
     if (sistole >= 180 || diastole >= 110) return { indikator: "Tekanan Darah", kategori: "Hipertensi tingkat 3", kode: "Ht 3", batas: ">180/110", is_merah: true };
     if (sistole >= 160 || diastole >= 100) return { indikator: "Tekanan Darah", kategori: "Hipertensi tingkat 2", kode: "Ht 2", batas: "160-179/100-109", is_merah: true };
@@ -508,7 +509,7 @@ const evaluasiTekananDarah = (sistole, diastole, kelompokSasaran) => {
     if (sistole >= 130 || diastole >= 85) return { indikator: "Tekanan Darah", kategori: "Pra Hipertensi", kode: "Pra Ht", batas: "130-139/85-89", is_merah: true };
     return { indikator: "Tekanan Darah", kategori: "Normal", kode: "N", batas: "<120-129/80-84", is_merah: false };
   }
-  if (kelompokSasaran === "lansia") {
+  if (kat === "lansia") {
     if (sistole > 140 && diastole < 90) return { indikator: "Tekanan Darah", kategori: "Hipertensi sistolik terisolasi", kode: "HST", batas: ">140/<90", is_merah: true };
     if (sistole >= 160 || diastole >= 100) return { indikator: "Tekanan Darah", kategori: "Hipertensi tingkat 2", kode: "Ht 2", batas: ">160/100", is_merah: true };
     if (sistole >= 140 || diastole >= 90) return { indikator: "Tekanan Darah", kategori: "Hipertensi tingkat 1", kode: "Ht 1", batas: "140-159/90-99", is_merah: true };
@@ -522,12 +523,13 @@ const evaluasiIMT = (bb_kg, tb_cm, kelompokSasaran) => {
   if (!bb_kg || !tb_cm) return null;
   const tb_m = tb_cm / 100;
   const imt = parseFloat((bb_kg / (tb_m * tb_m)).toFixed(2));
-  if (["busui", "bumil"].includes(kelompokSasaran)) {
-    if (imt < 18.5) return { indikator: "IMT", imt, kategori: kelompokSasaran === "bumil" ? "Risiko KEK" : "Kurus", kode: kelompokSasaran === "bumil" ? "KEK" : "K", batas: "<18.5", is_merah: true };
+  const kat = String(kelompokSasaran || "").toLowerCase();
+  if (["busui", "bumil", "nifas", "nifas_menyusui"].includes(kat)) {
+    if (imt < 18.5) return { indikator: "IMT", imt, kategori: kat === "bumil" ? "Risiko KEK" : "Kurus", kode: kat === "bumil" ? "KEK" : "K", batas: "<18.5", is_merah: true };
     if (imt <= 24.9) return { indikator: "IMT", imt, kategori: "Normal", kode: "N", batas: "18.5-24.9", is_merah: false };
-    return { indikator: "IMT", imt, kategori: kelompokSasaran === "bumil" ? "Risiko gizi lebih" : imt <= 29.9 ? "Gemuk" : "Obesitas", kode: kelompokSasaran === "bumil" ? "RGL" : imt <= 29.9 ? "G" : "O", batas: "≥25", is_merah: true };
+    return { indikator: "IMT", imt, kategori: kat === "bumil" ? "Risiko gizi lebih" : imt <= 29.9 ? "Gemuk" : "Obesitas", kode: kat === "bumil" ? "RGL" : imt <= 29.9 ? "G" : "O", batas: "≥25", is_merah: true };
   }
-  if (["dewasa", "lansia"].includes(kelompokSasaran)) {
+  if (["dewasa", "lansia"].includes(kat)) {
     if (imt < 17) return { indikator: "IMT", imt, kategori: "Sangat kurus", kode: "SK", batas: "<17", is_merah: true };
     if (imt <= 18.4) return { indikator: "IMT", imt, kategori: "Kurus", kode: "K", batas: "17-18.4", is_merah: true };
     if (imt <= 25) return { indikator: "IMT", imt, kategori: "Normal", kode: "N", batas: "18.5-25", is_merah: false };
@@ -546,23 +548,24 @@ const evaluasiLingkarPerut = (lingkar_perut_cm, jenis_kelamin) => {
 
 const evaluasiLila = (lila_cm, kelompokSasaran) => {
   if (!lila_cm) return null;
-  if (kelompokSasaran === "bayi") {
+  const kat = String(kelompokSasaran || "").toLowerCase();
+  if (["bayi", "bayi-0-11"].includes(kat)) {
     if (lila_cm < 11) return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi Buruk", kode: "GiBur", batas: "<11 cm", is_merah: true };
     if (lila_cm <= 12.4) return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi Kurang", kode: "GiKur", batas: "11.1-12.4 cm", is_merah: true };
     return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi normal", kode: "N", batas: ">=12.5 cm", is_merah: false };
   }
-  if (kelompokSasaran === "balita") {
+  if (["balita", "balita-12-59"].includes(kat)) {
     if (lila_cm < 11.4) return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi buruk", kode: "GiBur", batas: "<11.4 cm", is_merah: true };
     if (lila_cm <= 12.5) return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi kurang", kode: "GiKur", batas: "11.5-12.5 cm", is_merah: true };
     return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi normal", kode: "N", batas: "≥12.5 cm", is_merah: false };
   }
-  if (kelompokSasaran === "apras") {
+  if (kat === "apras") {
     if (lila_cm < 12.8) return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi buruk", kode: "GiBur", batas: "<12.8 cm", is_merah: true };
     if (lila_cm <= 14) return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi kurang", kode: "GiKur", batas: "12.8-14 cm", is_merah: true };
     return { indikator: "LILA", nilai: lila_cm, kategori: "Gizi normal", kode: "N", batas: "≥14 cm", is_merah: false };
   }
-  if (kelompokSasaran === "bumil") return { indikator: "LILA", nilai: lila_cm, kategori: lila_cm < 23.5 ? "KEK" : "Normal", kode: lila_cm < 23.5 ? "KEK" : "N", batas: lila_cm < 23.5 ? "<23.5 cm" : "≥23.5 cm", is_merah: lila_cm < 23.5 };
-  if (["dewasa", "lansia"].includes(kelompokSasaran))
+  if (["bumil", "busui", "nifas", "nifas_menyusui"].includes(kat)) return { indikator: "LILA", nilai: lila_cm, kategori: lila_cm < 23.5 ? "KEK" : "Normal", kode: lila_cm < 23.5 ? "KEK" : "N", batas: lila_cm < 23.5 ? "<23.5 cm" : "≥23.5 cm", is_merah: lila_cm < 23.5 };
+  if (["dewasa", "lansia"].includes(kat))
     return { indikator: "LILA", nilai: lila_cm, kategori: lila_cm < 21.5 ? "Kurang" : "Normal", kode: lila_cm < 21.5 ? "K" : "N", batas: lila_cm < 21.5 ? "<21.5 cm" : "≥21.5 cm", is_merah: lila_cm < 21.5 };
   return { indikator: "LILA", nilai: lila_cm, status: "Normal" };
 };

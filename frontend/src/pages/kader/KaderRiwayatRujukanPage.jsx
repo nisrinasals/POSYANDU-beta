@@ -210,10 +210,8 @@ export default function KaderRiwayatRujukanPage({ globalSasaranList = [], global
                       <td>
                         <div className="fw-semibold text-dark mb-0">{item.kaderPerujuk}</div>
                       </td>
-                      <td className="text-center" style={{ whiteSpace: "nowrap" }}>
-                        <span className="badge bg-light text-dark border px-2.5 py-1.5 rounded font-monospace" style={{ fontSize: "0.78rem" }}>
-                          {item.tglDirujuk}
-                        </span>
+                      <td className="text-center text-dark small" style={{ whiteSpace: "nowrap" }}>
+                        {item.tglDirujuk}
                       </td>
                       <td>
                         <div className="text-danger mb-0.5" style={{ fontSize: "0.85rem", lineHeight: "1.4" }}>{item.masalahBadge}</div>
@@ -327,7 +325,7 @@ export default function KaderRiwayatRujukanPage({ globalSasaranList = [], global
                         <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
                           Tanggal Dirujuk
                         </div>
-                        <div className="fw-bold text-dark fs-6 font-monospace">{selectedReferral.tglDirujuk}</div>
+                        <div className="fw-bold text-dark fs-6">{selectedReferral.tglDirujuk}</div>
                       </div>
                     </div>
                   </div>

@@ -1,8 +1,10 @@
 import React from "react";
 import { User, Activity, BarChart2, Stethoscope, HeartHandshake, CheckCircle2, Edit3, X, ShieldCheck, Loader2 } from "lucide-react";
 import { formatDateId } from "../../utils/dataMappers";
+import { evaluasiPemeriksaan } from "../../utils/plotHelper";
 
 const SCREENING_LABELS = {
+  nik: "Nomor Induk Kependudukan (NIK)",
   hpht: "HPHT",
   hpl: "Taksiran HPL",
   tbc: "Skrining TBC",
@@ -56,13 +58,13 @@ const SCREENING_LABELS = {
   is_mp_asi: "Pemberian MP-ASI",
   is_pmt_lokal_pemulihan: "PMT Lokal Pemulihan",
   is_konsumsi_pmt_habis: "PMT Dikonsumsi Habis",
-  is_vit_a_given: "Vitamin A Diberikan",
+  is_vit_a_given: "Pemberian Kapsul Vitamin A",
   is_obat_cacing_given: "Obat Cacing Diberikan",
   is_ikut_kelas_balita: "Mengikuti Kelas Balita",
   is_rutin_vit_a: "Rutin Konsumsi Vitamin A",
   is_menyusui: "Masih Menyusui",
   is_kb_pasca_persalinan: "KB Pascapersalinan",
-  jumlah_kapsul_vit_a: "Jumlah Kapsul Vitamin A",
+  jumlah_kapsul_vit_a: "Pemberian Kapsul Vitamin A",
   jumlah_ttd_given: "Jumlah TTD Diberikan",
   is_rutin_ttd: "Rutin Konsumsi TTD",
   is_mt_kek_given: "MT Bumil KEK Diberikan",
@@ -118,6 +120,14 @@ const SCREENING_LABELS = {
   has_sedih_tertekan_putus_asa: "Merasa Sedih atau Putus Asa",
   has_kurang_minat_kesenangan: "Kurang Minat atau Kesenangan",
   is_imunisasi_covid19: "Imunisasi COVID-19",
+  status_evaluasi_plotting: "Status Evaluasi Plotting",
+  status_imt: "Status IMT (Gizi)",
+  status_tekanan_darah: "Status Tekanan Darah",
+  status_lila: "Status LiLA",
+  status_lingkar_perut: "Status Lingkar Perut",
+  status_gula_darah: "Status Gula Darah",
+  status_kolesterol: "Status Kolesterol",
+  status_lingkar_kepala: "Status Lingkar Kepala",
   zscore_bbu: "Z-Score BB/U",
   zscore_pbu: "Z-Score PB/U",
   zscore_tbu: "Z-Score TB/U",
@@ -125,8 +135,8 @@ const SCREENING_LABELS = {
   zscore_bbtb: "Z-Score BB/TB",
   zscore_imtu: "Z-Score IMT/U",
   status_gizi_bbu: "Status Gizi BB/U",
-  status_gizi_pbu: "Status Gizi PB/U",
-  status_gizi_tbu: "Status Gizi TB/U",
+  status_gizi_pbu: "Status Pertumbuhan PB/U",
+  status_gizi_tbu: "Status Pertumbuhan TB/U",
   status_gizi_bbpb: "Status Gizi BB/PB",
   status_gizi_bbtb: "Status Gizi BB/TB",
   status_gizi_imtu: "Status Gizi IMT/U",
@@ -161,6 +171,11 @@ const formatDisplayValue = (value, fieldKey = "") => {
   }
 
   if (typeof value === "boolean") return value ? "Ya" : "Tidak";
+  if (fieldKey === "jumlah_kapsul_vit_a" || fieldKey === "is_vit_a_given") {
+    return Number(value) >= 1 || value === true || String(value).toLowerCase() === "sudah" || String(value).toLowerCase() === "ya"
+      ? "Sudah Diberikan"
+      : "Belum Diberikan";
+  }
   if (fieldKey === "hpht" || fieldKey === "hpl" || fieldKey.startsWith("tanggal") || fieldKey === "tglLahir" || fieldKey === "tglPeriksa") return formatDateId(value);
   if (fieldKey === "status_tbc") return ({ risiko: "Risiko", rujukan: "Perlu Rujukan", tidak_terindikasi: "Tidak Terindikasi" })[value] || String(value);
   if (fieldKey === "status_risiko_puma") return ({ risiko_rendah: "Risiko Rendah", risiko_tinggi: "Risiko Tinggi", ambigu_skor_6: "Skor Perlu Evaluasi" })[value] || String(value);
@@ -174,11 +189,11 @@ const formatDisplayValue = (value, fieldKey = "") => {
 
   if (fieldKey.toLowerCase().includes("status") || fieldKey.toLowerCase().includes("hasil") || fieldKey.startsWith("ploting_")) {
     const valLower = String(value).toLowerCase();
-    if (valLower.includes("normal") || valLower.includes("baik") || valLower.includes("aman") || valLower.includes("tidak_terindikasi") || valLower === "n") {
+    if (valLower.includes("normal") || valLower.includes("baik") || valLower.includes("aman") || valLower.includes("tidak_terindikasi") || valLower.includes("hijau") || valLower === "n") {
       return <span className="text-success fw-bold">{formattedValue}</span>;
     } else if (valLower.includes("waspada") || valLower.includes("prediab") || valLower.includes("risiko_rendah") || valLower.includes("kuning")) {
       return <span className="text-warning fw-bold">{formattedValue}</span>;
-    } else if (valLower.includes("tinggi") || valLower.includes("bahaya") || valLower.includes("diabetisi") || valLower.includes("risiko") || valLower.includes("merah") || valLower.includes("rujukan")) {
+    } else if (valLower.includes("tinggi") || valLower.includes("bahaya") || valLower.includes("diabetisi") || valLower.includes("risiko") || valLower.includes("merah") || valLower.includes("rujukan") || valLower.includes("kurang") || valLower.includes("kek") || valLower.includes("obes")) {
       return <span className="text-danger fw-bold">{formattedValue}</span>;
     }
   }
@@ -258,39 +273,255 @@ export const resolve5StepDetails = (citizen, examData = null) => {
     l2["Tekanan Darah"] = `${exam?.td_sistole || step2.td_sistole}/${exam?.td_diastole || step2.td_diastole} mmHg`;
   }
 
-  let l3 = {};
-  if (exam?.langkah3 && typeof exam.langkah3 === "object") {
-    l3 = { ...exam.langkah3 };
-  } else {
-    const zScoreMap = {
-      "Z-Score BB/U": exam?.zscore_bbu,
-      "Z-Score PB/U": exam?.zscore_pbu,
-      "Z-Score TB/U": exam?.zscore_tbu,
-      "Z-Score BB/PB": exam?.zscore_bbpb,
-      "Z-Score BB/TB": exam?.zscore_bbtb,
-      "Z-Score IMT/U": exam?.zscore_imtu,
-      "Status Gizi BB/U": exam?.status_gizi_bbu,
-      "Status Gizi PB/U": exam?.status_gizi_pbu,
-      "Status Gizi TB/U": exam?.status_gizi_tbu,
-      "Status Gizi BB/PB": exam?.status_gizi_bbpb,
-      "Status Gizi BB/TB": exam?.status_gizi_bbtb,
-      "Status Gizi IMT/U": exam?.status_gizi_imtu,
-    };
-    for (const [k, v] of Object.entries(zScoreMap)) {
-      if (isFilled(v)) l3[k] = v;
-    }
-    if (Object.values(zScores).some((v) => isFilled(v))) {
-      for (const [zk, zv] of Object.entries(zScores)) {
-        if (isFilled(zv)) l3[zk] = zv;
+  // ----------------------------------------------------------------------
+  // Resolusi Kategori ILP Sasaran (Selaras dengan Standar Backend)
+  // ----------------------------------------------------------------------
+  const resolveCategoryKey = () => {
+    const direct = exam?.kategori_sasaran || citizen?.kategori_sasaran || source?.kategori_sasaran;
+    if (direct && typeof direct === "string") {
+      const d = direct.toLowerCase().replace(/-/g, "_");
+      if (["bayi", "balita", "apras", "uskrem_6_14", "uskrem_15_18", "dewasa", "lansia", "bumil", "busui"].includes(d)) {
+        return d;
       }
+      if (d.includes("6_14") || d.includes("6-14")) return "uskrem_6_14";
+      if (d.includes("15_18") || d.includes("15-18")) return "uskrem_15_18";
     }
-    if (Object.keys(plot).length) {
-      for (const [pk, pv] of Object.entries(plot)) {
-        if (isFilled(pv)) l3[pk] = pv;
-      }
+
+    const text = String(citizen?.subKategori || citizen?.kategori || "").toLowerCase();
+    if (text.includes("hamil") || text.includes("bumil")) return "bumil";
+    if (text.includes("nifas") || text.includes("busui") || text.includes("menyusui")) return "busui";
+    if (text.includes("apras") || text.includes("prasekolah") || text.includes("pra-sekolah")) return "apras";
+    if (text.includes("6-14") || text.includes("6_14")) return "uskrem_6_14";
+    if (text.includes("15-18") || text.includes("15_18")) return "uskrem_15_18";
+    if (text.includes("bayi")) return "bayi";
+    if (text.includes("balita")) return "balita";
+    if (text.includes("lansia") || text.includes("lanjut usia")) return "lansia";
+    if (text.includes("dewasa") || text.includes("produktif")) return "dewasa";
+
+    const birthDate = citizen?.tglLahir || citizen?.tanggal_lahir || source?.tanggal_lahir;
+    if (birthDate) {
+      try {
+        const birth = new Date(birthDate);
+        const check = new Date(exam?.tanggal || new Date());
+        let totalMonths = (check.getFullYear() - birth.getFullYear()) * 12 + check.getMonth() - birth.getMonth();
+        if (check.getDate() < birth.getDate()) totalMonths--;
+        const years = Math.floor(totalMonths / 12);
+
+        if (totalMonths >= 0 && totalMonths <= 11) return "bayi";
+        if (totalMonths >= 12 && totalMonths <= 59) return "balita";
+        if (years >= 5 && years < 6) return "apras";
+        if (years >= 6 && years <= 14) return "uskrem_6_14";
+        if (years >= 15 && years <= 18) return "uskrem_15_18";
+        if (years >= 19 && years <= 59) return "dewasa";
+        if (years >= 60) return "lansia";
+      } catch (_) {}
     }
-    if (exam?.periode) l3.periode = exam.periode;
+
+    if (text.includes("remaja") || text.includes("anak")) return "uskrem_15_18";
+    return "dewasa";
+  };
+
+  const normalizedCategory = resolveCategoryKey();
+
+  let computedPlot = (plot && Object.keys(plot).length > 0) ? plot : null;
+  const rawBb = step2.bb_kg ?? exam?.bb_kg ?? source.bb_kg ?? step2.bb ?? exam?.bb;
+  const rawTb = step2.tb_cm ?? exam?.tb_cm ?? source.tb_cm ?? step2.tb ?? exam?.tb;
+  const rawLila = step2.lila_cm ?? exam?.lila_cm ?? source.lila_cm ?? step2.lila ?? exam?.lila;
+  const rawLk = step2.lingkar_kepala_cm ?? exam?.lingkar_kepala_cm ?? source.lingkar_kepala_cm ?? step2.lk ?? exam?.lk;
+  const rawLp = step2.lingkar_perut_cm ?? exam?.lingkar_perut_cm ?? source.lingkar_perut_cm ?? step2.lp ?? exam?.lp;
+  const rawSistol = step2.td_sistole ?? exam?.td_sistole ?? step2.tensiSistol ?? exam?.tensiSistol;
+  const rawDiastol = step2.td_diastole ?? exam?.td_diastole ?? step2.tensiDiastol ?? exam?.tensiDiastol;
+  const rawGula = step2.kadar_gula ?? exam?.kadar_gula ?? step2.gulaDarah ?? exam?.gulaDarah;
+
+  if (!computedPlot && (rawBb || rawTb || rawLila || rawSistol)) {
+    try {
+      computedPlot = evaluasiPemeriksaan({
+        kategori_sasaran: normalizedCategory,
+        bb_kg: rawBb,
+        tb_cm: rawTb,
+        lingkar_kepala_cm: rawLk,
+        lila_cm: rawLila,
+        lingkar_perut_cm: rawLp,
+        td_sistole: rawSistol,
+        td_diastole: rawDiastol,
+        kadar_gula: rawGula,
+        jenis_kelamin: citizen?.gender || source?.jenis_kelamin,
+        tanggal_lahir: citizen?.tglLahir || source?.tanggal_lahir,
+        tanggal_pemeriksaan: exam?.tanggal || source?.tanggal || new Date(),
+        zscores: zScores,
+      });
+    } catch (_) {}
   }
+
+  let l3 = {};
+  const isMerah = Boolean(
+    computedPlot?.is_perlu_rujukan === true ||
+    computedPlot?.status_plot === "merah" ||
+    computedPlot?.status_rujukan === "merah"
+  );
+  l3.status_evaluasi_plotting = isMerah ? "Perlu Evaluasi (Kategori Merah)" : "Normal Sesuai Standar (Kategori Hijau)";
+
+  const nestedHasil = computedPlot?.hasil_plot || computedPlot || {};
+
+  const fmtZ = (val) => {
+    if (val === undefined || val === null || val === "") return "";
+    const num = Number(val);
+    if (!Number.isFinite(num)) return ` (Z-Score: ${val})`;
+    return ` (Z-Score: ${num > 0 ? "+" : ""}${num.toFixed(2)})`;
+  };
+
+  // 1. Kategori Bayi & Balita: BB/U, TB/U (PB/U), BB/TB (BB/PB), Lingkar Kepala, LiLA
+  if (["bayi", "balita"].includes(normalizedCategory)) {
+    const bbu = computedPlot?.bbu || nestedHasil?.bbu;
+    if (bbu?.kategori) {
+      l3.status_gizi_bbu = `${bbu.kategori}${fmtZ(bbu.zscore ?? exam?.zscore_bbu)}`;
+    } else if (exam?.status_gizi_bbu || exam?.zscore_bbu !== undefined) {
+      l3.status_gizi_bbu = `${exam?.status_gizi_bbu || "Normal"}${fmtZ(exam?.zscore_bbu)}`;
+    }
+
+    const tbu = computedPlot?.tbu || nestedHasil?.tbu;
+    if (tbu?.kategori) {
+      const isPb = tbu.indikator === "PB/U" || normalizedCategory === "bayi";
+      l3[isPb ? "status_gizi_pbu" : "status_gizi_tbu"] = `${tbu.kategori}${fmtZ(tbu.zscore ?? (isPb ? exam?.zscore_pbu : exam?.zscore_tbu))}`;
+    } else if (exam?.status_gizi_tbu || exam?.zscore_tbu !== undefined || exam?.status_gizi_pbu || exam?.zscore_pbu !== undefined) {
+      const isPb = exam?.status_gizi_pbu || exam?.zscore_pbu !== undefined;
+      const val = isPb ? exam?.status_gizi_pbu : exam?.status_gizi_tbu;
+      const zVal = isPb ? exam?.zscore_pbu : exam?.zscore_tbu;
+      l3[isPb ? "status_gizi_pbu" : "status_gizi_tbu"] = `${val || "Normal"}${fmtZ(zVal)}`;
+    }
+
+    const size = computedPlot?.bb_panjang_tinggi || nestedHasil?.bb_panjang_tinggi;
+    if (size?.kategori) {
+      const isPb = size.indikator === "BB/PB" || normalizedCategory === "bayi";
+      l3[isPb ? "status_gizi_bbpb" : "status_gizi_bbtb"] = `${size.kategori}${fmtZ(size.zscore ?? (isPb ? exam?.zscore_bbpb : exam?.zscore_bbtb))}`;
+    } else if (exam?.status_gizi_bbtb || exam?.zscore_bbtb !== undefined || exam?.status_gizi_bbpb || exam?.zscore_bbpb !== undefined) {
+      const isPb = exam?.status_gizi_bbpb || exam?.zscore_bbpb !== undefined;
+      const val = isPb ? exam?.status_gizi_bbpb : exam?.status_gizi_bbtb;
+      const zVal = isPb ? exam?.zscore_bbpb : exam?.zscore_bbtb;
+      l3[isPb ? "status_gizi_bbpb" : "status_gizi_bbtb"] = `${val || "Normal"}${fmtZ(zVal)}`;
+    }
+
+    const lilaObj = computedPlot?.lila || nestedHasil?.lila;
+    if (lilaObj?.kategori) {
+      l3.status_lila = lilaObj.kategori;
+    }
+
+    const lkObj = computedPlot?.lingkar_kepala || nestedHasil?.lingkar_kepala;
+    if (lkObj?.kategori) {
+      l3.status_lingkar_kepala = lkObj.kategori;
+    }
+  }
+
+  // 2. Kategori Apras (Anak Pra-Sekolah 5-6 Tahun): IMT/U, LiLA
+  else if (normalizedCategory === "apras") {
+    const imtu = nestedHasil?.imtu || computedPlot?.imtu;
+    if (imtu?.kategori) {
+      l3.status_gizi_imtu = `${imtu.kategori}${fmtZ(imtu.zscore ?? exam?.zscore_imtu)}`;
+    } else if (exam?.status_gizi_imtu || exam?.zscore_imtu !== undefined) {
+      l3.status_gizi_imtu = `${exam?.status_gizi_imtu || "Normal"}${fmtZ(exam?.zscore_imtu)}`;
+    }
+
+    const lilaObj = nestedHasil?.lila || computedPlot?.lila;
+    if (lilaObj?.kategori) {
+      l3.status_lila = lilaObj.kategori;
+    }
+  }
+
+  // 3. Kategori Usia Sekolah 6 - 14 Tahun: HANYA IMT/U
+  else if (normalizedCategory === "uskrem_6_14") {
+    const imtu = nestedHasil?.imtu || computedPlot?.imtu;
+    if (imtu?.kategori) {
+      l3.status_gizi_imtu = `${imtu.kategori}${fmtZ(imtu.zscore ?? exam?.zscore_imtu)}`;
+    } else if (exam?.status_gizi_imtu || exam?.zscore_imtu !== undefined) {
+      l3.status_gizi_imtu = `${exam?.status_gizi_imtu || "Normal"}${fmtZ(exam?.zscore_imtu)}`;
+    }
+  }
+
+  // 4. Kategori Remaja 15 - 18 Tahun: IMT/U dan Tekanan Darah
+  else if (normalizedCategory === "uskrem_15_18") {
+    const imtu = nestedHasil?.imtu || computedPlot?.imtu;
+    if (imtu?.kategori) {
+      l3.status_gizi_imtu = `${imtu.kategori}${fmtZ(imtu.zscore ?? exam?.zscore_imtu)}`;
+    } else if (exam?.status_gizi_imtu || exam?.zscore_imtu !== undefined) {
+      l3.status_gizi_imtu = `${exam?.status_gizi_imtu || "Normal"}${fmtZ(exam?.zscore_imtu)}`;
+    }
+
+    const tdObj = nestedHasil?.tekanan_darah || computedPlot?.tekanan_darah;
+    if (tdObj?.kategori) {
+      const tensiText = tdObj.sistol && tdObj.diastol ? ` (${tdObj.sistol}/${tdObj.diastol} mmHg)` : "";
+      l3.status_tekanan_darah = `${tdObj.kategori}${tensiText}`;
+    }
+  }
+
+  // 5. Kategori Ibu Hamil (Bumil): IMT Sebelum Hamil, LiLA, Tekanan Darah
+  else if (normalizedCategory === "bumil") {
+    const imtObj = nestedHasil?.imt || computedPlot?.imt;
+    if (imtObj?.kategori) {
+      const valText = imtObj.imt ? ` (IMT: ${imtObj.imt} kg/m²)` : "";
+      l3.status_imt = `${imtObj.kategori}${valText}`;
+    }
+
+    const lilaObj = nestedHasil?.lila || computedPlot?.lila;
+    if (lilaObj?.kategori) {
+      l3.status_lila = lilaObj.kategori === "KEK" ? "Risiko KEK (< 23.5 cm)" : "Normal (≥ 23.5 cm)";
+    }
+
+    const tdObj = nestedHasil?.tekanan_darah || computedPlot?.tekanan_darah;
+    if (tdObj?.kategori) {
+      const tensiText = tdObj.sistol && tdObj.diastol ? ` (${tdObj.sistol}/${tdObj.diastol} mmHg)` : "";
+      l3.status_tekanan_darah = `${tdObj.kategori}${tensiText}`;
+    }
+  }
+
+  // 6. Kategori Ibu Menyusui (Busui): IMT, Tekanan Darah
+  else if (normalizedCategory === "busui") {
+    const imtObj = nestedHasil?.imt || computedPlot?.imt;
+    if (imtObj?.kategori) {
+      const valText = imtObj.imt ? ` (IMT: ${imtObj.imt} kg/m²)` : "";
+      l3.status_imt = `${imtObj.kategori}${valText}`;
+    }
+
+    const tdObj = nestedHasil?.tekanan_darah || computedPlot?.tekanan_darah;
+    if (tdObj?.kategori) {
+      const tensiText = tdObj.sistol && tdObj.diastol ? ` (${tdObj.sistol}/${tdObj.diastol} mmHg)` : "";
+      l3.status_tekanan_darah = `${tdObj.kategori}${tensiText}`;
+    }
+  }
+
+  // 7. Kategori Dewasa & Lansia: IMT, Lingkar Perut, LiLA, Tekanan Darah, Kadar Gula Darah
+  else {
+    const imtObj = nestedHasil?.imt || computedPlot?.imt;
+    if (imtObj?.kategori) {
+      const valText = imtObj.imt ? ` (IMT: ${imtObj.imt} kg/m²)` : "";
+      l3.status_imt = `${imtObj.kategori}${valText}`;
+    }
+
+    const lpObj = nestedHasil?.lingkar_perut || computedPlot?.lingkar_perut;
+    if (lpObj) {
+      const isLaki = String(citizen?.gender || source?.jenis_kelamin || "").toUpperCase() === "L";
+      const limit = isLaki ? 90 : 80;
+      l3.status_lingkar_perut = lpObj.is_merah ? `Risiko Obesitas Sentral (> ${limit} cm)` : `Normal (≤ ${limit} cm)`;
+    }
+
+    const lilaObj = nestedHasil?.lila || computedPlot?.lila;
+    if (lilaObj?.kategori) {
+      l3.status_lila = lilaObj.kategori === "Kurang" ? "Kurang (< 21.5 cm)" : "Normal (≥ 21.5 cm)";
+    }
+
+    const tdObj = nestedHasil?.tekanan_darah || computedPlot?.tekanan_darah;
+    if (tdObj?.kategori) {
+      const tensiText = tdObj.sistol && tdObj.diastol ? ` (${tdObj.sistol}/${tdObj.diastol} mmHg)` : "";
+      l3.status_tekanan_darah = `${tdObj.kategori}${tensiText}`;
+    }
+
+    const gulaObj = nestedHasil?.kadar_gula_darah || computedPlot?.kadar_gula_darah;
+    if (gulaObj?.kategori) {
+      const valText = gulaObj.nilai_riil ? ` (${gulaObj.nilai_riil} mg/dL)` : "";
+      l3.status_gula_darah = `${gulaObj.kategori}${valText}`;
+    }
+  }
+
+  if (exam?.periode) l3.periode = exam.periode;
 
   const l4 = (step4 && typeof step4 === "object" ? { ...step4 } : {}) || {};
   if (exam?.detail_skrining && typeof exam.detail_skrining === "object") {
@@ -305,6 +536,16 @@ export const resolve5StepDetails = (citizen, examData = null) => {
   }
   if (l4.pemeriksaan_tahunan_remaja_putri && !l4.is_skrining_tahunan) {
     l4.pemeriksaan_tahunan_remaja_putri = "-";
+  }
+
+  // Rapikan pelayanan_kesehatan nifas/busui:
+  // Hindari menampilkan angka 1 kapsul. Tampilkan status pemberian secara natural.
+  if (l4.pelayanan_kesehatan && typeof l4.pelayanan_kesehatan === "object") {
+    const pk = { ...l4.pelayanan_kesehatan };
+    if (isFilled(pk.is_vit_a_given) && isFilled(pk.jumlah_kapsul_vit_a)) {
+      delete pk.jumlah_kapsul_vit_a;
+    }
+    l4.pelayanan_kesehatan = pk;
   }
 
   // Bersihkan key boolean raw dari backend agar tidak muncul dobel di UI
@@ -323,11 +564,50 @@ export const resolve5StepDetails = (citizen, examData = null) => {
     l5.tindakan_edukasi = step5.tindakan_edukasi || exam?.tindakan_edukasi || "-";
   }
 
-  const isRujuk = exam?.is_perlu_rujukan ?? step5.is_perlu_rujukan ?? false;
+  // Sinkronisasi status rujukan otomatis berdasarkan skrining Langkah 4 & plotting Langkah 3
+  const hasScreeningReferralIndication = Boolean(
+    l4?.tbc?.is_tbc_terindikasi === true ||
+    l4?.tbc?.status_tbc === "risiko" ||
+    l4?.tbc?.status_tbc === "rujukan" ||
+    l4?.skrining_ppok_puma?.status_risiko_puma === "risiko_tinggi" ||
+    l4?.skrining_jiwa?.is_rujukan_jiwa === true ||
+    l4?.aks_aktifitas_harian?.is_rujukan_aks === true ||
+    l4?.skilas?.is_rujukan_skilas === true ||
+    exam?.detail_skrining?.tbc?.is_tbc_terindikasi === true ||
+    exam?.detail_skrining?.tbc?.status_tbc === "risiko" ||
+    exam?.detail_skrining?.tbc?.status_tbc === "rujukan" ||
+    exam?.detail_skrining?.skrining_ppok_puma?.status_risiko_puma === "risiko_tinggi" ||
+    exam?.detail_skrining?.skrining_jiwa?.is_rujukan_jiwa === true ||
+    exam?.detail_skrining?.aks_aktifitas_harian?.is_rujukan_aks === true ||
+    exam?.detail_skrining?.skilas?.is_rujukan_skilas === true ||
+    computedPlot?.is_perlu_rujukan === true ||
+    computedPlot?.status_plot === "merah" ||
+    computedPlot?.status_rujukan === "merah"
+  );
+
+  const isRujuk = Boolean(
+    exam?.is_perlu_rujukan === true ||
+    exam?.rujukan ||
+    step5?.is_perlu_rujukan === true ||
+    step5?.statusRujukan === "Rujuk ke Puskesmas / Pustu" ||
+    hasScreeningReferralIndication
+  );
   l5.is_perlu_rujukan = isRujuk ? "Ya" : "Tidak";
 
-  if (isRujuk || isFilled(step5.alasanRujukan) || isFilled(step5.statusRujukan) || isFilled(step5.alasan_rujukan) || isFilled(exam?.alasan_rujukan) || isFilled(exam?.rujukan?.alasan_rujukan)) {
-    l5.alasan_rujukan = step5.alasanRujukan || step5.statusRujukan || step5.alasan_rujukan || exam?.rujukan?.alasan_rujukan || exam?.alasan_rujukan || "-";
+  let finalAlasanRujuk = step5.alasanRujukan || step5.statusRujukan || step5.alasan_rujukan || exam?.rujukan?.alasan_rujukan || exam?.alasan_rujukan;
+  if (!finalAlasanRujuk && isRujuk) {
+    const reasons = [];
+    if (l4?.tbc?.is_tbc_terindikasi || l4?.tbc?.status_tbc === "risiko" || l4?.tbc?.status_tbc === "rujukan") reasons.push("Indikasi Skrining TBC");
+    if (computedPlot?.is_perlu_rujukan || computedPlot?.status_plot === "merah" || computedPlot?.status_rujukan === "merah") reasons.push("Hasil Plotting Perlu Evaluasi");
+    if (l4?.skrining_ppok_puma?.status_risiko_puma === "risiko_tinggi") reasons.push("Risiko Tinggi PPOK (PUMA)");
+    if (l4?.skrining_jiwa?.is_rujukan_jiwa) reasons.push("Indikasi Skrining Kesehatan Jiwa");
+    if (l4?.aks_aktifitas_harian?.is_rujukan_aks) reasons.push("Indikasi Evaluasi AKS");
+    if (l4?.skilas?.is_rujukan_skilas) reasons.push("Indikasi Evaluasi SKILAS");
+    finalAlasanRujuk = reasons.length > 0 ? reasons.join("; ") : "Indikasi medis hasil pemeriksaan & skrining";
+  }
+
+  if (isRujuk || isFilled(finalAlasanRujuk)) {
+    l5.alasan_rujukan = finalAlasanRujuk || "-";
   }
 
   return {
@@ -343,7 +623,23 @@ export const resolve5StepDetails = (citizen, examData = null) => {
   };
 };
 
-export default function DetailRekapModal({ citizen, selectedCitizen, onClose, onHide, show = true, examData = null, isLoading = false, theme = "kader", themeColor = null, roleTitle = null, onEdit = null }) {
+export default function DetailRekapModal({
+  citizen,
+  selectedCitizen,
+  onClose,
+  onHide,
+  show = true,
+  examData = null,
+  isLoading = false,
+  theme = "kader",
+  themeColor = null,
+  roleTitle = null,
+  onEdit = null,
+  isPreview = false,
+  previewTitle = null,
+  onConfirmSave = null,
+  isSaving = false,
+}) {
   if (show === false) return null;
 
   const targetCitizen = citizen || selectedCitizen;
@@ -353,10 +649,11 @@ export default function DetailRekapModal({ citizen, selectedCitizen, onClose, on
   if (!data) return null;
 
   const handleClose = onClose || onHide || (() => {});
-  const isDinkes = theme === "dinkes" || (themeColor && themeColor.includes("1e3a8a")) || roleTitle?.toLowerCase().includes("dinas");
-  const isPuskesmas = theme === "puskesmas" || roleTitle?.toLowerCase().includes("puskesmas");
-  const primaryColor = themeColor || (isDinkes ? "#1e3a8a" : isPuskesmas ? "#428A75" : "#2b2e4a");
-  const accentColor = isDinkes ? "#1e3a8a" : isPuskesmas ? "#428A75" : "#F25B8E";
+  const isSA = theme === "sa" || themeColor === "#475569" || roleTitle?.toLowerCase().includes("super");
+  const isDinkes = !isSA && (theme === "dinkes" || (themeColor && (themeColor.includes("0f2b5c") || themeColor.includes("1e3a8a"))) || roleTitle?.toLowerCase().includes("dinas"));
+  const isPuskesmas = !isSA && !isDinkes && (theme === "puskesmas" || roleTitle?.toLowerCase().includes("puskesmas"));
+  const primaryColor = isSA ? "#475569" : themeColor || (isDinkes ? "#0f2b5c" : isPuskesmas ? "#3b7d6b" : "#059669");
+  const accentColor = isSA ? "#475569" : isDinkes ? "#0f2b5c" : isPuskesmas ? "#3b7d6b" : "#059669";
 
   const renderDataFields = (objectValue, nested = false) => {
     const entries = Object.entries(objectValue || {}).filter(([key, value]) => isFilled(value) && !(key === "tempat_imunisasi" && String(value).includes(" || ")));
@@ -376,7 +673,7 @@ export default function DetailRekapModal({ citizen, selectedCitizen, onClose, on
                 <div className="small text-muted mb-1" style={{ lineHeight: 1.35 }}>
                   {formatDisplayKey(key)}
                 </div>
-                <div className="small fw-semibold text-dark" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.45 }}>
+                <div className={`small fw-semibold text-dark ${key === "nik" ? "font-monospace fs-6" : ""}`} style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.45 }}>
                   {formatDisplayValue(value, key)}
                 </div>
               </div>
@@ -396,6 +693,11 @@ export default function DetailRekapModal({ citizen, selectedCitizen, onClose, on
           <div className="modal-header text-white p-3 px-4 d-flex align-items-center justify-content-between" style={{ backgroundColor: primaryColor }}>
             <div>
               <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                {isPreview && (
+                  <span className="badge bg-warning text-dark fw-bold px-2.5 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                    PREVIEW HASIL PEMERIKSAAN BERTAHAP (LANGKAH 1 - 5)
+                  </span>
+                )}
                 <span className="badge bg-white text-dark fw-bold px-2 py-1 rounded-pill" style={{ fontSize: "0.74rem" }}>
                   {formatDisplayValue(data.kategori)}
                   {data.subText ? ` (${data.subText})` : ""}
@@ -404,12 +706,18 @@ export default function DetailRekapModal({ citizen, selectedCitizen, onClose, on
                   Tanggal Pemeriksaan: {formatDisplayValue(data.tglPeriksa)}
                 </span>
               </div>
-              <h5 className="modal-title fw-bold text-white mb-0">Detail Rekap Pemeriksaan</h5>
+              <h5 className="modal-title fw-bold text-white mb-0">{isPreview ? (previewTitle || "Konfirmasi Simpan Data") : "Detail Rekap Pemeriksaan"}</h5>
             </div>
             <button type="button" className="btn-close btn-close-white" onClick={handleClose} aria-label="Tutup" />
           </div>
 
           <div className="modal-body p-4 bg-light">
+            {isPreview && (
+              <div className="alert bg-white border border-warning-subtle text-dark rounded-3 p-3 mb-3 shadow-xs">
+                <strong>ⓘ Mohon periksa kembali ringkasan data dari Langkah 1 s/d Langkah 5 sebelum menekan Konfirmasi Simpan.</strong>
+              </div>
+            )}
+
             {isLoading && (
               <div className="alert alert-light border d-flex align-items-center gap-2 mb-3">
                 <Loader2 size={16} className="spin" />
@@ -459,7 +767,25 @@ export default function DetailRekapModal({ citizen, selectedCitizen, onClose, on
           </div>
 
           <div className="modal-footer bg-white p-3 px-4 d-flex justify-content-between align-items-center">
-            {!isPuskesmas && onEdit ? (
+            {isPreview ? (
+              <>
+                <button type="button" className="btn btn-outline-secondary btn-sm px-4 rounded-3" onClick={handleClose}>
+                  &larr; Edit Data
+                </button>
+                {onConfirmSave && (
+                  <button
+                    type="button"
+                    className="btn btn-dark-custom btn-sm px-4 rounded-3 text-white fw-bold d-inline-flex align-items-center gap-2"
+                    style={{ backgroundColor: "#2b2e4a" }}
+                    onClick={onConfirmSave}
+                    disabled={isSaving}
+                  >
+                    <CheckCircle2 size={16} />
+                    <span>{isSaving ? "Menyimpan Pemeriksaan..." : "✓ Konfirmasi & Simpan Pemeriksaan"}</span>
+                  </button>
+                )}
+              </>
+            ) : !isPuskesmas && onEdit ? (
               <button type="button" className="btn btn-dark-custom btn-sm px-3 rounded-3 d-inline-flex align-items-center gap-2 text-white fw-semibold" style={{ backgroundColor: "#2b2e4a" }} onClick={() => onEdit(data)}>
                 <Edit3 size={14} /> Edit Data
               </button>
@@ -469,9 +795,11 @@ export default function DetailRekapModal({ citizen, selectedCitizen, onClose, on
                 <span>Data tersinkronisasi realtime dengan Sistem Posyandu &amp; Puskesmas</span>
               </div>
             )}
-            <button type="button" className="btn btn-outline-secondary btn-sm px-4 rounded-3" onClick={handleClose}>
-              Tutup
-            </button>
+            {!isPreview && (
+              <button type="button" className="btn btn-outline-secondary btn-sm px-4 rounded-3" onClick={handleClose}>
+                Tutup
+              </button>
+            )}
           </div>
         </div>
       </div>

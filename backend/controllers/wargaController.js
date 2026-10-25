@@ -44,6 +44,13 @@ const verifyMutasiWarga = async (req, res, next) => {
       include: [{ model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "puskesmas_id"] }],
     });
 
+    if (!warga) {
+      return res.status(404).json({
+        success: false,
+        message: "Data warga dengan NIK, nama lengkap, dan nama ibu tersebut tidak ditemukan.",
+      });
+    }
+
     const posyanduAsalId = warga.posyandu_id;
     const posyanduTujuanId = Number(destination.id);
 

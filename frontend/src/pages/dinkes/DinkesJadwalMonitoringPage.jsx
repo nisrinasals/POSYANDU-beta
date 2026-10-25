@@ -3,7 +3,7 @@ import { Calendar, Clock, MapPin, Search, Eye, Filter, UserCheck, ChevronLeft, C
 import { formatDateId } from "../../utils/dataMappers";
 
 export default function DinkesJadwalMonitoringPage({ globalJadwalList = [], user }) {
-  const themeColor = user?.roleType === "sa" ? "#6b4e31" : "#1e3a8a";
+  const themeColor = user?.roleType === "sa" ? "#475569" : "#0f2b5c";
   const [searchQuery, setSearchQuery] = useState("");
   const [bulanFilter, setBulanFilter] = useState("Semua");
   const [selectedPuskesmas, setSelectedPuskesmas] = useState("Semua");

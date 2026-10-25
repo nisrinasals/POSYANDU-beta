@@ -1,47 +1,130 @@
 import React, { useState } from "react";
-import { LayoutDashboard, Calendar, Users, Stethoscope, ClipboardList, User, LogOut, ChevronDown, ChevronRight, HeartHandshake, Menu, Building2, UserCheck, UserCog, Activity, FileSpreadsheet, Shield } from "lucide-react";
+import { LayoutDashboard, Calendar, Users, Stethoscope, ClipboardList, User, LogOut, ChevronDown, ChevronRight, HeartHandshake, Menu, Building2, UserCheck, UserCog, Activity, FileSpreadsheet, Shield, ShieldCheck } from "lucide-react";
 import { kategoriPemeriksaan } from "../../data/kategoriPemeriksaan";
+import logoSengkuyung from "../../assets/logo_sengkuyung_katresnan.png";
 
-export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate, onLogout, children }) {
+export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate, onLogout, globalJadwalList = [], children }) {
   const [pemeriksaanOpen, setPemeriksaanOpen] = useState(true);
   const [verifikasiDinkesOpen, setVerifikasiDinkesOpen] = useState(true);
   const [verifikasiPuskesmasOpen, setVerifikasiPuskesmasOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isLogoutHovered, setIsLogoutHovered] = useState(false);
+  const [isProfileHovered, setIsProfileHovered] = useState(false);
 
   const isSA = user?.roleType === "sa";
   const isPuskesmasAdmin = user?.roleType === "puskesmas" || user?.roleType === "puskesmas-admin";
   const isPuskesmasStaf = user?.roleType === "puskesmas-staf" || user?.roleType === "puskesmas-user";
   const isPuskesmas = isPuskesmasAdmin || isPuskesmasStaf;
 
-  const isDinkesAdmin = user?.roleType === "dinkes-admin" || isSA;
+  const isDinkesAdmin = user?.roleType === "dinkes-admin";
   const isDinkesStaf = user?.roleType === "dinkes-staf" || user?.roleType === "dinkes";
-  const isDinkes = isDinkesAdmin || isDinkesStaf;
+  const isDinkes = (isDinkesAdmin || isDinkesStaf) && !isSA;
+  const isKader = !isSA && !isDinkes && !isPuskesmas;
 
-  const handleSubmenuClick = (subId) => {
+  const logoutTheme = React.useMemo(() => {
+    if (isSA) return { bg: "#475569", hover: "#334155" };
+    if (isDinkes) return { bg: "#0f2b5c", hover: "#0a1e40" };
+    if (isPuskesmas) return { bg: "#3b7d6b", hover: "#2e6354" };
+    return { bg: "#2b2e4a", hover: "#1e2034" };
+  }, [isSA, isDinkes, isPuskesmas]);
+
+  // Logika Sesi Posyandu Aktif (H s.d H+6 dan status open) untuk Kader
+  const sesiAktifInfo = React.useMemo(() => {
+    if (!isKader || !Array.isArray(globalJadwalList) || globalJadwalList.length === 0) {
+      return { hasActiveSession: true, activeCategories: null, activeSession: null };
+    }
+
+    const now = new Date();
+    const localMs = now.getTime() - now.getTimezoneOffset() * 60 * 1000;
+    const todayStr = new Date(localMs).toISOString().slice(0, 10);
+    const todayDate = new Date(`${todayStr}T00:00:00Z`);
+
+    const userPosyanduId = user?.posyandu_id ? Number(user.posyandu_id) : null;
+    const userPosyanduName = (user?.posyandu || "").toLowerCase().trim();
+
+    // Cari sesi posyandu milik kader yang statusnya open dan dalam rentang H s.d H+6
+    const matchingSessions = globalJadwalList.filter((j) => {
+      const jPosId = j?.posyandu_id ? Number(j.posyandu_id) : null;
+      const jPosName = (j?.posyandu || j?.namaPosyandu || "").toLowerCase().trim();
+      const matchPos = (userPosyanduId && jPosId === userPosyanduId) || (userPosyanduName && jPosName.includes(userPosyanduName));
+      if (!matchPos && (userPosyanduId || userPosyanduName)) return false;
+
+      const rawDate = j?.tanggal || (j?._raw?.tanggal_pelaksanaan ? String(j._raw.tanggal_pelaksanaan).slice(0, 10) : "");
+      if (!rawDate) return false;
+
+      const sessionDate = new Date(`${rawDate}T00:00:00Z`);
+      if (Number.isNaN(sessionDate.getTime())) return false;
+
+      const diffDays = Math.floor((todayDate - sessionDate) / 86400000);
+      const isOpen = j?.status === "Terjadwal" || j?.status === "open" || j?._raw?.status === "open";
+
+      return isOpen && diffDays >= 0 && diffDays <= 6;
+    });
+
+    if (matchingSessions.length === 0) {
+      // Tidak ada sesi buka saat ini dalam rentang H s.d H+6
+      return { hasActiveSession: false, activeCategories: [], activeSession: null };
+    }
+
+    // Ambil fokusLayanan jika sesi posyandu membatasi kategori sasaran tertentu
+    const activeSession = matchingSessions[0];
+    const rawFokus = activeSession?.fokusLayanan || activeSession?._raw?.fokus_layanan || [];
+    let activeCategories = null;
+
+    if (Array.isArray(rawFokus) && rawFokus.length > 0) {
+      activeCategories = rawFokus.map((f) => String(f).toLowerCase().trim());
+    }
+
+    return { hasActiveSession: true, activeCategories, activeSession };
+  }, [isKader, globalJadwalList, user]);
+
+  const isCategoryAllowed = (catId, catLabel) => {
+    if (!isKader) return true;
+    if (!sesiAktifInfo.hasActiveSession) return false;
+    if (!sesiAktifInfo.activeCategories) return true; // Seluruh kategori ILP terbuka jika tidak dibatasi fokus spesifik
+
+    const lowerId = String(catId).toLowerCase();
+    const lowerLabel = String(catLabel).toLowerCase();
+
+    return sesiAktifInfo.activeCategories.some((fokus) => {
+      if (lowerId.includes("bumil") && fokus.includes("bumil")) return true;
+      if (lowerId.includes("nifas") && (fokus.includes("nifas") || fokus.includes("menyusui"))) return true;
+      if ((lowerId.includes("bayi") || lowerId.includes("balita")) && (fokus.includes("bayi") || fokus.includes("balita"))) return true;
+      if (lowerId.includes("apras") && (fokus.includes("apras") || fokus.includes("pra sekolah") || fokus.includes("prasekolah"))) return true;
+      if (lowerId.includes("usekrem") && (fokus.includes("usekrem") || fokus.includes("remaja") || fokus.includes("sekolah"))) return true;
+      if (lowerId.includes("dewasa") && fokus.includes("dewasa")) return true;
+      if (lowerId.includes("lansia") && fokus.includes("lansia")) return true;
+      return lowerLabel.includes(fokus) || fokus.includes(lowerLabel);
+    });
+  };
+
+  const handleSubmenuClick = (subId, catLabel) => {
+    if (isKader && !isCategoryAllowed(subId, catLabel)) {
+      return;
+    }
     onNavigate("pemeriksaan", subId);
   };
 
   const getPageBg = () => {
-    if (isSA) return "#f4ede8"; // Soft brown for SA page background
+    if (isSA) return "#f8fafc";
     if (isDinkes) return "#eef2f6";
     if (isPuskesmas) return "#EEF1EF";
     return "#f2f2f2";
   };
 
   const getBrandBg = () => {
-    if (isSA) return "#6b4e31"; // Neutral brown for SA brand
-    if (isDinkes) return "#1e3a8a";
-    if (isPuskesmas) return "#2E4E52";
+    if (isSA) return "#475569";
+    if (isDinkes) return "#0f2b5c";
+    if (isPuskesmas) return "#3b7d6b";
     return "#2b2e4a";
   };
 
   const getRoleBadgeBg = () => {
-    if (isSA) return "#8c6b5d"; // Brown for SA badge
-    if (isDinkesAdmin) return "#1e3a8a";
-    if (isDinkesStaf) return "#0284c7";
-    if (isPuskesmasAdmin) return "#2E4E52";
-    if (isPuskesmasStaf) return "#0D9488";
-    return "#F25B8E";
+    if (isSA) return "#64748b";
+    if (isDinkes) return "#0f2b5c";
+    if (isPuskesmasAdmin) return "#3b7d6b";
+    if (isPuskesmasStaf) return "#3b7d6b";
+    return "#2b2e4a";
   };
 
   const getRoleLabel = () => {
@@ -50,7 +133,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
     if (isDinkesStaf) return "Dinkes (Staf)";
     if (isPuskesmasAdmin) return "Puskesmas (Admin)";
     if (isPuskesmasStaf) return "Puskesmas (Staf)";
-    return "Kader";
+    return "Kader Posyandu";
   };
 
   const getRoleSubLabel = () => {
@@ -87,11 +170,9 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
     <div className={`d-flex min-vh-100 position-relative ${roleClass}`} style={{ backgroundColor: getPageBg() }}>
       {/* Mobile Toggle Bar */}
       <div className="d-lg-none position-fixed top-0 start-0 end-0 bg-white border-bottom p-3 d-flex align-items-center justify-content-between z-3 shadow-sm">
-        <div className="d-flex align-items-center gap-2">
-          <div className="p-2 text-white rounded-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: getBrandBg() }}>
-            {isDinkes ? <Building2 size={20} /> : isPuskesmas ? <Shield size={20} /> : <HeartHandshake size={20} />}
-          </div>
-          <span className="fw-bold text-dark">SENGKUYUNG KATRESNAN</span>
+        <div className="d-flex align-items-center gap-2.5">
+          <img src={logoSengkuyung} alt="Logo Sengkuyung Katresnan" style={{ height: "32px", width: "auto", objectFit: "contain" }} />
+          <span className="fw-bold text-dark" style={{ fontSize: "0.95rem", letterSpacing: "-0.01em" }}>SENGKUYUNG KATRESNAN</span>
         </div>
         <button className="btn btn-outline-secondary btn-sm" onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}>
           <Menu size={20} />
@@ -101,41 +182,26 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
       {/* Sidebar Container */}
       <aside className={`sidebar-container ${mobileSidebarOpen ? "show" : ""}`}>
         {/* Sidebar Header */}
-        <div className="p-4 border-bottom d-flex align-items-center gap-3">
-          <div className="rounded-3 p-2 text-white d-flex align-items-center justify-content-center shadow-sm" style={{ backgroundColor: getBrandBg() }}>
-            {isDinkes ? <Building2 size={24} /> : isPuskesmas ? <Shield size={24} /> : <HeartHandshake size={24} />}
+        <div className="p-3.5 border-bottom d-flex align-items-center gap-3" style={{ padding: "16px 20px" }}>
+          <div
+            className="rounded-3 p-1.5 bg-white border d-flex align-items-center justify-content-center shadow-xs flex-shrink-0"
+            style={{ width: "46px", height: "46px", borderColor: "#e2e8f0" }}
+          >
+            <img src={logoSengkuyung} alt="Logo Sengkuyung Katresnan" style={{ width: "36px", height: "36px", objectFit: "contain" }} />
           </div>
-          <div>
-            <h6 className="fw-bold mb-0 text-dark">SENGKUYUNG KATRESNAN</h6>
+          <div className="overflow-hidden">
+            <h6 className="fw-bold mb-0 text-dark" style={{ fontSize: "0.92rem", letterSpacing: "-0.01em", lineHeight: 1.25 }}>
+              SENGKUYUNG KATRESNAN
+            </h6>
             <span
-              className="fw-bold"
+              className="fw-bold d-block text-truncate mt-0.5"
               style={{
-                fontSize: "0.75rem",
-                color: isSA ? "#6b4e31" : isDinkes ? "#1e3a8a" : isPuskesmas ? "#428A75" : "#64748b",
+                fontSize: "0.72rem",
+                color: isSA ? "#475569" : isDinkes ? "#0f2b5c" : isPuskesmas ? "#3b7d6b" : "#64748b",
               }}
             >
               {isSA ? "SUPER ADMIN SISTEM" : isDinkes ? (isDinkesAdmin ? "DINAS KESEHATAN (ADMIN)" : "DINAS KESEHATAN (STAF)") : isPuskesmas ? (isPuskesmasAdmin ? "PUSKESMAS (ADMIN)" : "PUSKESMAS (STAF)") : "Sistem Layanan Kesehatan"}
             </span>
-          </div>
-        </div>
-
-        {/* Role Indicator Banner & Switch Button */}
-        <div className="px-3 pt-3">
-          <div
-            className="p-2.5 rounded-3 border d-flex align-items-center justify-content-between"
-            style={{
-              fontSize: "0.8rem",
-              backgroundColor: isSA ? "rgba(107, 78, 49, 0.1)" : isDinkes ? "rgba(219, 234, 254, 0.5)" : isPuskesmas ? "rgba(220, 252, 231, 0.5)" : "#f8fafc",
-            }}
-          >
-            <div className="d-flex align-items-center gap-2 overflow-hidden">
-              <span className="badge text-white" style={{ backgroundColor: getRoleBadgeBg() }}>
-                {getRoleLabel()}
-              </span>
-              <span className="fw-semibold text-truncate" style={{ maxWidth: "120px" }}>
-                {getRoleSubLabel()}
-              </span>
-            </div>
           </div>
         </div>
 
@@ -146,7 +212,151 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
           </div>
 
           <nav className="d-flex flex-column gap-1">
-            {isDinkes ? (
+            {isSA ? (
+              /* ========================================================================= */
+              /* SUPER ADMINISTRATOR ROLE NAVIGATION MENU */
+              /* ========================================================================= */
+              <>
+                {/* 1. Dashboard */}
+                <a
+                  href="#dashboard"
+                  className={`nav-link-custom sa-nav-link ${activeMenu === "dashboard" ? "active" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigate("dashboard");
+                  }}
+                >
+                  <LayoutDashboard size={18} />
+                  <span>Dashboard</span>
+                </a>
+
+                {/* 2. Manajemen Akun (Super Admin) */}
+                <div>
+                  <div
+                    className={`nav-link-custom sa-nav-link justify-content-between ${activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun" ? "active" : ""}`}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      onNavigate("verifikasi-akun", activeSubmenu || "puskesmas");
+                      setVerifikasiDinkesOpen(!verifikasiDinkesOpen);
+                    }}
+                  >
+                    <div className="d-flex align-items-center gap-2">
+                      <UserCog size={18} />
+                      <span>Manajemen Akun</span>
+                    </div>
+                    {verifikasiDinkesOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </div>
+
+                  {verifikasiDinkesOpen && (
+                    <div className="d-flex flex-column my-1">
+                      {/* Submenu 0: Verifikasi Kader Posyandu */}
+                      <a
+                        href="#verifikasi-kader"
+                        className={`nav-link-custom submenu-link sa-submenu-link ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kader" ? "active" : ""}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onNavigate("verifikasi-akun", "kader");
+                        }}
+                      >
+                        <Users size={15} className="me-1.5 opacity-75" />
+                        <span>Verifikasi Kader</span>
+                      </a>
+
+                      {/* Submenu 1: Verifikasi Puskesmas */}
+                      <a
+                        href="#verifikasi-puskesmas"
+                        className={`nav-link-custom submenu-link sa-submenu-link ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && (activeSubmenu === "puskesmas" || !activeSubmenu) ? "active" : ""}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onNavigate("verifikasi-akun", "puskesmas");
+                        }}
+                      >
+                        <Building2 size={15} className="me-1.5 opacity-75" />
+                        <span>Verifikasi Puskesmas</span>
+                      </a>
+
+                      {/* Submenu 2: Verifikasi Staf Internal Dinkes */}
+                      <a
+                        href="#verifikasi-staf"
+                        className={`nav-link-custom submenu-link sa-submenu-link ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "staf" ? "active" : ""}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onNavigate("verifikasi-akun", "staf");
+                        }}
+                      >
+                        <Shield size={15} className="me-1.5 opacity-75" />
+                        <span>Verifikasi Staf Dinkes</span>
+                      </a>
+
+                      {/* Submenu 3: Kelola Akun & Role */}
+                      <a
+                        href="#kelola-akun"
+                        className={`nav-link-custom submenu-link sa-submenu-link ${(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kelola" ? "active" : ""}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onNavigate("verifikasi-akun", "kelola");
+                        }}
+                      >
+                        <UserCheck size={15} className="me-1.5 opacity-75" />
+                        <span>Kelola Akun &amp; Role</span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Data Sasaran */}
+                <a
+                  href="#data-sasaran"
+                  className={`nav-link-custom sa-nav-link ${activeMenu === "data-sasaran" ? "active" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigate("data-sasaran");
+                  }}
+                >
+                  <Users size={18} />
+                  <span>Data Sasaran</span>
+                </a>
+
+                {/* 4. Jadwal Posyandu */}
+                <a
+                  href="#jadwal-monitoring"
+                  className={`nav-link-custom sa-nav-link ${activeMenu === "jadwal-monitoring" || activeMenu === "jadwal" ? "active" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigate("jadwal-monitoring");
+                  }}
+                >
+                  <Calendar size={18} />
+                  <span>Jadwal Posyandu</span>
+                </a>
+
+                {/* 5. Rekapitulasi Pelaporan */}
+                <a
+                  href="#laporan-ekspor"
+                  className={`nav-link-custom sa-nav-link ${activeMenu === "laporan-ekspor" ? "active" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigate("laporan-ekspor");
+                  }}
+                >
+                  <FileSpreadsheet size={18} />
+                  <span>Rekapitulasi Pelaporan</span>
+                </a>
+
+                {/* 6. Profil Super Admin */}
+                <a
+                  href="#profil-pengguna"
+                  className={`nav-link-custom sa-nav-link ${activeMenu === "profil-pengguna" ? "active" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigate("profil-pengguna");
+                  }}
+                >
+                  <Building2 size={18} />
+                  <span>Profil Super Admin</span>
+                </a>
+              </>
+            ) : isDinkes ? (
               /* ========================================================================= */
               /* DINAS KESEHATAN ROLE NAVIGATION MENU (ADMIN vs STAF) */
               /* ========================================================================= */
@@ -509,19 +719,38 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
 
                   {pemeriksaanOpen && (
                     <div className="d-flex flex-column my-1">
-                      {kategoriPemeriksaan.map((cat) => (
-                        <a
-                          key={cat.id}
-                          href={`#pemeriksaan-${cat.id}`}
-                          className={`nav-link-custom submenu-link ${activeMenu === "pemeriksaan" && activeSubmenu === cat.id ? "active" : ""}`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleSubmenuClick(cat.id);
-                          }}
-                        >
-                          <span>{cat.label}</span>
-                        </a>
-                      ))}
+                      {kategoriPemeriksaan.map((cat) => {
+                        const allowed = isCategoryAllowed(cat.id, cat.label);
+                        const isActive = activeMenu === "pemeriksaan" && activeSubmenu === cat.id;
+
+                        return (
+                          <a
+                            key={cat.id}
+                            href={`#pemeriksaan-${cat.id}`}
+                            className={`nav-link-custom submenu-link d-flex align-items-center justify-content-between ${isActive ? "active" : ""} ${!allowed ? "opacity-50 text-muted" : ""}`}
+                            style={{
+                              cursor: allowed ? "pointer" : "not-allowed",
+                            }}
+                            title={allowed ? cat.desc : "Bukan jadwal pelayanan Posyandu untuk kategori ini"}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (allowed) {
+                                handleSubmenuClick(cat.id, cat.label);
+                              }
+                            }}
+                          >
+                            <span>{cat.label}</span>
+                            {!allowed && (
+                              <span
+                                className="badge bg-secondary-subtle text-secondary border px-1.5 py-0.5 rounded-pill"
+                                style={{ fontSize: "0.65rem", transform: "scale(0.88)" }}
+                              >
+                                Tutup
+                              </span>
+                            )}
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -568,7 +797,16 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
 
         {/* Sidebar Footer / Log Out */}
         <div className="p-3 border-top">
-          <button className="btn btn-dark-custom w-100 d-flex align-items-center justify-content-center gap-2 py-2" onClick={onLogout}>
+          <button
+            className="btn w-100 d-flex align-items-center justify-content-center gap-2 py-2 text-white border-0 transition-all rounded-3 fw-semibold shadow-xs"
+            style={{
+              backgroundColor: isLogoutHovered ? logoutTheme.hover : logoutTheme.bg,
+              transition: "background-color 0.15s ease",
+            }}
+            onMouseEnter={() => setIsLogoutHovered(true)}
+            onMouseLeave={() => setIsLogoutHovered(false)}
+            onClick={onLogout}
+          >
             <LogOut size={18} />
             <span>Log Out</span>
           </button>
@@ -584,9 +822,15 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 <>
                   {activeMenu === "dashboard" && "Dashboard Super Administrator"}
                   {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") &&
-                    (activeSubmenu === "staf" ? "Manajemen Staf Dinkes" : activeSubmenu === "kelola" ? "Kelola Akun Dinkes & Puskesmas" : "Manajemen Akun Puskesmas")}
+                    (activeSubmenu === "staf"
+                      ? "Manajemen Staf Dinkes"
+                      : activeSubmenu === "kelola"
+                      ? "Kelola Akun Dinkes & Puskesmas"
+                      : activeSubmenu === "kader"
+                      ? "Verifikasi Akun Kader Posyandu"
+                      : "Manajemen Akun Puskesmas")}
                   {(activeMenu === "jadwal-monitoring" || activeMenu === "jadwal") && "Monitoring Posyandu Sistem"}
-                  {activeMenu === "data-sasaran" && "Database Sasaran Terpadu"}
+                  {activeMenu === "data-sasaran" && "Master Data Sasaran Terpadu"}
                   {activeMenu === "laporan-ekspor" && "Rekapitulasi Sistem"}
                   {activeMenu === "profil-pengguna" && "Profil Super Admin"}
                 </>
@@ -594,7 +838,13 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 <>
                   {activeMenu === "dashboard" && (isDinkesStaf ? "Dashboard Staf Dinas Kesehatan" : "Dashboard Dinas Kesehatan")}
                   {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") &&
-                    (activeSubmenu === "staf" ? "Verifikasi Staf Dinas Kesehatan" : activeSubmenu === "kelola" ? "Kelola Akun Faskes & Staf Terdaftar" : "Verifikasi Akun Puskesmas")}
+                    (activeSubmenu === "staf"
+                      ? "Verifikasi Staf Dinas Kesehatan"
+                      : activeSubmenu === "kelola"
+                      ? "Kelola Akun Faskes & Staf Terdaftar"
+                      : activeSubmenu === "kader"
+                      ? "Verifikasi Akun Kader Posyandu"
+                      : "Verifikasi Akun Puskesmas")}
                   {(activeMenu === "jadwal-monitoring" || activeMenu === "jadwal") && "Jadwal Posyandu Se-Kota"}
                   {activeMenu === "data-sasaran" && "Data Sasaran Wilayah Kota"}
                   {activeMenu === "laporan-ekspor" && (isDinkesStaf ? "Rekapitulasi Pelaporan" : "Rekapitulasi Pemeriksaan")}
@@ -629,7 +879,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                   {activeMenu === "dashboard" && "Pusat kendali dan manajemen master data seluruh sistem layanan terpadu"}
                   {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && "Akses penuh memanipulasi status, aktivasi, dan password seluruh pengguna terdaftar"}
                   {(activeMenu === "jadwal-monitoring" || activeMenu === "jadwal") && "Log monitoring semua jadwal yang berjalan di sistem"}
-                  {activeMenu === "data-sasaran" && "Database mentah dan agregasi demografi sasaran"}
+                  {activeMenu === "data-sasaran" && "Pengelolaan master data dan agregasi demografi sasaran"}
                   {activeMenu === "laporan-ekspor" && "Ekspor data mentah dan laporan sistem untuk audit"}
                   {activeMenu === "profil-pengguna" && "Pengaturan kredensial keamanan tingkat lanjut"}
                 </>
@@ -652,14 +902,14 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 </>
               ) : isPuskesmas ? (
                 <>
-                  {activeMenu === "dashboard" && "Ringkasan operasional fasyankes, tren pemeriksaan dan kunjungan Posyandu se-wilayah kerja"}
-                  {activeMenu === "jadwal" && "Jadwal operasional Posyandu di wilayah kerja Puskesmas"}
+                  {activeMenu === "dashboard" && "Ringkasan operasional fasyankes, tren pemeriksaan dan kunjungan Posyandu."}
+                  {activeMenu === "jadwal" && "Jadwal operasional Posyandu di Puskesmas."}
                   {(activeMenu === "verifikasi-akun" || activeMenu === "verifikasi-kader" || activeMenu === "manajemen-akun") &&
                     (activeSubmenu === "staf"
                       ? "Kelola persetujuan dan otorisasi pendaftaran akun tenaga kesehatan dan staf administrasi internal Puskesmas."
                       : activeSubmenu === "kelola"
                         ? "Manajemen status aktif, nonaktif, dan penugasan seluruh Kader Posyandu dan Staf Puskesmas terdaftar."
-                        : "Kelola persetujuan dan otorisasi pendaftaran akun kader posyandu dari berbagai RW wilayah kerja Puskesmas.")}
+                        : "Kelola persetujuan dan otorisasi pendaftaran akun kader posyandu dari berbagai RW di Puskesmas.")}
                   {activeMenu === "data-sasaran" && "Kelola dan pantau data sasaran fasyankes pembina wilayah dari seluruh Posyandu"}
                   {activeMenu === "pemantauan-rujukan" && "Monitoring kasus rujukan berisiko dari Posyandu yang membutuhkan penanganan medis di Puskesmas"}
                   {activeMenu === "laporan-ekspor" && "Rekapitulasi formulir register bulanan dan unduh laporan berkas Excel (.xlsx)"}
@@ -669,7 +919,7 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                 <>
                   {activeMenu === "dashboard" && "Ringkasan pelayanan Posyandu."}
                   {activeMenu === "jadwal" && "Agenda dan waktu pelaksanaan Posyandu."}
-                  {activeMenu === "data-sasaran" && "Data sasaran seluruh siklus hidup posyandu di wilayah kerja Posyandu."}
+                  {activeMenu === "data-sasaran" && "Data sasaran seluruh siklus hidup posyandu."}
                   {activeMenu === "pemeriksaan" && "Input dan monitoring berkala tumbuh kembang serta kesehatan."}
                   {activeMenu === "rekap-pemeriksaan" && "Laporan rekap bulanan pemeriksaan kesehatan posyandu."}
                   {activeMenu === "riwayat-rujukan" && "Daftar sasaran warga yang dirujuk ke Puskesmas / Pustu berdasarkan hasil pemeriksaan posyandu."}
@@ -679,21 +929,33 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
             </p>
           </div>
 
-          {/* User Profile Badge (Top Right - Aligned Horizontally) */}
+          {/* User Profile Badge (Top Right - Elongated & Elegant Capsule) */}
           <div
-            className="d-flex align-items-center gap-2.5 bg-white p-1.5 pe-3 rounded-pill border shadow-xs flex-shrink-0 align-self-start align-self-md-center"
-            style={{ cursor: "pointer", transition: "all 0.2s ease" }}
+            className="d-flex align-items-center bg-white rounded-pill border flex-shrink-0 align-self-start align-self-md-center user-select-none"
+            style={{
+              padding: "6px 18px 6px 12px",
+              minWidth: "215px",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              backgroundColor: isProfileHovered ? "#f8fafc" : "#ffffff",
+              borderColor: isProfileHovered ? "#cbd5e1" : "#e2e8f0",
+              boxShadow: isProfileHovered ? "0 2px 8px rgba(0, 0, 0, 0.08)" : "0 1px 3px rgba(0, 0, 0, 0.04)",
+            }}
+            onMouseEnter={() => setIsProfileHovered(true)}
+            onMouseLeave={() => setIsProfileHovered(false)}
             onClick={() => onNavigate(isDinkes ? "profil-pengguna" : isPuskesmasAdmin ? "profil-instansi" : "profil-pengguna")}
             title="Buka Pengaturan Profil"
           >
             <div
               className="rounded-circle overflow-hidden d-flex align-items-center justify-content-center text-white fw-bold shadow-xs flex-shrink-0"
               style={{
-                width: "38px",
-                height: "38px",
-                backgroundColor: isDinkes ? (isDinkesAdmin ? "#1e3a8a" : "#0284c7") : isPuskesmas ? (isPuskesmasAdmin ? "#2E4E52" : "#0D9488") : "#2b2e4a",
+                width: "36px",
+                height: "36px",
+                backgroundColor: isSA ? "#475569" : isDinkes ? "#0f2b5c" : isPuskesmas ? "#3b7d6b" : "#2b2e4a",
                 color: "#ffffff",
                 fontSize: "0.85rem",
+                border: "2px solid #ffffff",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
               }}
             >
               {profilePictureSrc ? (
@@ -706,19 +968,28 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
                   }}
                 />
               ) : isDinkesAdmin ? (
-                <Building2 size={18} />
+                <Building2 size={17} />
               ) : (
-                <User size={18} />
+                <User size={17} />
               )}
             </div>
-            <div>
-              <div className="fw-bold text-dark" style={{ fontSize: "0.825rem", lineHeight: "1.2" }}>
-                {user?.nama || ""}
+            <div className="d-flex flex-column justify-content-center text-start" style={{ marginLeft: "12px", minWidth: "0", flex: 1 }}>
+              <div
+                className="fw-bold text-dark text-capitalize text-truncate"
+                style={{ fontSize: "0.84rem", lineHeight: "1.25", maxWidth: "135px" }}
+                title={user?.nama || "Pengguna"}
+              >
+                {user?.nama || "Pengguna"}
               </div>
-              <span className="text-muted" style={{ fontSize: "0.725rem" }}>
-                {user?.role || ""}
+              <span
+                className="text-muted text-truncate"
+                style={{ fontSize: "0.72rem", lineHeight: "1.2", marginTop: "1px", maxWidth: "135px" }}
+                title={getRoleLabel()}
+              >
+                {getRoleLabel()}
               </span>
             </div>
+            <ChevronDown size={14} className="text-muted opacity-50 ms-2 flex-shrink-0" />
           </div>
         </header>
 

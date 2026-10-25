@@ -28,7 +28,7 @@ export default function RekapTemplateExcelView({
   user = {},
 }) {
   const isDinkes = userRole?.includes("dinkes") || user?.roleType?.includes("dinkes");
-  const themeColor = isDinkes ? "#1e3a8a" : "#428A75";
+  const themeColor = isDinkes ? "#0f2b5c" : "#3b7d6b";
   const roleTitle = isDinkes ? user?.instansi || user?.nama_instansi || user?.role || "" : user?.puskesmas || user?.instansi || user?.role || "";
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);

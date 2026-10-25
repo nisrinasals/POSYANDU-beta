@@ -3,7 +3,7 @@ import { Download, Search, Users, CheckCircle, Clock, AlertTriangle, Filter, Cal
 import DetailRekapModal, { resolve5StepDetails } from "../../components/pemeriksaan/DetailRekapModal";
 import ExportRekapModal from "../../components/pemeriksaan/ExportRekapModal";
 import RekapWorksheetPreview from "../../components/pemeriksaan/RekapWorksheetPreview";
-import { formatAgeFromMonths, formatDateId } from "../../utils/dataMappers";
+import { formatAgeFromMonths, formatDateId, cleanPuskesmasName, cleanPosyanduName } from "../../utils/dataMappers";
 import { pemeriksaanService } from "../../services";
 
 const getAgeInMonths = (birthDate, referenceDate = new Date()) => {
@@ -18,11 +18,12 @@ const getAgeInMonths = (birthDate, referenceDate = new Date()) => {
 
 export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], globalPemeriksaanData = {}, globalPosyanduList = [], onNavigate, user, userRole = "puskesmas" }) {
   const isSA = userRole === "sa" || user?.roleType === "sa";
-  const isDinkes = userRole === "dinkes" || userRole === "dinkes-admin" || userRole === "dinkes-staf" || user?.roleType?.includes("dinkes");
+  const isDinkes = !isSA && (userRole === "dinkes" || userRole === "dinkes-admin" || userRole === "dinkes-staf" || user?.roleType?.includes("dinkes"));
   const isStaf = userRole === "dinkes-staf" || userRole === "puskesmas-staf" || user?.roleType === "dinkes-staf" || user?.roleType === "puskesmas-staf" || user?.role === "staf";
   const isSuperAdminOrDinkes = isSA || isDinkes;
-  const themeColor = isDinkes ? "#1e3a8a" : "#428A75";
-  const roleTitle = isDinkes ? user?.instansi || user?.role || "" : user?.puskesmas || user?.instansi || user?.role || "";
+  const theme = isSA ? "sa" : isDinkes ? "dinkes" : "puskesmas";
+  const themeColor = isSA ? "#475569" : isDinkes ? "#0f2b5c" : "#3b7d6b";
+  const roleTitle = isSA ? "Super Administrator" : isDinkes ? user?.instansi || user?.role || "Dinas Kesehatan" : user?.puskesmas || user?.instansi || user?.role || "Puskesmas";
   const [stafTemplateKey, setStafTemplateKey] = useState("bumil_nifas_menyusui");
   const [stafExportAll, setStafExportAll] = useState(false);
   const [stafPreviewKey, setStafPreviewKey] = useState(null);
@@ -49,58 +50,93 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
 
   // Dynamic Unified Rekap Data derived from globalSasaranList and globalPemeriksaanData (Hanya yang sudah periksa - persis seperti Posyandu)
   const allRekapList = useMemo(() => {
-    if (!globalSasaranList || globalSasaranList.length === 0) return [];
+    let sourceList = [];
 
-    return globalSasaranList
-      .map((s) => {
-        if (!s) return null;
-        const exam = (globalPemeriksaanData && (globalPemeriksaanData[s.id] || globalPemeriksaanData[String(s.id)] || globalPemeriksaanData[s.nik] || globalPemeriksaanData[`exam_${s.id}`])) || s.exam || null;
-        const resolved = resolve5StepDetails(s, exam) || {};
-        const isExamined = s.statusPemeriksaan === "Sudah" || s.status === "Sudah" || resolved.isExamined || !!exam;
+    if (globalSasaranList && globalSasaranList.length > 0) {
+      sourceList = globalSasaranList
+        .map((s) => {
+          if (!s) return null;
+          const exam = (globalPemeriksaanData && (globalPemeriksaanData[s.id] || globalPemeriksaanData[String(s.id)] || globalPemeriksaanData[s.nik] || globalPemeriksaanData[`exam_${s.id}`])) || s.exam || null;
+          const resolved = resolve5StepDetails(s, exam) || {};
+          const isExamined = s.statusPemeriksaan === "Sudah" || s.status === "Sudah" || resolved.isExamined || !!exam;
 
+          return {
+            ...resolved,
+            id: s.id,
+            idSasaran: s.idSasaran || "",
+            nama: s.nama || "",
+            nik: s.nik || "",
+            kategori: s.kategori || "",
+            subKategori: s.subKategori || "",
+            subText:
+              formatAgeFromMonths(exam?.usia_bulan, s.subKategori || s.kategori) ||
+              formatAgeFromMonths(getAgeInMonths(s.tglLahir, exam?.tanggal || new Date()), s.subKategori || s.kategori) ||
+              s.usia ||
+              "",
+            tglLahir: s.tglLahir || "",
+            gender: s.gender || "",
+            posyandu: s.posyandu || "",
+            puskesmas: s.puskesmas || (globalPosyanduList.find(p => p.nama === s.posyandu || String(p.id) === String(s.posyandu_id || s.posyanduId))?.puskesmas) || (exam?.kunjungan?.sesiPosyandu?.posyandu?.puskesmas?.nama_puskesmas) || "",
+            rw: s.rw || "",
+            keteranganKeluarga: s.keteranganIbuSuami || s.namaIbu || s.namaAyah || "",
+            tglPeriksa: resolved.tglPeriksa || s.tglPeriksa || resolved.tanggal || "",
+            pemeriksaanId: exam?.id || resolved?.idPemeriksaan || s.pemeriksaanId || null,
+            status: isExamined ? "Sudah" : "Belum",
+          };
+        })
+        .filter(Boolean)
+        .filter((item) => item.status === "Sudah");
+    } else if (globalPemeriksaanData && typeof globalPemeriksaanData === "object") {
+      const examItems = Object.values(globalPemeriksaanData).filter(
+        (item) => item && typeof item === "object" && item.id && !String(item.id).startsWith("exam_")
+      );
+      sourceList = examItems.map((exam) => {
+        const warga = exam.kunjungan?.warga || {};
+        const pos = exam.kunjungan?.sesiPosyandu?.posyandu || {};
+        const pkm = pos.puskesmas || {};
+        const resolved = resolve5StepDetails(warga, exam) || {};
         return {
           ...resolved,
-          id: s.id,
-          idSasaran: s.idSasaran || "",
-          nama: s.nama || "",
-          nik: s.nik || "",
-          kategori: s.kategori || "",
-          subKategori: s.subKategori || "",
-          subText:
-            formatAgeFromMonths(exam?.usia_bulan, s.subKategori || s.kategori) ||
-            formatAgeFromMonths(getAgeInMonths(s.tglLahir, exam?.tanggal || new Date()), s.subKategori || s.kategori) ||
-            s.usia ||
-            "",
-          tglLahir: s.tglLahir || "",
-          gender: s.gender || "",
-          posyandu: s.posyandu || "",
-          puskesmas: s.puskesmas || "",
-          rw: s.rw || "",
-          keteranganKeluarga: s.keteranganIbuSuami || s.namaIbu || s.namaAyah || "",
-          tglPeriksa: resolved.tglPeriksa || s.tglPeriksa || resolved.tanggal || "",
-          pemeriksaanId: exam?.id || resolved?.idPemeriksaan || s.pemeriksaanId || null,
-          status: isExamined ? "Sudah" : "Belum",
+          id: warga.id || exam.id,
+          idSasaran: warga.id || "",
+          nama: warga.nama_lengkap || warga.nama || "Sasaran Periksa",
+          nik: warga.nik || "-",
+          kategori: exam.kategori_sasaran || warga.kategori || "",
+          subKategori: warga.subKategori || exam.kategori_sasaran || "",
+          subText: formatAgeFromMonths(exam?.usia_bulan, exam.kategori_sasaran) || "",
+          tglLahir: warga.tanggal_lahir || "",
+          gender: warga.jenis_kelamin || "",
+          posyandu: pos.nama_posyandu || pos.nama || "-",
+          puskesmas: pkm.nama_puskesmas || "-",
+          rw: warga.rw || "-",
+          keteranganKeluarga: warga.nama_ibu || warga.nama_ayah || "",
+          tglPeriksa: resolved.tglPeriksa || exam.tanggal || "",
+          pemeriksaanId: exam.id,
+          status: "Sudah",
         };
-      })
-      .filter(Boolean)
-      .filter((item) => item.status === "Sudah");
-  }, [globalSasaranList, globalPemeriksaanData]);
+      });
+    }
+
+    return sourceList;
+  }, [globalSasaranList, globalPemeriksaanData, globalPosyanduList]);
 
   // Available Puskesmas List
   const availablePuskesmasList = useMemo(() => {
-    return [...new Set(globalPosyanduList.map((item) => item.puskesmas).filter(Boolean))].sort();
+    return [...new Set(globalPosyanduList.map((item) => cleanPuskesmasName(item.puskesmas)).filter(Boolean))].sort();
   }, [globalPosyanduList]);
 
   // Available Posyandu List for filter dropdown
   const availablePosyanduList = useMemo(() => {
     let baseList = globalPosyanduList;
     if (isSuperAdminOrDinkes && selectedPuskesmas !== "Semua Puskesmas") {
-      baseList = baseList.filter(item => item.puskesmas === selectedPuskesmas);
+      const selClean = cleanPuskesmasName(selectedPuskesmas).toLowerCase();
+      baseList = baseList.filter((item) => cleanPuskesmasName(item.puskesmas).toLowerCase() === selClean);
     } else if (!isSuperAdminOrDinkes && user?.puskesmas) {
-      baseList = baseList.filter(item => item.puskesmas === user.puskesmas);
+      const userPuskClean = cleanPuskesmasName(user.puskesmas).toLowerCase();
+      baseList = baseList.filter((item) => cleanPuskesmasName(item.puskesmas).toLowerCase() === userPuskClean);
     }
-    return [...new Set(baseList.map((item) => item.nama).filter(Boolean))].sort();
-  }, [isSuperAdminOrDinkes, selectedPuskesmas, user?.puskesmas]);
+    return [...new Set(baseList.map((item) => cleanPosyanduName(item.nama)).filter(Boolean))].sort();
+  }, [isSuperAdminOrDinkes, selectedPuskesmas, user?.puskesmas, globalPosyanduList]);
 
   // Filtered List Logic (Search, Category, Posyandu, Month & Year)
   const filteredList = useMemo(() => {
@@ -526,7 +562,7 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
           examData={selectedExamDetail}
           isLoading={isLoadingDetail}
           onClose={handleCloseDetail}
-          theme={isDinkes ? "dinkes" : "puskesmas"}
+          theme={theme}
           themeColor={themeColor}
           roleTitle={roleTitle}
         />
@@ -541,9 +577,10 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
         globalSasaranList={globalSasaranList}
         globalPemeriksaanData={globalPemeriksaanData}
         filteredList={filteredList}
-        theme={isDinkes ? "dinkes" : "puskesmas"}
+        theme={theme}
         themeColor={themeColor}
         roleTitle={roleTitle}
+        user={user}
       />
     </div>
   );

@@ -30,19 +30,25 @@ const getColumnGroup = (key) => {
   return "Hasil Pengukuran / Pemeriksaan";
 };
 
-export default function RekapWorksheetPreview({ templateRekap, year, theme = "puskesmas", roleTitle = "" }) {
+export default function RekapWorksheetPreview({ templateRekap, year, theme = "puskesmas", roleTitle = "", posyanduId = null }) {
   const [preview, setPreview] = useState(null);
   const title = TEMPLATE_TITLES[templateRekap] || TEMPLATE_TITLES.bumil_nifas_menyusui;
 
   useEffect(() => {
     let cancelled = false;
+    const params = {
+      template_rekap: templateRekap,
+      ...(year !== "Semua" ? { start_date: `${year}-01-01`, end_date: `${year}-12-31` } : {}),
+      ...(posyanduId && posyanduId !== "all" ? { posyandu_id: posyanduId } : {}),
+    };
     pemeriksaanService
-      .getRekapitulasi({ template_rekap: templateRekap, ...(year !== "Semua" ? { start_date: `${year}-01-01`, end_date: `${year}-12-31` } : {}) })
+      .getRekapitulasi(params)
       .then((response) => {
         if (cancelled) return;
         setPreview({
           templateRekap,
           year,
+          posyanduId,
           columns: Array.isArray(response?.data?.columns) ? response.data.columns : [],
           rows: Array.isArray(response?.data?.rows) ? response.data.rows : [],
           errorMessage: "",
@@ -50,15 +56,15 @@ export default function RekapWorksheetPreview({ templateRekap, year, theme = "pu
       })
       .catch((error) => {
         if (cancelled) return;
-        setPreview({ templateRekap, year, columns: [], rows: [], errorMessage: error?.message || "Pratinjau template gagal dimuat." });
+        setPreview({ templateRekap, year, posyanduId, columns: [], rows: [], errorMessage: error?.message || "Pratinjau template gagal dimuat." });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [templateRekap, year]);
+  }, [templateRekap, year, posyanduId]);
 
-  const isLoading = preview?.templateRekap !== templateRekap || preview?.year !== year;
+  const isLoading = preview?.templateRekap !== templateRekap || preview?.year !== year || preview?.posyanduId !== posyanduId;
   const columns = isLoading ? EMPTY_COLUMNS : preview.columns;
   const rows = isLoading ? EMPTY_ROWS : preview.rows;
   const errorMessage = isLoading ? "" : preview.errorMessage;
@@ -75,7 +81,8 @@ export default function RekapWorksheetPreview({ templateRekap, year, theme = "pu
           return period?.year === selectedYear && period.month === index + 1;
         }) || {};
         const emptyRow = Object.fromEntries(columns.map((column) => [column.key, column.key === "bulan_tahun" ? `${month} ${selectedYear}` : 0]));
-        return { ...emptyRow, ...backendRow, bulan_tahun: `${month} ${selectedYear}` };
+        const hasData = Object.entries(backendRow).some(([k, v]) => k !== "bulan_tahun" && Number(v) > 0);
+        return { ...emptyRow, ...backendRow, bulan_tahun: `${month} ${selectedYear}`, hasData };
       }),
     );
   }, [columns, rows, year]);
@@ -91,11 +98,20 @@ export default function RekapWorksheetPreview({ templateRekap, year, theme = "pu
     return groups;
   }, [columns]);
 
+  const activePeriodCount = rows.filter((r) => Object.entries(r).some(([k, v]) => k !== "bulan_tahun" && Number(v) > 0)).length;
+
   return (
     <section className="border rounded-3 overflow-hidden" aria-live="polite">
-      <div className="px-3 py-2 text-center border-bottom bg-white">
+      <div className="px-3 py-2 text-center border-bottom bg-white d-flex flex-column align-items-center gap-1">
         <div className="fw-bold text-dark text-uppercase" style={{ fontSize: "0.8rem" }}>Rekapitulasi Hasil Pemeriksaan {title}</div>
-        <div className="small fw-semibold text-dark">{theme === "dinkes" ? "DINAS KESEHATAN" : theme === "kader" ? "POSYANDU" : `PUSKESMAS ${roleTitle}`}</div>
+        <div className="small fw-semibold text-dark">{theme === "dinkes" ? "DINAS KESEHATAN KOTA" : theme === "kader" ? "POSYANDU" : theme === "sa" ? "SUPER ADMIN SISTEM" : `PUSKESMAS ${roleTitle}`}</div>
+        {activePeriodCount > 0 && (
+          <div className="mt-1">
+            <span className="badge rounded-pill bg-success-subtle text-success border border-success-subtle" style={{ fontSize: "0.72rem", padding: "3px 10px" }}>
+              ✓ Data realtime tercatat pada {activePeriodCount} periode pemeriksaan (Oktober 2026)
+            </span>
+          </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -122,9 +138,11 @@ export default function RekapWorksheetPreview({ templateRekap, year, theme = "pu
             </thead>
             <tbody>
               {worksheetRows.map((row) => (
-                <tr key={row.bulan_tahun}>
+                <tr key={row.bulan_tahun} style={row.hasData ? { backgroundColor: "#f0fdf4", fontWeight: "600" } : {}}>
                   {columns.map((column) => (
-                    <td key={column.key} className="px-2 py-1 text-nowrap">{row[column.key] || 0}</td>
+                    <td key={column.key} className={`px-2 py-1 text-nowrap ${row.hasData && column.key !== "bulan_tahun" && Number(row[column.key]) > 0 ? "text-success fw-bolder" : ""}`}>
+                      {row[column.key] || 0}
+                    </td>
                   ))}
                 </tr>
               ))}

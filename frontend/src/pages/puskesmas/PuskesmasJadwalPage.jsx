@@ -118,8 +118,8 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 mb-3 pb-2 border-bottom">
           <div>
             <h5 className="fw-bold text-dark mb-1 d-flex align-items-center gap-2">
-              <CalendarCheck size={20} style={{ color: "#428A75" }} />
-              <span>Daftar Jadwal Posyandu Se-Wilayah Kerja</span>
+              <CalendarCheck size={20} style={{ color: "#3b7d6b" }} />
+              <span>Daftar Jadwal Posyandu</span>
             </h5>
           </div>
           <div className="badge bg-light text-secondary border px-3 py-1.5 rounded-pill small fw-semibold align-self-start align-self-sm-center">Periode: {bulanFilter === "Semua" ? "Semua Jadwal" : bulanFilter}</div>
@@ -233,8 +233,8 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
                   style={{
                     fontSize: "0.8rem",
                     minWidth: "32px",
-                    backgroundColor: currentPage === pIdx + 1 ? "#428A75" : undefined,
-                    borderColor: currentPage === pIdx + 1 ? "#428A75" : undefined,
+                    backgroundColor: currentPage === pIdx + 1 ? "#3b7d6b" : undefined,
+                    borderColor: currentPage === pIdx + 1 ? "#3b7d6b" : undefined,
                   }}
                   onClick={() => setCurrentPage(pIdx + 1)}
                 >
@@ -254,7 +254,7 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
         <div className="modal show d-block" style={{ backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1050 }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
-              <div className="modal-header border-bottom px-4 py-3" style={{ backgroundColor: "#428A75" }}>
+              <div className="modal-header border-bottom px-4 py-3" style={{ backgroundColor: "#3b7d6b" }}>
                 <div className="d-flex align-items-center gap-2">
                   <FileText size={19} color="#ffffff" style={{ stroke: "#ffffff" }} />
                   <h5 className="modal-title fw-bold mb-0" style={{ color: "#ffffff", fontSize: "1.05rem" }}>
@@ -270,7 +270,7 @@ export default function PuskesmasJadwalPage({ globalJadwalList = [], setGlobalJa
                   <div className="col-12 col-md-6">
                     <div className="card border-0 shadow-xs rounded-3 h-100 p-3 bg-white">
                       <div className="d-flex align-items-center gap-2 pb-2 mb-2 border-bottom text-dark">
-                        <Calendar size={16} style={{ color: "#428A75" }} />
+                        <Calendar size={16} style={{ color: "#3b7d6b" }} />
                         <h6 className="fw-bold mb-0" style={{ fontSize: "0.9rem" }}>
                           Informasi Jadwal
                         </h6>

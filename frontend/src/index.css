@@ -15,25 +15,25 @@
   --font-size-xs: 0.75rem;       /* 12px - Badges, table headers, captions */
   --font-size-xxs: 0.6875rem;    /* 11px - Micro badges, tiny indicators */
 
-  /* Posyandu Role Theme Colors (#F25B8E - Vibrant Rose Pink) */
+  /* Posyandu Role Theme Colors (#F25B8E / #2b2e4a) */
   --posyandu-primary: #F25B8E;
   --posyandu-primary-hover: #d93c72;
-  --posyandu-secondary: #fbcfe8;
+  --posyandu-secondary: #fce7f3;
   --posyandu-bg-subtle: #fdf2f8;
   --posyandu-text-subtle: #be185d;
 
-  /* Puskesmas Role Theme Colors (Teal Garage Palette) */
-  --puskesmas-bg: #EEF1EF;
-  --puskesmas-primary: #428A75;
-  --puskesmas-primary-hover: #2E4E52;
-  --puskesmas-secondary: #63B6A2;
-  --puskesmas-secondary-hover: #428A75;
+  /* Puskesmas Role Theme Colors (Soft Sage Teal) */
+  --puskesmas-bg: #f2f6f4;
+  --puskesmas-primary: #3b7d6b;
+  --puskesmas-primary-hover: #2e6354;
+  --puskesmas-secondary: #d6ebe4;
+  --puskesmas-secondary-hover: #3b7d6b;
 
-  /* Dinkes Role Theme Colors */
-  --dinkes-bg: #eef2f6;
-  --dinkes-primary: #1e3a8a;
-  --dinkes-primary-hover: #172554;
-  --dinkes-secondary: #0284c7;
+  /* Dinkes Role Theme Colors (True Deep Navy) */
+  --dinkes-bg: #f1f5f9;
+  --dinkes-primary: #0f2b5c;
+  --dinkes-primary-hover: #0a1e40;
+  --dinkes-secondary: #1a427d;
   
   --brand-primary: #F25B8E;
   --brand-primary-hover: #d93c72;
@@ -97,7 +97,7 @@ body {
   line-height: 1.35 !important;
 }
 
-h1, .h1, .fs-1 {
+h1, .h1 {
   font-size: 1.5rem !important;
   font-weight: 800 !important;
   line-height: 1.25 !important;
@@ -105,7 +105,7 @@ h1, .h1, .fs-1 {
   color: #0f172a;
 }
 
-h2, .h2, .fs-2 {
+h2, .h2 {
   font-size: 1.35rem !important;
   font-weight: 700 !important;
   line-height: 1.3 !important;
@@ -113,33 +113,43 @@ h2, .h2, .fs-2 {
   color: #0f172a;
 }
 
-h3, .h3, .fs-3 {
+h3, .h3 {
   font-size: 1.2rem !important;
   font-weight: 700 !important;
   line-height: 1.35 !important;
   color: #0f172a;
 }
 
-h4, .h4, .fs-4 {
+h4, .h4 {
   font-size: 1.05rem !important;
   font-weight: 600 !important;
   line-height: 1.4 !important;
   color: #0f172a;
 }
 
-h5, .h5, .fs-5 {
+h5, .h5 {
   font-size: 0.95rem !important;
   font-weight: 600 !important;
   line-height: 1.45 !important;
   color: #1e293b;
 }
 
-h6, .h6, .fs-6 {
+h6, .h6 {
   font-size: 0.875rem !important;
   font-weight: 600 !important;
   line-height: 1.5 !important;
   color: #1e293b;
 }
+
+/* Explicit Utility Font Sizing Scale */
+.fs-1 { font-size: 2.1rem !important; }
+.fs-2 { font-size: 1.7rem !important; }
+.fs-3 { font-size: 1.38rem !important; }
+.fs-4 { font-size: 1.18rem !important; }
+.fs-5 { font-size: 1.05rem !important; }
+.fs-6 { font-size: 0.95rem !important; }
+.fs-7 { font-size: 0.825rem !important; }
+.fs-8 { font-size: 0.75rem !important; }
 
 p, li, span, div {
   font-family: inherit;
@@ -349,28 +359,28 @@ small, .small, .text-sm {
 }
 
 .btn-outline-teal {
-  color: #2E4E52 !important;
-  border: 1.5px solid #428A75 !important;
-  background-color: rgba(99, 182, 162, 0.12) !important;
+  color: #235447 !important;
+  border: 1.5px solid #3b7d6b !important;
+  background-color: rgba(59, 125, 107, 0.1) !important;
   font-weight: 600 !important;
 }
 
 .btn-outline-teal:hover {
-  background-color: #428A75 !important;
-  border-color: #428A75 !important;
+  background-color: #3b7d6b !important;
+  border-color: #3b7d6b !important;
   color: #ffffff !important;
 }
 
 .btn-outline-navy {
-  color: #1e3a8a !important;
-  border: 1.5px solid #1e3a8a !important;
-  background-color: #e0e7ff !important;
+  color: #0f2b5c !important;
+  border: 1.5px solid #0f2b5c !important;
+  background-color: #e8effa !important;
   font-weight: 600 !important;
 }
 
 .btn-outline-navy:hover {
-  background-color: #1e3a8a !important;
-  border-color: #1e3a8a !important;
+  background-color: #0f2b5c !important;
+  border-color: #0f2b5c !important;
   color: #ffffff !important;
 }
 
@@ -425,20 +435,31 @@ table td .text-muted, table td .small {
 /* ========================================================================= */
 
 .badge {
-  font-size: 0.75rem !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.015em !important;
-  padding: 0.35rem 0.65rem !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  padding: 0.35rem 0.65rem;
   border-radius: 6px;
-  line-height: 1.25 !important;
+  line-height: 1.25;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
 }
 
 .badge.rounded-pill {
-  border-radius: 50rem !important;
-  padding: 0.3rem 0.75rem !important;
+  border-radius: 50rem;
+  padding: 0.3rem 0.75rem;
+}
+
+.role-micro-badge {
+  font-size: 0.68rem !important;
+  font-weight: 600 !important;
+  padding: 2px 8px !important;
+  line-height: 1.2 !important;
+  border-radius: 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  width: fit-content !important;
 }
 
 .badge-status-aktif {
@@ -591,39 +612,43 @@ table td .text-muted, table td .small {
 }
 
 .puskesmas-nav-link:hover {
-  color: #428A75 !important;
-  background-color: rgba(154, 207, 166, 0.25) !important;
+  color: #2e6354 !important;
+  background-color: rgba(59, 125, 107, 0.08) !important;
 }
 
 .puskesmas-nav-link.active {
-  color: #2E4E52 !important;
-  background-color: rgba(154, 207, 166, 0.4) !important;
+  color: #0f172a !important;
+  background-color: rgba(59, 125, 107, 0.14) !important;
   font-weight: 700;
-  border-left: 4px solid #428A75 !important;
+  border-left: 4px solid #3b7d6b !important;
+}
+
+.puskesmas-nav-link.active svg {
+  color: #3b7d6b !important;
 }
 
 .dinkes-nav-link:hover {
-  color: #1e3a8a !important;
-  background-color: #e0e7ff !important;
+  color: #0f2b5c !important;
+  background-color: #f1f6fd !important;
 }
 
 .dinkes-nav-link.active {
-  color: #1e3a8a !important;
-  background-color: #dbeafe !important;
+  color: #0f2b5c !important;
+  background-color: #e8f0fe !important;
   font-weight: 700;
-  border-left: 4px solid #1e3a8a !important;
+  border-left: 4px solid #0f2b5c !important;
 }
 
 .sa-nav-link:hover {
-  color: #6b4e31 !important;
-  background-color: #f5ebe6 !important;
+  color: #334155 !important;
+  background-color: #f1f5f9 !important;
 }
 
 .sa-nav-link.active {
-  color: #6b4e31 !important;
-  background-color: #ede0d4 !important;
+  color: #1e293b !important;
+  background-color: #e2e8f0 !important;
   font-weight: 700;
-  border-left: 4px solid #6b4e31 !important;
+  border-left: 4px solid #475569 !important;
 }
 
 .submenu-link {
@@ -650,41 +675,41 @@ table td .text-muted, table td .small {
 }
 
 .dinkes-submenu-link:hover {
-  color: #1e3a8a !important;
-  border-left-color: #1e3a8a !important;
-  background-color: #e0e7ff !important;
+  color: #0f2b5c !important;
+  border-left-color: #0f2b5c !important;
+  background-color: #f1f6fd !important;
 }
 
 .dinkes-submenu-link.active {
-  color: #1e3a8a !important;
-  border-left-color: #1e3a8a !important;
-  background-color: #dbeafe !important;
+  color: #0f2b5c !important;
+  border-left-color: #0f2b5c !important;
+  background-color: #e8f0fe !important;
   font-weight: 700;
 }
 
 .sa-submenu-link:hover {
-  color: #6b4e31 !important;
-  border-left-color: #6b4e31 !important;
-  background-color: #f5ebe6 !important;
+  color: #334155 !important;
+  border-left-color: #64748b !important;
+  background-color: #f1f5f9 !important;
 }
 
 .sa-submenu-link.active {
-  color: #6b4e31 !important;
-  border-left-color: #6b4e31 !important;
-  background-color: #ede0d4 !important;
+  color: #1e293b !important;
+  border-left-color: #475569 !important;
+  background-color: #e2e8f0 !important;
   font-weight: 700;
 }
 
 .puskesmas-submenu-link:hover {
-  color: #428A75 !important;
-  border-left-color: #428A75 !important;
-  background-color: rgba(154, 207, 166, 0.25) !important;
+  color: #3b7d6b !important;
+  border-left-color: #3b7d6b !important;
+  background-color: rgba(59, 125, 107, 0.1) !important;
 }
 
 .puskesmas-submenu-link.active {
-  color: #2E4E52 !important;
-  border-left-color: #428A75 !important;
-  background-color: rgba(154, 207, 166, 0.4) !important;
+  color: #2e6354 !important;
+  border-left-color: #3b7d6b !important;
+  background-color: rgba(59, 125, 107, 0.16) !important;
   font-weight: 700;
 }
 
@@ -715,27 +740,27 @@ table td .text-muted, table td .small {
   --theme-border-subtle: #fce7f3;
 }
 
-/* Puskesmas Role (#428A75 / #2E4E52) */
+/* Puskesmas Role (Soft Sage Teal) */
 .role-puskesmas {
-  --theme-primary: #428A75;
-  --theme-primary-hover: #2E4E52;
-  --theme-secondary: #63B6A2;
-  --theme-dark: #2E4E52;
-  --theme-dark-hover: #1f3538;
-  --theme-subtle: rgba(66, 138, 117, 0.12);
-  --theme-text-subtle: #2E4E52;
-  --theme-border-subtle: rgba(66, 138, 117, 0.25);
+  --theme-primary: #3b7d6b;
+  --theme-primary-hover: #2e6354;
+  --theme-secondary: #d6ebe4;
+  --theme-dark: #2e6354;
+  --theme-dark-hover: #1f473c;
+  --theme-subtle: rgba(59, 125, 107, 0.1);
+  --theme-text-subtle: #235447;
+  --theme-border-subtle: rgba(59, 125, 107, 0.2);
 }
 
-/* Dinkes Role (#1e3a8a / #0284c7) */
+/* Dinkes Role (#0f2b5c - True Deep Navy) */
 .role-dinkes {
-  --theme-primary: #1e3a8a;
-  --theme-primary-hover: #172554;
-  --theme-secondary: #0284c7;
-  --theme-dark: #1e3a8a;
-  --theme-dark-hover: #172554;
-  --theme-subtle: #dbeafe;
-  --theme-text-subtle: #1e3a8a;
+  --theme-primary: #0f2b5c;
+  --theme-primary-hover: #0a1e40;
+  --theme-secondary: #1a427d;
+  --theme-dark: #0f2b5c;
+  --theme-dark-hover: #0a1e40;
+  --theme-subtle: #e8f0fe;
+  --theme-text-subtle: #0f2b5c;
   --theme-border-subtle: #bfdbfe;
 }
 
@@ -744,10 +769,10 @@ table td .text-muted, table td .small {
   color: #F25B8E !important;
 }
 .role-puskesmas .text-primary {
-  color: #428A75 !important;
+  color: #3b7d6b !important;
 }
 .role-dinkes .text-primary {
-  color: #1e3a8a !important;
+  color: #0f2b5c !important;
 }
 
 .bg-primary, .role-kader .bg-primary {
@@ -755,11 +780,11 @@ table td .text-muted, table td .small {
   color: #ffffff !important;
 }
 .role-puskesmas .bg-primary {
-  background-color: #428A75 !important;
+  background-color: #3b7d6b !important;
   color: #ffffff !important;
 }
 .role-dinkes .bg-primary {
-  background-color: #1e3a8a !important;
+  background-color: #0f2b5c !important;
   color: #ffffff !important;
 }
 
@@ -768,29 +793,29 @@ table td .text-muted, table td .small {
   color: #be185d !important;
 }
 .role-puskesmas .bg-primary-subtle {
-  background-color: rgba(66, 138, 117, 0.12) !important;
-  color: #2E4E52 !important;
+  background-color: rgba(59, 125, 107, 0.1) !important;
+  color: #235447 !important;
 }
 .role-dinkes .bg-primary-subtle {
-  background-color: #dbeafe !important;
-  color: #1e3a8a !important;
+  background-color: #e8f0fe !important;
+  color: #0f2b5c !important;
 }
 
 .border-primary, .role-kader .border-primary {
   border-color: #F25B8E !important;
 }
 .role-puskesmas .border-primary {
-  border-color: #428A75 !important;
+  border-color: #3b7d6b !important;
 }
 .role-dinkes .border-primary {
-  border-color: #1e3a8a !important;
+  border-color: #0f2b5c !important;
 }
 
 .border-primary-subtle, .role-kader .border-primary-subtle {
   border-color: #fce7f3 !important;
 }
 .role-puskesmas .border-primary-subtle {
-  border-color: rgba(66, 138, 117, 0.25) !important;
+  border-color: rgba(59, 125, 107, 0.2) !important;
 }
 .role-dinkes .border-primary-subtle {
   border-color: #bfdbfe !important;
@@ -798,29 +823,29 @@ table td .text-muted, table td .small {
 
 /* Scoped Primary Buttons per Role */
 .role-puskesmas .btn-primary {
-  background-color: #428A75 !important;
-  border-color: #428A75 !important;
+  background-color: #3b7d6b !important;
+  border-color: #3b7d6b !important;
 }
 .role-puskesmas .btn-primary:hover {
-  background-color: #2E4E52 !important;
-  border-color: #2E4E52 !important;
+  background-color: #2e6354 !important;
+  border-color: #2e6354 !important;
 }
 
 .role-dinkes .btn-primary {
-  background-color: #1e3a8a !important;
-  border-color: #1e3a8a !important;
+  background-color: #0f2b5c !important;
+  border-color: #0f2b5c !important;
 }
 .role-dinkes .btn-primary:hover {
-  background-color: #172554 !important;
-  border-color: #172554 !important;
+  background-color: #0a1e40 !important;
+  border-color: #0a1e40 !important;
 }
 
 /* Scoped Form Focus Rings per Role */
 .role-puskesmas .form-control:focus, .role-puskesmas .form-select:focus {
-  border-color: #428A75 !important;
-  box-shadow: 0 0 0 3px rgba(66, 138, 117, 0.2) !important;
+  border-color: #3b7d6b !important;
+  box-shadow: 0 0 0 3px rgba(59, 125, 107, 0.2) !important;
 }
 .role-dinkes .form-control:focus, .role-dinkes .form-select:focus {
-  border-color: #1e3a8a !important;
-  box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.2) !important;
+  border-color: #0f2b5c !important;
+  box-shadow: 0 0 0 3px rgba(15, 43, 92, 0.2) !important;
 }

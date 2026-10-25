@@ -153,9 +153,11 @@ export function mapFlatScreeningToBackend(category, form = {}) {
 
   if (category === "bumil") {
     const pelayanan_kesehatan = {};
-    if (has(form, "jumlahTtd")) set(pelayanan_kesehatan, "jumlah_ttd_given", num(form.jumlahTtd));
+    const ttdVal = has(form, "jumlahTtd") ? form.jumlahTtd : has(form, "pemberianTtd") ? form.pemberianTtd : undefined;
+    if (ttdVal !== undefined) {
+      set(pelayanan_kesehatan, "jumlah_ttd_given", numFromStatus(ttdVal));
+    }
     if (has(form, "rutinTtd")) set(pelayanan_kesehatan, "is_rutin_ttd", bool(form.rutinTtd));
-    if (has(form, "pemberianTtd") && !has(form, "jumlahTtd")) set(pelayanan_kesehatan, "jumlah_ttd_given", num(form.pemberianTtd));
     if (has(form, "komposisiMtBumil")) set(pelayanan_kesehatan, "komposisi_mt_kek", form.komposisiMtBumil);
     if (has(form, "rutinMtBumil")) set(pelayanan_kesehatan, "is_rutin_mt_kek", bool(form.rutinMtBumil));
     if (has(form, "komposisiMtBumil") || has(form, "rutinMtBumil")) set(pelayanan_kesehatan, "is_mt_kek_given", true);
@@ -165,7 +167,11 @@ export function mapFlatScreeningToBackend(category, form = {}) {
 
   if (category === "busui") {
     const pelayanan_kesehatan = {};
-    if (has(form, "jumlahVitA")) set(pelayanan_kesehatan, "jumlah_kapsul_vit_a", numFromStatus(form.jumlahVitA));
+    const vitAVal = has(form, "jumlahVitA") ? form.jumlahVitA : has(form, "vitA") ? form.vitA : undefined;
+    if (vitAVal !== undefined) {
+      set(pelayanan_kesehatan, "is_vit_a_given", bool(vitAVal));
+      set(pelayanan_kesehatan, "jumlah_kapsul_vit_a", numFromStatus(vitAVal));
+    }
     if (has(form, "rutinVitA")) set(pelayanan_kesehatan, "is_rutin_vit_a", bool(form.rutinVitA));
     if (has(form, "menyusui")) set(pelayanan_kesehatan, "is_menyusui", bool(form.menyusui));
     if (has(form, "kbPascaPersalinan")) set(pelayanan_kesehatan, "is_kb_pasca_persalinan", bool(form.kbPascaPersalinan));
@@ -211,4 +217,134 @@ export function mapFlatScreeningToBackend(category, form = {}) {
   }
 
   return result;
+}
+
+export function unflattenScreeningFromBackend(category, detail = {}) {
+  if (!detail || typeof detail !== "object") return {};
+  const form = {};
+  const tbc = detail.tbc || {};
+  const pk = detail.pelayanan_kesehatan || {};
+
+  // TBC Gejala (Child / Bumil / Umum)
+  if (tbc.has_batuk_menerus !== undefined) form.batukTbc = tbc.has_batuk_menerus ? "Ya" : "Tidak";
+  if (tbc.has_batuk_2_minggu !== undefined) form.batukTbc = tbc.has_batuk_2_minggu ? "Ya" : "Tidak";
+  if (tbc.has_batuk_lebih_2_minggu !== undefined) form.batukBesarTbc = tbc.has_batuk_lebih_2_minggu ? "Ya" : "Tidak";
+  if (tbc.has_batuk_kurang_2_minggu !== undefined) form.batukTbc = tbc.has_batuk_kurang_2_minggu ? "Ya" : "Tidak";
+  if (tbc.has_demam_2_minggu !== undefined) form.demamTbc = tbc.has_demam_2_minggu ? "Ya" : "Tidak";
+  if (tbc.has_bb_tetap_atau_turun_2_bulan !== undefined) form.bbTurunTbc = tbc.has_bb_tetap_atau_turun_2_bulan ? "Ya" : "Tidak";
+  if (tbc.has_kontak_pasien_tbc !== undefined) form.kontakTbc = tbc.has_kontak_pasien_tbc ? "Ya" : "Tidak";
+  if (tbc.has_lesu_malaise !== undefined) form.lesuTbc = tbc.has_lesu_malaise ? "Ya" : "Tidak";
+
+  // Gejala Tambahan TBC Dewasa/Lansia
+  const gt = tbc.gejala_tambahan || {};
+  if (gt.has_nafsu_makan_menurun !== undefined) form.nafsuMakanTbc = gt.has_nafsu_makan_menurun ? "Ya" : "Tidak";
+  if (gt.has_bb_menurun !== undefined) form.bbMenurunTbc = gt.has_bb_menurun ? "Ya" : "Tidak";
+  if (gt.has_lemah_letih_lesu !== undefined) form.lemahLesuTbc = gt.has_lemah_letih_lesu ? "Ya" : "Tidak";
+  if (gt.has_keringat_malam_tanpa_fisik !== undefined) form.berkeringatMalamTbc = gt.has_keringat_malam_tanpa_fisik ? "Ya" : "Tidak";
+  if (gt.has_batuk_darah !== undefined) form.batukDarahTbc = gt.has_batuk_darah ? "Ya" : "Tidak";
+  if (gt.has_sesak_nafas !== undefined) form.sesakNafasTbc = gt.has_sesak_nafas ? "Ya" : "Tidak";
+
+  // Bumil
+  if (category === "bumil") {
+    if (pk.jumlah_ttd_given !== undefined) {
+      form.jumlahTtd = String(pk.jumlah_ttd_given);
+      form.pemberianTtd = Number(pk.jumlah_ttd_given) >= 1 ? "Sudah" : "Belum";
+    }
+    if (pk.is_rutin_ttd !== undefined) form.rutinTtd = pk.is_rutin_ttd ? "Ya" : "Tidak";
+    if (pk.komposisi_mt_kek !== undefined) form.komposisiMtBumil = pk.komposisi_mt_kek;
+    if (pk.is_rutin_mt_kek !== undefined) form.rutinMtBumil = pk.is_rutin_mt_kek ? "Ya" : "Tidak";
+  }
+
+  // Busui / Nifas
+  if (category === "busui" || category === "nifas") {
+    if (pk.is_vit_a_given !== undefined || pk.jumlah_kapsul_vit_a !== undefined) {
+      form.jumlahVitA = (pk.is_vit_a_given || pk.jumlah_kapsul_vit_a >= 1) ? "Sudah" : "Belum";
+    }
+    if (pk.is_rutin_vit_a !== undefined) form.rutinVitA = pk.is_rutin_vit_a ? "Ya" : "Tidak";
+    if (pk.is_menyusui !== undefined) form.menyusui = pk.is_menyusui ? "Ya" : "Tidak";
+    if (pk.is_kb_pasca_persalinan !== undefined) form.kbPascaPersalinan = pk.is_kb_pasca_persalinan ? "Ya" : "Tidak";
+  }
+
+  // Bayi & Balita
+  if (category === "bayi" || category === "balita") {
+    if (pk.is_asi_eksklusif !== undefined) form.asiEksklusif = pk.is_asi_eksklusif ? "Ya" : "Tidak";
+    if (pk.is_mpasi !== undefined || pk.is_mp_asi !== undefined) form.mpAsi = (pk.is_mpasi || pk.is_mp_asi) ? "Ya" : "Tidak";
+    if (pk.is_pmt_lokal_pemulihan !== undefined) form.pmtPemulihan = pk.is_pmt_lokal_pemulihan ? "Ya" : "Tidak";
+    if (pk.is_konsumsi_pmt_habis !== undefined) form.pmtHabis = pk.is_konsumsi_pmt_habis ? "Ya" : "Tidak";
+    if (pk.is_vit_a_given !== undefined) form.vitA = pk.is_vit_a_given ? "Ya" : "Tidak";
+    if (pk.is_obat_cacing_given !== undefined) form.obatCacing = pk.is_obat_cacing_given ? "Ya" : "Tidak";
+    if (pk.is_ikut_kelas_balita !== undefined) form.ikutKelasBalita = pk.is_ikut_kelas_balita ? "Ya" : "Tidak";
+  }
+
+  // Apras
+  if (category === "apras") {
+    if (pk.is_obat_cacing_given !== undefined) form.obatCacing = pk.is_obat_cacing_given ? "Ya" : "Tidak";
+  }
+
+  // 6 Bulanan (Dewasa, Lansia, Remaja)
+  const sem = detail.pemeriksaan_6_bulanan || {};
+  if (sem.tes_penglihatan_hitung_jari) {
+    if (sem.tes_penglihatan_hitung_jari.is_mata_kanan_normal !== undefined) form.mataKanan = sem.tes_penglihatan_hitung_jari.is_mata_kanan_normal ? "Normal" : "Gangguan";
+    if (sem.tes_penglihatan_hitung_jari.is_mata_kiri_normal !== undefined) form.mataKiri = sem.tes_penglihatan_hitung_jari.is_mata_kiri_normal ? "Normal" : "Gangguan";
+  }
+  if (sem.tes_pendengaran_berbisik) {
+    if (sem.tes_pendengaran_berbisik.is_telinga_kanan_normal !== undefined) form.telingaKanan = sem.tes_pendengaran_berbisik.is_telinga_kanan_normal ? "Normal" : "Gangguan";
+    if (sem.tes_pendengaran_berbisik.is_telinga_kiri_normal !== undefined) form.telingaKiri = sem.tes_pendengaran_berbisik.is_telinga_kiri_normal ? "Normal" : "Gangguan";
+  }
+
+  // Remaja Tahunan
+  const rem = detail.pemeriksaan_tahunan_remaja_putri || {};
+  if (rem.is_skrining_jiwa !== undefined) form.skriningJiwa = rem.is_skrining_jiwa ? "Ya" : "Tidak";
+  if (rem.is_periksa_hb !== undefined) form.periksaHb = rem.is_periksa_hb ? "Ya" : "Tidak";
+
+  // Dewasa & Lansia PTM
+  if (detail.kadar_kolesterol !== undefined) form.kolesterol = String(detail.kadar_kolesterol);
+  if (detail.kadar_gula_darah !== undefined) form.skriningPtm = String(detail.kadar_gula_darah);
+  if (detail.is_menggunakan_kontrasepsi !== undefined) form.alatKontrasepsi = detail.is_menggunakan_kontrasepsi ? "Ya" : "Tidak";
+
+  // PUMA
+  const puma = detail.skrining_ppok_puma || {};
+  if (puma.merokok_skor !== undefined) form.pumaMerokok = puma.merokok_skor;
+  if (puma.napas_pendek_skor !== undefined) form.pumaNapasPendek = puma.napas_pendek_skor === 1 ? "Ya" : "Tidak";
+  if (puma.dahak_paru_skor !== undefined) form.pumaDahak = puma.dahak_paru_skor === 1 ? "Ya" : "Tidak";
+  if (puma.batuk_atau_spirometri_skor !== undefined) form.pumaBatukFlu = puma.batuk_atau_spirometri_skor === 1 ? "Ya" : "Tidak";
+
+  // AKS Lansia
+  const aks = detail.aks_aktifitas_harian || {};
+  if (aks.bab_skor !== undefined) form.aksBab = aks.bab_skor;
+  if (aks.bak_skor !== undefined) form.aksBak = aks.bak_skor;
+  if (aks.membersihkan_diri_skor !== undefined) form.aksCuciMuka = aks.membersihkan_diri_skor;
+  if (aks.penggunaan_wc_skor !== undefined) form.aksWc = aks.penggunaan_wc_skor;
+  if (aks.makan_minum_skor !== undefined) form.aksMakan = aks.makan_minum_skor;
+  if (aks.transfer_tempat_tidur_skor !== undefined) form.aksPindah = aks.transfer_tempat_tidur_skor;
+  if (aks.berjalan_tempat_rata_skor !== undefined) form.aksJalan = aks.berjalan_tempat_rata_skor;
+  if (aks.berpakaian_skor !== undefined) form.aksPakaian = aks.berpakaian_skor;
+  if (aks.naik_turun_tangga_skor !== undefined) form.aksTangga = aks.naik_turun_tangga_skor;
+  if (aks.mandi_skor !== undefined) form.aksMandi = aks.mandi_skor;
+
+  // SKILAS Lansia
+  const sk = detail.skilas || {};
+  if (sk.has_kendala_orientasi_waktu_tempat !== undefined) form.skilasOrientasi = sk.has_kendala_orientasi_waktu_tempat ? "Ya" : "Tidak";
+  if (sk.has_kendala_ulang_3_kata !== undefined) form.skilasUlangKata = sk.has_kendala_ulang_3_kata ? "Ya" : "Tidak";
+  if (sk.has_keterbatasan_mobilisasi !== undefined) form.skilasMobilisasi = sk.has_keterbatasan_mobilisasi ? "Ya" : "Tidak";
+  if (sk.has_kendala_tes_berdiri_kursi !== undefined) form.skilasTesKursi = sk.has_kendala_tes_berdiri_kursi ? "Ya" : "Tidak";
+  if (sk.has_bb_turun_3kg_3_bulan !== undefined) form.skilasBbTurun = sk.has_bb_turun_3kg_3_bulan ? "Ya" : "Tidak";
+  if (sk.has_hilang_nafsu_makan !== undefined) form.skilasNafsuMakan = sk.has_hilang_nafsu_makan ? "Ya" : "Tidak";
+  if (sk.is_lila_kurang_21cm !== undefined) form.skilasLilaKurang = sk.is_lila_kurang_21cm ? "Ya" : "Tidak";
+  if (sk.has_masalah_mata !== undefined) form.skilasMasalahMata = sk.has_masalah_mata ? "Ya" : "Tidak";
+  if (sk.has_kendala_tes_melihat !== undefined) form.skilasTesLihat = sk.has_kendala_tes_melihat ? "Ya" : "Tidak";
+  if (sk.has_kendala_tes_berbisik !== undefined) form.skilasTesBisik = sk.has_kendala_tes_berbisik ? "Ya" : "Tidak";
+  if (sk.has_sedih_tertekan_putus_asa !== undefined) form.skilasPerasaanSedih = sk.has_sedih_tertekan_putus_asa ? "Ya" : "Tidak";
+  if (sk.has_kurang_minat_kesenangan !== undefined) form.skilasHilangMinat = sk.has_kurang_minat_kesenangan ? "Ya" : "Tidak";
+  if (sk.is_imunisasi_covid19 !== undefined) form.skilasImunisasiCovid = sk.is_imunisasi_covid19 ? "Ya" : "Tidak";
+
+  // Skrining Jiwa PHQ-4
+  const jiwa = detail.skrining_jiwa || {};
+  if (jiwa.kurang_bersemangat !== undefined) form.jiwaQ1 = jiwa.kurang_bersemangat;
+  if (jiwa.murung_tertekan_putus_asa !== undefined) form.jiwaQ2 = jiwa.murung_tertekan_putus_asa;
+  if (jiwa.gugup_cemas_gelisah !== undefined) form.jiwaQ3 = jiwa.gugup_cemas_gelisah;
+  if (jiwa.sulit_kendalikan_khawatir !== undefined) form.jiwaQ4 = jiwa.sulit_kendalikan_khawatir;
+  if (jiwa.bulan_pemeriksaan !== undefined) form.bulanSkriningJiwa = jiwa.bulan_pemeriksaan;
+
+  return form;
 }

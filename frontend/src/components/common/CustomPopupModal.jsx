@@ -46,14 +46,14 @@ export default function CustomPopupModal({ modalState, onClose }) {
   // Clean Theme Configuration
   const getModalConfig = () => {
     const primaryThemeColor = modalState.themeColor || 
-      (typeof document !== 'undefined' && document.querySelector('.role-dinkes') ? '#1e3a8a' : 
-       typeof document !== 'undefined' && document.querySelector('.role-puskesmas') ? '#428A75' : '#2b2e4a');
+      (typeof document !== 'undefined' && document.querySelector('.role-dinkes') ? '#0f2b5c' : 
+       typeof document !== 'undefined' && document.querySelector('.role-puskesmas') ? '#3b7d6b' : '#2b2e4a');
     const primaryThemeHover = 
-      (primaryThemeColor === '#1e3a8a' ? '#172554' : 
-       primaryThemeColor === '#428A75' ? '#2E4E52' : '#1e2137');
+      (primaryThemeColor === '#0f2b5c' ? '#0a1e40' : 
+       primaryThemeColor === '#3b7d6b' ? '#2e6354' : '#1e2137');
     const primaryThemeSubtle = 
-      (primaryThemeColor === '#1e3a8a' ? '#eff6ff' : 
-       primaryThemeColor === '#428A75' ? 'rgba(66, 138, 117, 0.1)' : '#fdf2f8');
+      (primaryThemeColor === '#0f2b5c' ? '#e8effa' : 
+       primaryThemeColor === '#3b7d6b' ? 'rgba(59, 125, 107, 0.1)' : '#fdf2f8');
 
     switch (type) {
       case 'success':

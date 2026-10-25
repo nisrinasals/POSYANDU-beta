@@ -562,18 +562,35 @@ export const evaluasiIMTU = (bb_kg, tb_cm, usiaBulan, jenisKelamin) => {
 };
 
 // ----------------------------------------------------------------------
+export const evaluasiGulaDarah = (kadar_gula) => {
+  if (kadar_gula === undefined || kadar_gula === null || kadar_gula === "") return null;
+  const nilai = Number(kadar_gula);
+  if (!Number.isFinite(nilai) || nilai <= 0) return null;
+  if (nilai >= 200) return { indikator: "Kadar Gula Darah", nilai_riil: nilai, kategori: "Diabetisi", kode: "D", batas: "≥ 200 mg/dl", is_merah: true };
+  if (nilai >= 140) return { indikator: "Kadar Gula Darah", nilai_riil: nilai, kategori: "Prediabetisi", kode: "Pd", batas: "140 - 199 mg/dl", is_merah: true };
+  return { indikator: "Kadar Gula Darah", nilai_riil: nilai, kategori: "Normal", kode: "N", batas: "< 140 mg/dl", is_merah: false };
+};
+
+export const applyZScore = (result, zscore, mode = "weight") => {
+  if (!result || result.error || zscore === undefined || zscore === null) return result;
+  const z = Number(zscore);
+  if (!Number.isFinite(z)) return result;
+  return { ...result, zscore: z, is_merah: mode === "height" ? z < -2 : z < -2 || z > 1 };
+};
+
+// ----------------------------------------------------------------------
 // 5. FUNGSI UTAMA (FACADE FUNCTIONS)
 // ----------------------------------------------------------------------
 
-export const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan, zscores }) => {
+export const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, lila_cm, tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan, zscores }) => {
   const usiaBulan = hitungUsiaBulan(tanggal_lahir, tanggal_pemeriksaan);
 
-  const hasilBBU = usiaBulan <= 60 && bb_kg ? evaluasiBBU(bb_kg, usiaBulan, jenis_kelamin) : null;
-  const hasilTBU = usiaBulan <= 60 && tb_cm ? evaluasiTBU(tb_cm, usiaBulan, jenis_kelamin) : null;
-  const hasilUkuran = usiaBulan <= 60 && bb_kg && tb_cm ? evaluateWeightForSize(bb_kg, tb_cm, usiaBulan, jenis_kelamin) : null;
-  const hasilIMTU = bb_kg && tb_cm ? evaluasiIMTU(bb_kg, tb_cm, usiaBulan, jenis_kelamin) : null;
+  const hasilBBU = applyZScore(evaluasiBBU(bb_kg, usiaBulan, jenis_kelamin), zscores?.zscore_bbu);
+  const hasilTBU = applyZScore(evaluasiTBU(tb_cm, usiaBulan, jenis_kelamin), zscores?.zscore_pbu ?? zscores?.zscore_tbu, "height");
+  const hasilUkuran = applyZScore(evaluateWeightForSize(bb_kg, tb_cm, usiaBulan, jenis_kelamin), zscores?.zscore_bbpb ?? zscores?.zscore_bbtb);
+  const hasilLila = evaluasiLila(lila_cm, usiaBulan < 12 ? "bayi" : "balita");
 
-  const hasil = [hasilBBU, hasilTBU, hasilUkuran, hasilIMTU].filter(Boolean);
+  const hasil = [hasilBBU, hasilTBU, hasilUkuran, hasilLila].filter((item) => item && !item.error);
   const isPerluRujukan = hasil.some((item) => item && item.is_merah === true);
 
   return {
@@ -581,35 +598,76 @@ export const kalkulasiAntropometriAnak = ({ bb_kg, tb_cm, tanggal_lahir, jenis_k
     bbu: hasilBBU,
     tbu: hasilTBU,
     bb_panjang_tinggi: hasilUkuran,
-    imtu: hasilIMTU,
+    lila: hasilLila,
     status_rujukan: isPerluRujukan ? "merah" : "hijau",
     is_perlu_rujukan: isPerluRujukan,
   };
 };
 
 export const evaluasiPemeriksaan = (data) => {
-  const { kategori_sasaran, bb_kg, tb_cm, td_sistole, td_diastole, lila_cm, lingkar_perut_cm, jenis_kelamin, zscores } = data;
+  const { kategori_sasaran, bb_kg, tb_cm, td_sistole, td_diastole, lila_cm, lingkar_perut_cm, kadar_gula, jenis_kelamin, zscores, tanggal_lahir, tanggal_pemeriksaan } = data;
 
   const normalizedKat = String(kategori_sasaran || "").toLowerCase().replace(/-/g, "_");
 
-  if (["bayi", "bayi_0_11", "balita", "balita_12_59", "apras", "apras_60_72", "uskrem_6_14", "usekrem_6_14", "uskrem_15_18", "usekrem_15_18"].includes(normalizedKat) && data.tanggal_lahir) {
-    return kalkulasiAntropometriAnak({ bb_kg, tb_cm, tanggal_lahir: data.tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan: data.tanggal_pemeriksaan, zscores });
+  if (["bayi", "bayi_0_11", "balita", "balita_12_59"].includes(normalizedKat) && tanggal_lahir) {
+    return kalkulasiAntropometriAnak({ bb_kg, tb_cm, lila_cm, tanggal_lahir, jenis_kelamin, tanggal_pemeriksaan, zscores });
   }
 
-  const standardKat = ["bumil", "busui", "nifas", "dewasa", "lansia"].includes(normalizedKat) 
-    ? (normalizedKat === "nifas" ? "busui" : normalizedKat) 
+  if (["apras", "apras_60_72"].includes(normalizedKat) && tanggal_lahir) {
+    const usia_bulan = hitungUsiaBulan(tanggal_lahir, tanggal_pemeriksaan);
+    const hasil_plot = {
+      imtu: evaluasiIMTU(bb_kg, tb_cm, usia_bulan, jenis_kelamin),
+      lila: evaluasiLila(lila_cm, "apras"),
+    };
+    Object.keys(hasil_plot).forEach((key) => {
+      if (!hasil_plot[key] || hasil_plot[key].error) delete hasil_plot[key];
+    });
+    const isPerluRujukan = Object.values(hasil_plot).some((item) => item?.is_merah === true);
+    return { usia_bulan, hasil_plot, status_plot: isPerluRujukan ? "merah" : "hijau", is_perlu_rujukan: isPerluRujukan };
+  }
+
+  if (["uskrem_6_14", "usekrem_6_14"].includes(normalizedKat) && tanggal_lahir) {
+    const usia_bulan = hitungUsiaBulan(tanggal_lahir, tanggal_pemeriksaan);
+    const hasil_plot = {
+      imtu: evaluasiIMTU(bb_kg, tb_cm, usia_bulan, jenis_kelamin),
+    };
+    Object.keys(hasil_plot).forEach((key) => {
+      if (!hasil_plot[key] || hasil_plot[key].error) delete hasil_plot[key];
+    });
+    const isPerluRujukan = Object.values(hasil_plot).some((item) => item?.is_merah === true);
+    return { usia_bulan, hasil_plot, status_plot: isPerluRujukan ? "merah" : "hijau", is_perlu_rujukan: isPerluRujukan };
+  }
+
+  if (["uskrem_15_18", "usekrem_15_18"].includes(normalizedKat) && tanggal_lahir) {
+    const usia_bulan = hitungUsiaBulan(tanggal_lahir, tanggal_pemeriksaan);
+    const hasil_plot = {
+      imtu: evaluasiIMTU(bb_kg, tb_cm, usia_bulan, jenis_kelamin),
+      tekanan_darah: evaluasiTekananDarah(td_sistole, td_diastole, "uskrem_15_18"),
+    };
+    Object.keys(hasil_plot).forEach((key) => {
+      if (!hasil_plot[key] || hasil_plot[key].error) delete hasil_plot[key];
+    });
+    const isPerluRujukan = Object.values(hasil_plot).some((item) => item?.is_merah === true);
+    return { usia_bulan, hasil_plot, status_plot: isPerluRujukan ? "merah" : "hijau", is_perlu_rujukan: isPerluRujukan };
+  }
+
+  const standardKat = ["bumil", "busui", "nifas", "dewasa", "lansia"].includes(normalizedKat)
+    ? (normalizedKat === "nifas" ? "busui" : normalizedKat)
     : "dewasa";
 
   const hasil = {
     imt: evaluasiIMT(bb_kg, tb_cm, standardKat),
     tekanan_darah: evaluasiTekananDarah(td_sistole, td_diastole, standardKat),
-    lila: evaluasiLila(lila_cm, standardKat),
-    lingkar_perut: evaluasiLingkarPerut(lingkar_perut_cm, jenis_kelamin),
+    lila: ["bumil", "dewasa", "lansia"].includes(standardKat) ? evaluasiLila(lila_cm, standardKat) : null,
+    lingkar_perut: ["dewasa", "lansia"].includes(standardKat) ? evaluasiLingkarPerut(lingkar_perut_cm, jenis_kelamin) : null,
+    kadar_gula_darah: ["dewasa", "lansia"].includes(standardKat) ? evaluasiGulaDarah(kadar_gula) : null,
   };
 
-  const statusMerah = Object.values(hasil)
-    .filter((h) => h !== null)
-    .some((h) => h && h.is_merah === true);
+  Object.keys(hasil).forEach((key) => {
+    if (!hasil[key] || hasil[key].error) delete hasil[key];
+  });
+
+  const statusMerah = Object.values(hasil).some((h) => h && h.is_merah === true);
 
   return {
     is_perlu_rujukan: statusMerah,
@@ -626,6 +684,7 @@ export default {
   evaluasiIMT,
   evaluasiLingkarPerut,
   evaluasiLila,
+  evaluasiGulaDarah,
   evaluasiBBU,
   evaluasiTBU,
   evaluasiIMTU,

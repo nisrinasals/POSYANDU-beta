@@ -1,5 +1,16 @@
 // Data mapper: backend entities -> frontend view state.
 // This file never invents business data; absent backend values remain empty/null.
+import daftarPosyandu2026 from "../data/daftarPosyandu2026.json";
+
+export const cleanPuskesmasName = (name) => {
+  if (!name) return "";
+  return String(name).replace(/^puskesmas\s+/i, "").replace(/^pusk\.?\s+/i, "").trim();
+};
+
+export const cleanPosyanduName = (name) => {
+  if (!name) return "";
+  return String(name).replace(/^posyandu\s+/i, "").replace(/^pos\.?\s+/i, "").trim();
+};
 
 export const KATEGORI_MAPPINGS = {
   bumil: { label: "Bumil", slug: "bumil" },
@@ -121,6 +132,21 @@ export function mapBackendWargaToFrontend(w) {
   const birthWeight = w.bb_lahir_kg ?? w.bbl ?? "";
   const birthHeight = w.tb_lahir_cm ?? w.pbl ?? "";
 
+  const posNameRaw = w.posyandu?.nama_posyandu || w.posyandu || "";
+  const posClean = cleanPosyanduName(posNameRaw);
+  const posId = w.posyandu_id ?? w.posyandu?.id ?? null;
+
+  let puskesmasRaw = w.posyandu?.puskesmas?.nama_puskesmas || w.puskesmas || "";
+  if (!puskesmasRaw && (posId || posClean)) {
+    const matchedPos = daftarPosyandu2026.find(
+      (p) => (posId && p.id === posId) || (posClean && cleanPosyanduName(p.nama).toLowerCase() === posClean.toLowerCase())
+    );
+    if (matchedPos?.puskesmas) {
+      puskesmasRaw = matchedPos.puskesmas;
+    }
+  }
+  const puskesmasClean = cleanPuskesmasName(puskesmasRaw);
+
   return {
     id: w.id,
     idSasaran: w.id_sasaran || "",
@@ -135,10 +161,10 @@ export function mapBackendWargaToFrontend(w) {
     status,
     statusPemeriksaan: w.statusPemeriksaan || "",
     tglPeriksa: w.tglPeriksa || "",
-    posyandu: w.posyandu?.nama_posyandu || w.posyandu || "",
+    posyandu: posClean,
     rw: w.rw || "",
     alamat: w.alamat || "",
-    puskesmas: w.posyandu?.puskesmas?.nama_puskesmas || w.puskesmas || "",
+    puskesmas: puskesmasClean,
     noHp: w.telepon || w.noHp || "",
     namaIbu: w.nama_ibu || w.namaIbu || "",
     namaAyah: w.nama_ayah || w.namaAyah || "",
@@ -166,7 +192,7 @@ export function mapBackendWargaToFrontend(w) {
     perilakuBerisiko: isAdultOrLansia ? perilakuBerisikoDewasa : riwayatDiriSendiri,
     perilakuBerisikoDewasa,
     profilKesehatanId: healthProfile.id || null,
-    posyandu_id: w.posyandu_id ?? w.posyandu?.id ?? null,
+    posyandu_id: posId,
     _raw: w,
   };
 }
@@ -189,11 +215,26 @@ export function mapBackendSesiToFrontend(s) {
   const waktuSelesai = s.waktu_selesai ? String(s.waktu_selesai).substring(0, 5).replace(":", ".") : "";
   const fokusLayanan = Array.isArray(s.fokus_layanan) ? s.fokus_layanan : [];
 
+  const posNameRaw = s.posyandu?.nama_posyandu || s.posyandu || "";
+  const posClean = cleanPosyanduName(posNameRaw);
+  const posId = s.posyandu_id ?? s.posyandu?.id ?? null;
+
+  let puskesmasRaw = s.posyandu?.puskesmas?.nama_puskesmas || s.puskesmas?.nama_puskesmas || s.puskesmas || "";
+  if (!puskesmasRaw && (posId || posClean)) {
+    const matchedPos = daftarPosyandu2026.find(
+      (p) => (posId && p.id === posId) || (posClean && cleanPosyanduName(p.nama).toLowerCase() === posClean.toLowerCase())
+    );
+    if (matchedPos?.puskesmas) {
+      puskesmasRaw = matchedPos.puskesmas;
+    }
+  }
+  const puskesmasClean = cleanPuskesmasName(puskesmasRaw);
+
   return {
     id: s.id,
-    posyandu: s.posyandu?.nama_posyandu || s.posyandu || "",
-    posyandu_id: s.posyandu_id ?? s.posyandu?.id ?? null,
-    puskesmas: s.posyandu?.puskesmas?.nama_puskesmas || s.puskesmas?.nama_puskesmas || "",
+    posyandu: posClean,
+    posyandu_id: posId,
+    puskesmas: puskesmasClean,
     rw: s.rw || "",
     kelurahan: s.kelurahan?.nama_kelurahan || s.kelurahan || s.posyandu?.kelurahan?.nama_kelurahan || "",
     tanggal: rawDate,

@@ -19,7 +19,7 @@ export default function SAVerifikasiAkunPage({
   onRefreshData,
   user,
 }) {
-  const themeColor = "#6b4e31";
+  const themeColor = "#475569";
   const { showConfirm, showSuccess, showWarning } = useNotification();
   const isPuskesmas = activeSubmenu === "puskesmas";
   const isStaf = activeSubmenu === "staf";
@@ -36,6 +36,7 @@ export default function SAVerifikasiAkunPage({
 
   const [localPuskesmasList, setLocalPuskesmasList] = useState([]);
   const [localStaffList, setLocalStaffList] = useState([]);
+  const [localKaderList, setLocalKaderList] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const intervalRef = useRef(null);
@@ -47,8 +48,10 @@ export default function SAVerifikasiAkunPage({
       if (res?.data && Array.isArray(res.data)) {
         const pusks = [];
         const staffs = [];
+        const kaders = [];
         res.data.forEach((u) => {
-          const role = (u.role || "").toLowerCase();
+          const rawRole = u.role || "";
+          const role = rawRole.toLowerCase();
           const initials = (u.nama_lengkap || u.nama || "U")
             .split(" ")
             .map((n) => n[0])
@@ -57,19 +60,23 @@ export default function SAVerifikasiAkunPage({
             .toUpperCase();
           const mapped = {
             id: u.id,
+            role: rawRole,
             namaPendaftar: u.nama_lengkap || u.nama || "",
             namaPetugas: u.nama_lengkap || u.nama || "",
-            namaPuskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas || "",
+            namaPuskesmas: (u.puskesmas?.nama_puskesmas || u.puskesmas || "").replace(/^puskesmas\s+/i, "").trim(),
+            posyandu: (u.posyandu?.nama_posyandu || u.posyandu || "").replace(/^posyandu\s+/i, "").trim(),
             initials: initials,
-            nik: u.nik || "",
+            nik: u.nik || u.no_ktp || "",
             email: u.email || "",
             telepon: u.no_telepon || u.telepon || "",
-            bidangJabatan: u.jabatan || u.bidangJabatan || "",
-            jabatan: u.jabatan || "",
-            tglDaftar: formatDateId(u.email_verified_at || u.verified_at || u.createdAt),
+            bidangJabatan: u.jabatan || u.bidangJabatan || (rawRole === "dinkesAdmin" ? "Admin Dinkes" : rawRole === "puskesmasAdmin" ? "Admin Puskesmas" : rawRole === "kader" ? "Kader Posyandu" : ""),
+            jabatan: u.jabatan || (rawRole === "dinkesAdmin" ? "Admin Dinkes" : rawRole === "puskesmasAdmin" ? "Admin Puskesmas" : rawRole === "kader" ? "Kader Posyandu" : ""),
+            tglDaftar: formatDateId(u.created_at || u.createdAt || u.email_verified_at || u.verified_at) || formatDateId(new Date()),
             status: u.status === "pending_approval" ? "pending" : u.status || "",
           };
-          if (role.includes("puskesmas")) {
+          if (role.includes("kader")) {
+            kaders.push(mapped);
+          } else if (role.includes("puskesmas")) {
             pusks.push(mapped);
           } else if (role.includes("dinkes")) {
             staffs.push(mapped);
@@ -77,6 +84,7 @@ export default function SAVerifikasiAkunPage({
         });
         setLocalPuskesmasList(pusks);
         setLocalStaffList(staffs);
+        setLocalKaderList(kaders);
         setLastRefreshed(new Date());
       }
     } catch (err) {
@@ -109,14 +117,46 @@ export default function SAVerifikasiAkunPage({
   const rejectedCount = currentVerifList.filter((item) => item.status === "rejected" || item.status === "inactive").length;
   const totalCount = pendingCount + activeCount + rejectedCount;
 
-  // Kelola Akun — gabungan Dinkes Staf, Admin Puskesmas, dan Staf Puskesmas
-  const verifiedDinkesStaf = staffList.filter((s) => s.status === "active" || s.status === "inactive").map((s) => ({ ...s, tipeAkun: "staf-dinkes", nama: s.namaPetugas, jabatanRender: s.jabatan }));
+  // Kelola Akun — gabungan Dinkes Admin/Staf, Admin Puskesmas, dan Staf Puskesmas
+  const verifiedDinkesStaf = staffList
+    .filter((s) => s.status === "active" || s.status === "inactive")
+    .map((s) => ({
+      ...s,
+      tipeAkun: s.role === "dinkesAdmin" ? "admin-dinkes" : "staf-dinkes",
+      nama: s.namaPetugas,
+      jabatanRender: s.role === "dinkesAdmin" ? "Admin Dinkes" : s.jabatan || "Staf Dinkes",
+    }));
+
   const verifiedAdminPuskesmas = puskesmasList
     .filter((p) => p.status === "active" || p.status === "inactive")
-    .map((p) => ({ ...p, tipeAkun: "admin-puskesmas", nama: p.namaPendaftar, jabatanRender: "Admin " + p.namaPuskesmas, telepon: p.telepon || "" }));
-  const verifiedStafPuskesmas = puskesmasStaffList.filter((s) => s.status === "active" || s.status === "inactive").map((s) => ({ ...s, tipeAkun: "staf-puskesmas", nama: s.nama, jabatanRender: s.bidangJabatan + " (" + s.puskesmas + ")" }));
+    .map((p) => ({
+      ...p,
+      tipeAkun: p.role === "puskesmas" ? "staf-puskesmas" : "admin-puskesmas",
+      nama: p.namaPendaftar,
+      jabatanRender: (p.role === "puskesmas" ? "Staf " : "Admin ") + (p.namaPuskesmas || "Puskesmas"),
+      telepon: p.telepon || "",
+    }));
 
-  const kelolaAkunList = [...verifiedDinkesStaf, ...verifiedAdminPuskesmas, ...verifiedStafPuskesmas];
+  const verifiedStafPuskesmas = puskesmasStaffList
+    .filter((s) => s.status === "active" || s.status === "inactive")
+    .map((s) => ({
+      ...s,
+      tipeAkun: "staf-puskesmas",
+      nama: s.nama,
+      jabatanRender: s.bidangJabatan + (s.puskesmas ? " (" + s.puskesmas + ")" : ""),
+    }));
+
+  const verifiedKader = localKaderList
+    .filter((k) => k.status === "active" || k.status === "inactive")
+    .map((k) => ({
+      ...k,
+      tipeAkun: "kader",
+      nama: k.namaPendaftar || k.namaPetugas,
+      jabatanRender: "Kader " + (k.posyandu || "Posyandu"),
+      telepon: k.telepon || "",
+    }));
+
+  const kelolaAkunList = [...verifiedDinkesStaf, ...verifiedAdminPuskesmas, ...verifiedStafPuskesmas, ...verifiedKader];
   const kelolaDinkesTotal = kelolaAkunList.length;
   const kelolaDinkesActive = kelolaAkunList.filter((s) => s.status === "active").length;
   const kelolaDinkesInactive = kelolaAkunList.filter((s) => s.status === "inactive").length;
@@ -319,7 +359,7 @@ export default function SAVerifikasiAkunPage({
               <input
                 type="text"
                 className="form-control form-control-custom ps-5 bg-light border-0 rounded-3"
-                placeholder={isPuskesmas ? "Cari Nama Pendaftar / Puskesmas / Email..." : isStaf ? "Cari Nama Staf / Jabatan / Email..." : "Cari Nama Staf, NIK, Email, atau Jabatan..."}
+                placeholder={isPuskesmas ? "Cari Nama Pendaftar / Puskesmas / Email..." : isStaf ? "Cari Nama Staf / Email..." : "Cari Nama Staf, NIK, atau Email..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{ height: "40px", fontSize: "0.85rem" }}
@@ -330,9 +370,11 @@ export default function SAVerifikasiAkunPage({
             <div className="col-12 col-md-4">
               <select className="form-select form-control-custom bg-light border-0 text-muted fw-semibold rounded-3" value={tipeAkunFilter} onChange={(e) => setTipeAkunFilter(e.target.value)} style={{ height: "40px", fontSize: "0.85rem" }}>
                 <option value="Semua">Semua Tipe Akun</option>
-                <option value="staf-dinkes">Staf Dinas Kesehatan</option>
+                <option value="admin-dinkes">Admin Dinkes</option>
+                <option value="staf-dinkes">Staf Dinkes</option>
                 <option value="admin-puskesmas">Admin Puskesmas</option>
                 <option value="staf-puskesmas">Staf Puskesmas</option>
+                <option value="kader">Kader Posyandu</option>
               </select>
             </div>
           )}
@@ -346,6 +388,7 @@ export default function SAVerifikasiAkunPage({
               onClick={() => {
                 setSearchQuery("");
                 setFilterKategori("Semua");
+                setTipeAkunFilter("Semua");
               }}
               style={{ height: "40px", width: "40px" }}
             >
@@ -366,7 +409,7 @@ export default function SAVerifikasiAkunPage({
                     <th className="ps-3 py-3" style={{ width: "48px" }}>
                       NO
                     </th>
-                    <th className="py-3">NAMA LENGKAP</th>
+                    <th className="py-3">NAMA LENGKAP &amp; NIK</th>
                     <th className="py-3">NAMA PUSKESMAS</th>
                     <th className="py-3">EMAIL &amp; TELEPON</th>
                     <th className="py-3">TANGGAL DAFTAR</th>
@@ -378,7 +421,7 @@ export default function SAVerifikasiAkunPage({
                     <th className="ps-3 py-3" style={{ width: "48px" }}>
                       NO
                     </th>
-                    <th className="py-3">NAMA LENGKAP</th>
+                    <th className="py-3">NAMA LENGKAP &amp; NIK</th>
 
                     <th className="py-3">EMAIL &amp; TELEPON</th>
                     <th className="py-3">TANGGAL DAFTAR</th>
@@ -393,9 +436,14 @@ export default function SAVerifikasiAkunPage({
                     <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                       <td className="ps-3 text-muted fw-semibold">{index + 1 < 10 ? `0${index + 1}` : index + 1}</td>
 
-                      {/* Kolom 2: Nama */}
+                      {/* Kolom 2: Nama & NIK */}
                       <td>
-                        <div className="fw-bold text-dark">{isPuskesmas ? item.namaPendaftar : item.namaPetugas}</div>
+                        <div className="fw-bold text-dark" style={{ fontSize: "0.875rem" }}>
+                          {isPuskesmas ? item.namaPendaftar : item.namaPetugas}
+                        </div>
+                        <div className="text-muted font-monospace small" style={{ fontSize: "0.75rem" }}>
+                          {item.nik || "-"}
+                        </div>
                       </td>
 
                       {/* Kolom 3: Puskesmas */}
@@ -494,23 +542,70 @@ export default function SAVerifikasiAkunPage({
 
                       {/* Kolom 2: Nama & NIK */}
                       <td>
-                        <div className="fw-semibold text-dark">{item.nama}</div>
-                        <div className="text-muted font-monospace" style={{ fontSize: "0.75rem" }}>
-                          {item.nik || ""}
+                        <div className="fw-bold text-dark" style={{ fontSize: "0.86rem", lineHeight: "1.25" }}>
+                          {item.nama}
                         </div>
+                        <div className="text-muted font-monospace" style={{ fontSize: "0.74rem", margin: "2px 0 4px" }}>
+                          {item.nik || "-"}
+                        </div>
+                        {item.tipeAkun === "admin-dinkes" && (
+                          <span
+                            className="role-micro-badge"
+                            style={{
+                              backgroundColor: "rgba(15, 43, 92, 0.08)",
+                              color: "#0f2b5c",
+                              border: "1px solid rgba(15, 43, 92, 0.22)",
+                            }}
+                          >
+                            Admin Dinkes
+                          </span>
+                        )}
                         {item.tipeAkun === "staf-dinkes" && (
-                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-0.5 mt-1" style={{ fontSize: "0.65rem" }}>
+                          <span
+                            className="role-micro-badge"
+                            style={{
+                              backgroundColor: "rgba(15, 43, 92, 0.06)",
+                              color: "#1a427d",
+                              border: "1px solid rgba(26, 66, 125, 0.2)",
+                            }}
+                          >
                             Staf Dinkes
                           </span>
                         )}
                         {item.tipeAkun === "admin-puskesmas" && (
-                          <span className="badge bg-info-subtle text-info border border-info-subtle px-2 py-0.5 mt-1" style={{ fontSize: "0.65rem" }}>
+                          <span
+                            className="role-micro-badge"
+                            style={{
+                              backgroundColor: "rgba(59, 125, 107, 0.1)",
+                              color: "#2d6153",
+                              border: "1px solid rgba(59, 125, 107, 0.25)",
+                            }}
+                          >
                             Admin Puskesmas
                           </span>
                         )}
                         {item.tipeAkun === "staf-puskesmas" && (
-                          <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-0.5 mt-1" style={{ fontSize: "0.65rem" }}>
+                          <span
+                            className="role-micro-badge"
+                            style={{
+                              backgroundColor: "rgba(59, 125, 107, 0.08)",
+                              color: "#3b7d6b",
+                              border: "1px solid rgba(59, 125, 107, 0.2)",
+                            }}
+                          >
                             Staf Puskesmas
+                          </span>
+                        )}
+                        {item.tipeAkun === "kader" && (
+                          <span
+                            className="role-micro-badge"
+                            style={{
+                              backgroundColor: "rgba(242, 91, 142, 0.12)",
+                              color: "#be185d",
+                              border: "1px solid rgba(242, 91, 142, 0.3)",
+                            }}
+                          >
+                            Kader Posyandu
                           </span>
                         )}
                       </td>

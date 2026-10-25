@@ -10,11 +10,12 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
   const handleClose = onClose || onHide || (() => {});
 
   // Determine portal theme colors aligned with portal web
-  const isDinkes = theme === "dinkes" || (themeColor && themeColor.includes("1e3a8a")) || roleTitle?.toLowerCase().includes("dinas");
-  const isPuskesmas = theme === "puskesmas" || (themeColor && themeColor.includes("428A75")) || roleTitle?.toLowerCase().includes("puskesmas");
+  const isDinkes = theme === "dinkes" || (themeColor && (themeColor.includes("0f2b5c") || themeColor.includes("1e3a8a"))) || roleTitle?.toLowerCase().includes("dinas");
+  const isPuskesmas = theme === "puskesmas" || (themeColor && (themeColor.includes("428A75") || themeColor.includes("3b7d6b"))) || roleTitle?.toLowerCase().includes("puskesmas");
 
-  const primaryColor = themeColor || (isDinkes ? "#1e3a8a" : isPuskesmas ? "#428A75" : "#2b2e4a");
-  const accentColor = isDinkes ? "#1e3a8a" : isPuskesmas ? "#428A75" : "#F25B8E";
+  const isSA = theme === "sa" || themeColor === "#475569" || roleTitle?.toLowerCase().includes("super");
+  const primaryColor = themeColor || (isSA ? "#475569" : isDinkes ? "#0f2b5c" : isPuskesmas ? "#3b7d6b" : "#2b2e4a");
+  const accentColor = isSA ? "#475569" : isDinkes ? "#0f2b5c" : isPuskesmas ? "#3b7d6b" : "#F25B8E";
 
   const kategori = (target.kategori || "").trim();
   const katLower = kategori.toLowerCase();

@@ -195,7 +195,7 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
             <button
               type="button"
               className="btn w-100 d-flex align-items-center justify-content-center text-white fw-bold rounded-3 shadow-xs"
-              style={{ backgroundColor: "#428A75", height: "44px", fontSize: "0.85rem", borderRadius: "10px" }}
+              style={{ backgroundColor: "#3b7d6b", height: "44px", fontSize: "0.85rem", borderRadius: "10px" }}
               onClick={handleResetFilter}
               title="Filter / Reset"
             >
@@ -260,7 +260,7 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
                       <td className="py-3">
                         <div className="fw-semibold text-dark">{item.posyandu}</div>
                       </td>
-                      <td className="py-3 text-center fw-semibold text-secondary font-monospace" style={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                      <td className="py-3 text-center text-dark small" style={{ whiteSpace: "nowrap" }}>
                         {item.tglDirujuk}
                       </td>
                       <td className="py-3">
@@ -312,14 +312,11 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
           <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable my-4" style={{ maxHeight: "90vh" }}>
             <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden d-flex flex-column" style={{ maxHeight: "90vh" }}>
               {/* Modal Header */}
-              <div className="modal-header text-white p-3 px-4 d-flex align-items-center justify-content-between flex-shrink-0" style={{ backgroundColor: "#428A75" }}>
+              <div className="modal-header text-white p-3 px-4 d-flex align-items-center justify-content-between flex-shrink-0" style={{ backgroundColor: "#3b7d6b" }}>
                 <div>
                   <div className="d-flex align-items-center gap-2 mb-1">
                     <span className="badge bg-white text-dark fw-bold px-2.5 py-1 rounded-pill" style={{ fontSize: "0.74rem" }}>
                       {selectedReferral.kategori} ({selectedReferral.usia})
-                    </span>
-                    <span className="badge bg-white bg-opacity-25 text-white px-2.5 py-1 rounded-pill" style={{ fontSize: "0.74rem" }}>
-                      Status: {selectedReferral.kehadiran || ""}
                     </span>
                   </div>
                   <h5 className="modal-title fw-bold text-white mb-0">Detail Informasi Rujukan Pasien</h5>
@@ -333,7 +330,7 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
                   {/* Card 1: Identitas Pasien Warga */}
                   <div className="card border-0 shadow-sm rounded-4 p-4 mb-3 bg-white">
                     <h6 className="fw-bold text-dark mb-3 pb-2 border-bottom d-flex align-items-center gap-2">
-                      <User size={18} style={{ color: "#428A75" }} />
+                      <User size={18} style={{ color: "#3b7d6b" }} />
                       <span>Identitas Pasien Warga</span>
                     </h6>
                     <div className="row g-3">
@@ -401,7 +398,7 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
                           <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
                             Tanggal Pengantar Rujukan
                           </div>
-                          <div className="fw-bold text-dark fs-6 font-monospace">{selectedReferral.tglDirujuk}</div>
+                          <div className="fw-bold text-dark fs-6">{selectedReferral.tglDirujuk}</div>
                         </div>
                       </div>
                       <div className="col-12 col-md-6">
@@ -410,28 +407,6 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
                             Fasilitas Rujukan
                           </div>
                           <div className="fw-bold text-dark fs-6">{selectedReferral.raw?.puskesmas?.nama_puskesmas || selectedReferral.raw?.puskesmas?.nama || selectedReferral.raw?.puskesmas_nama || ""}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Presensi & Tindak Lanjut */}
-                  <div className="card border-0 shadow-sm rounded-4 p-4 bg-white">
-                    <h6 className="fw-bold text-dark mb-3 pb-2 border-bottom d-flex align-items-center gap-2">
-                      <ShieldCheck size={18} style={{ color: "#428A75" }} />
-                      <span>Presensi &amp; Tindak Lanjut</span>
-                    </h6>
-                    <div className="row g-3">
-                      <div className="col-12 col-md-6">
-                        <div className="p-3 bg-light rounded-3 h-100">
-                          <div className="text-muted small mb-1">Status Kehadiran</div>
-                          <div className="fw-bold text-dark">{selectedReferral.kehadiran || ""}</div>
-                        </div>
-                      </div>
-                      <div className="col-12 col-md-6">
-                        <div className="p-3 bg-light rounded-3 h-100">
-                          <div className="text-muted small mb-1">Catatan</div>
-                          <div className="text-dark small">{selectedReferral.raw?.catatan || selectedReferral.raw?.catatan_kunjungan || ""}</div>
                         </div>
                       </div>
                     </div>

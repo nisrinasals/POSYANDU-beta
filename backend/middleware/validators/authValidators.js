@@ -27,7 +27,8 @@ const register = [
 
 const verifyOtp = [email, otp, body("purpose").trim().isIn(["register", "reset_password"]).withMessage("Purpose OTP tidak valid.")];
 const resendOtp = [email, body("purpose").trim().isIn(["register", "reset_password"]).withMessage("Purpose OTP tidak valid.")];
-const login = [email, body("password").isString().notEmpty().withMessage("Password wajib diisi.")];
+const loginEmail = body("email").trim().notEmpty().withMessage("Email wajib diisi.");
+const login = [loginEmail, body("password").isString().notEmpty().withMessage("Password wajib diisi.")];
 const requestResetPassword = [email];
 const resetPassword = [email, otp, newPassword];
 

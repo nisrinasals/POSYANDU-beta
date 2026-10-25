@@ -249,10 +249,32 @@ const resendOtp = async (req, res, next) => {
  */
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(401).json({
+        success: false,
+        message: "Email dan kata sandi wajib diisi.",
+      });
+    }
+
+    const cleanInput = String(email).trim().toLowerCase();
+    const candidateEmails = [cleanInput];
+    if (cleanInput.includes("@")) {
+      if (cleanInput.startsWith("puskesmas.")) {
+        candidateEmails.push(cleanInput.replace("puskesmas.", ""));
+      } else {
+        candidateEmails.push(`puskesmas.${cleanInput}`);
+      }
+    } else {
+      candidateEmails.push(`${cleanInput}@gmail.com`);
+      candidateEmails.push(`puskesmas.${cleanInput}@gmail.com`);
+    }
 
     const user = await User.findOne({
-      where: { email },
+      where: {
+        email: { [Op.in]: candidateEmails },
+      },
       include: [
         { model: Puskesmas, as: "puskesmas", attributes: ["id", "nama_puskesmas"] },
         { model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu"] },
@@ -266,7 +288,17 @@ const login = async (req, res, next) => {
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    let isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (!isPasswordValid) {
+      // Toleransi variasi jika user mengetik domain di password atau sebaliknya
+      if (password.includes("@")) {
+        const withoutDomain = password.split("@")[0];
+        isPasswordValid = await bcrypt.compare(withoutDomain, user.password_hash);
+      } else {
+        isPasswordValid = await bcrypt.compare(`${password}@gmail.com`, user.password_hash);
+      }
+    }
+
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,

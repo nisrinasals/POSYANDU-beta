@@ -1,495 +1,437 @@
 import React, { useState } from "react";
-import { Eye, EyeOff, Loader2, Mail, Lock, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, Lock, ShieldCheck, ArrowRight } from "lucide-react";
 import RegisterRoleModal from "../../components/auth/RegisterRoleModal";
 import { useNotification } from "../../context/NotificationContext";
 import { authService, userService } from "../../services";
 import logoJogja from "../../assets/logo_jogja.png";
-import logoKemenkes from "../../assets/logo_kemenkes.png";
+import logoKemenkes from "../../assets/logo_kemenkes_clean.png";
 import logoPosyandu from "../../assets/logo_posyandu.png";
+import logoSengkuyung from "../../assets/logo_sengkuyung_katresnan.png";
+import bannerSoft from "../../assets/auth_banner_soft.jpg";
 
-/* ─── Inline styles as a style block (injected once) ─── */
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap');
 
-  .login-root {
-    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    min-height: 100dvh;
+  .auth-screen-wrapper {
+    min-height: 100vh;
+    width: 100vw;
+    background: #f1f5f9;
+    background: linear-gradient(135deg, #e2e8f0 0%, #f1f5f9 50%, #cbd5e1 100%);
     display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-sizing: border-box;
+    position: relative;
+    overflow-x: hidden;
   }
 
-  /* ── LEFT PANEL ── */
-  .login-left {
-    width: 50%;
-    min-height: 100dvh;
-    background: linear-gradient(155deg, #0d1b35 0%, #0f2557 50%, #1a3a8f 100%);
+  .auth-main-card {
+    width: 100%;
+    max-width: 1060px;
+    min-height: 600px;
+    background: #ffffff;
+    border-radius: 36px;
+    box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.12), 0 4px 16px rgba(15, 23, 42, 0.05);
+    display: flex;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #e2e8f0;
+  }
+
+  /* ── PANEL KIRI: GAMBAR SOFT NEUTRAL ── */
+  .auth-left-panel {
+    flex: 1.05;
+    position: relative;
+    background-image: url('${bannerSoft}');
+    background-size: cover;
+    background-position: center;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 2.25rem 2.75rem;
-    position: relative;
+    padding: 44px 46px;
     overflow: hidden;
+    color: #ffffff;
   }
 
-  .login-left::before {
-    content: '';
+  .auth-left-overlay {
     position: absolute;
-    top: -120px;
-    left: -80px;
-    width: 420px;
-    height: 420px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(96, 165, 250, 0.14) 0%, transparent 70%);
-    pointer-events: none;
-  }
-  .login-left::after {
-    content: '';
-    position: absolute;
-    bottom: -80px;
-    right: -60px;
-    width: 380px;
-    height: 380px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(147, 197, 253, 0.10) 0%, transparent 70%);
-    pointer-events: none;
+    inset: 0;
+    background: linear-gradient(150deg, rgba(15, 23, 42, 0.72) 0%, rgba(30, 41, 59, 0.60) 50%, rgba(15, 23, 42, 0.82) 100%);
+    backdrop-filter: blur(1px);
+    z-index: 1;
   }
 
-  .login-logo-badge {
+  .auth-left-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+  }
+
+  .auth-logos-badge {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    background: rgba(255,255,255,0.96);
-    padding: 7px 14px;
-    border-radius: 100px;
-    height: 42px;
+    gap: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(12px);
+    padding: 7px 18px;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.20), 0 0 0 1px rgba(255, 255, 255, 0.4);
+    align-self: flex-start;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .login-logo-sep {
+  .auth-logos-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px -4px rgba(15, 23, 42, 0.28);
+  }
+
+  .auth-badge-logo {
+    height: 26px;
+    width: auto;
+    object-fit: contain;
+    display: block;
+  }
+
+  .auth-badge-logo.kemenkes {
+    height: 18px;
+  }
+
+  .auth-badge-logo.posyandu {
+    height: 25px;
+  }
+
+  .auth-logo-sep {
     width: 1px;
     height: 18px;
     background: #cbd5e1;
   }
 
-  .login-ilp-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(29, 78, 216, 0.80);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(96, 165, 250, 0.35);
-    padding: 0 14px;
-    border-radius: 100px;
-    height: 42px;
-    font-size: 0.78rem;
-    font-weight: 600;
+  .auth-hero-title {
+    font-size: 2.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 8px;
     color: #ffffff;
-  }
-
-  .login-ilp-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #60a5fa;
-    box-shadow: 0 0 10px rgba(45, 212, 191, 0.8);
-    flex-shrink: 0;
-  }
-
-  /* ── HERO COPY ── */
-  .login-eyebrow {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: #60a5fa;
+  }
+
+  .auth-hero-appname {
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #cbd5e1;
     margin-bottom: 14px;
   }
 
-  .login-headline {
-    font-family: 'Outfit', sans-serif;
-    font-size: 3rem;
-    font-weight: 800;
-    line-height: 1.1;
-    letter-spacing: -0.03em;
-    color: #ffffff;
-    margin: 0 0 8px;
-  }
-
-  .login-headline-accent {
-    background: linear-gradient(90deg, #60a5fa 0%, #93c5fd 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    display: block;
-  }
-
-  .login-body {
-    font-size: 0.9rem;
+  .auth-hero-subtitle {
+    font-size: 0.92rem;
     font-weight: 400;
+    color: rgba(255, 255, 255, 0.92);
     line-height: 1.65;
-    color: #94a3b8;
     max-width: 420px;
-    margin-bottom: 28px;
-  }
-
-  /* ── STAT CARDS ── */
-  .login-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-  }
-
-  .login-stat-card {
-    background: rgba(255, 255, 255, 0.065);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 14px;
-    padding: 14px 14px 12px;
-    transition: border-color 0.2s;
-  }
-
-  .login-stat-card:hover {
-    border-color: rgba(45, 212, 191, 0.25);
-  }
-
-  .login-stat-val {
-    font-size: 1.35rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1;
-    margin-bottom: 5px;
-  }
-
-  .login-stat-desc {
-    font-size: 0.68rem;
-    font-weight: 400;
-    color: #94a3b8;
-    line-height: 1.35;
-  }
-
-  /* ── LEFT FOOTER ── */
-  .login-left-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 18px;
-    border-top: 1px solid rgba(255, 255, 255, 0.10);
-    font-size: 0.75rem;
-    color: #64748b;
-    position: relative;
-    z-index: 1;
-  }
-
-  /* ── RIGHT PANEL ── */
-  .login-right {
-    width: 50%;
-    min-height: 100dvh;
-    background: #ffffff;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 2.25rem 2.75rem;
-  }
-
-  .login-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .login-brand-name {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: #0f172a;
-  }
-
-  .login-brand-sub {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: #64748b;
-    letter-spacing: 0.01em;
-  }
-
-  .login-help-btn {
-    background: none;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 5px 13px;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: #64748b;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .login-help-btn:hover {
-    border-color: #cbd5e1;
-    color: #0f172a;
-    background: #f8fafc;
-  }
-
-  /* ── FORM CARD ── */
-  .login-form-wrap {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .login-card {
-    background: #ffffff;
-    border: 1px solid #e8edf3;
-    border-radius: 20px;
-    padding: 2.5rem 2.25rem;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
-    width: 100%;
-    max-width: 420px;
-  }
-
-  .login-title {
-    font-family: 'Outfit', sans-serif;
-    font-size: 2rem;
-    font-weight: 800;
-    letter-spacing: -0.04em;
-    line-height: 1.05;
-    color: #0f172a;
-    margin: 0 0 8px;
-  }
-
-  .login-subtitle {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 400;
-    color: #64748b;
-    line-height: 1.55;
     margin: 0 0 24px;
   }
 
-  /* ── FORM ELEMENTS ── */
-  .login-field {
-    margin-bottom: 16px;
+  .auth-info-card {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 16px 20px;
+    max-width: 420px;
   }
 
-  .login-label {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #374151;
-    letter-spacing: 0.01em;
-    display: block;
-    margin-bottom: 7px;
+  .auth-info-card-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #cbd5e1;
+    margin-bottom: 4px;
   }
 
-  .login-input-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 10px;
-    background: #fafbfc;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    overflow: hidden;
+  .auth-info-card-text {
+    font-size: 0.88rem;
+    color: #ffffff;
+    line-height: 1.5;
+    margin: 0;
   }
 
-  .login-input-wrap:focus-within {
-    border-color: #60a5fa;
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
-    background: #ffffff;
-  }
-
-  .login-input-icon {
-    padding: 0 12px;
-    color: #94a3b8;
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  .login-input {
-    flex: 1;
-    height: 46px;
-    border: none;
-    background: transparent;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.875rem;
-    font-weight: 400;
-    color: #0f172a;
-    outline: none;
-    padding: 0;
-  }
-
-  .login-input::placeholder {
-    color: #b0bcc8;
-    font-weight: 400;
-  }
-
-  .login-input:disabled {
-    color: #94a3b8;
-  }
-
-  .login-eye-btn {
-    padding: 0 12px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #94a3b8;
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    transition: color 0.15s;
-  }
-
-  .login-eye-btn:hover {
-    color: #475569;
-  }
-
-  /* ── LABEL ROW (password) ── */
-  .login-label-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 7px;
-  }
-
-  .login-forgot {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.76rem;
-    font-weight: 500;
-    color: #60a5fa;
-    text-decoration: none;
-    transition: opacity 0.15s;
-  }
-
-  .login-forgot:hover {
-    opacity: 0.75;
-    color: #60a5fa;
-  }
-
-  /* ── REMEMBER ME ── */
-  .login-remember {
+  .auth-left-badge-footer {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 22px;
-    margin-top: 4px;
-    cursor: pointer;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 500;
   }
 
-  .login-remember input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
-    accent-color: #0f172a;
-    cursor: pointer;
+  /* ── PANEL KANAN: FORMULIR ── */
+  .auth-right-panel {
+    flex: 1;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 48px 54px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .auth-right-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.03em;
+    margin: 0 0 8px;
+  }
+
+  .auth-right-desc {
+    font-size: 0.88rem;
+    color: #64748b;
+    margin: 0 0 28px;
+    line-height: 1.55;
+  }
+
+  .auth-input-pill {
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border-radius: 999px;
+    padding: 3px 20px;
+    margin-bottom: 16px;
+    border: 1.5px solid #cbd5e1;
+    transition: all 0.2s ease;
+  }
+
+  .auth-input-pill:focus-within {
+    background: #ffffff;
+    border-color: #0f172a;
+    box-shadow: 0 0 0 3.5px rgba(15, 23, 42, 0.1);
+  }
+
+  .auth-input-pill-icon {
+    color: #64748b;
+    margin-right: 12px;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
   }
 
-  .login-remember span {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.81rem;
-    font-weight: 400;
-    color: #475569;
+  .auth-field-input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    height: 48px;
+    font-size: 0.92rem;
+    color: #0f172a;
+    outline: none;
+    font-family: inherit;
+    font-weight: 600;
   }
 
-  /* ── SUBMIT BUTTON ── */
-  .login-submit {
+  .auth-field-input::placeholder {
+    color: #94a3b8;
+    font-weight: 400;
+  }
+
+  .auth-pass-toggle {
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    margin-right: 4px;
+  }
+
+  .auth-pass-toggle:hover {
+    color: #0f172a;
+    background: rgba(15, 23, 42, 0.08);
+  }
+
+  .auth-pass-toggle:active {
+    transform: scale(0.92);
+  }
+
+  .auth-extra-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    font-size: 0.85rem;
+  }
+
+  .auth-remember-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #334155;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .auth-remember-label input[type="checkbox"] {
+    accent-color: #0f172a;
+    width: 17px;
+    height: 17px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .auth-forgot-link {
+    color: #64748b;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s;
+  }
+
+  .auth-forgot-link:hover {
+    color: #0f172a;
+    text-decoration: underline;
+  }
+
+  .auth-btn-primary {
     width: 100%;
-    height: 50px;
+    height: 52px;
+    border: none;
+    border-radius: 999px;
     background: #0f172a;
     color: #ffffff;
-    border: none;
-    border-radius: 11px;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.92rem;
+    font-size: 1rem;
     font-weight: 700;
     letter-spacing: 0.01em;
     cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: background 0.15s, transform 0.1s;
-    margin-bottom: 16px;
   }
 
-  .login-submit:hover:not(:disabled) {
+  .auth-btn-primary:hover:not(:disabled) {
     background: #1e293b;
+    transform: translateY(-1.5px);
+    box-shadow: 0 12px 28px -4px rgba(15, 23, 42, 0.45);
   }
 
-  .login-submit:active:not(:disabled) {
-    transform: translateY(1px) scale(0.99);
+  .auth-btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
   }
 
-  .login-submit:disabled {
+  .auth-btn-primary:disabled {
     opacity: 0.65;
     cursor: not-allowed;
   }
 
-  /* ── ERROR ALERT ── */
-  .login-error {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.81rem;
-    font-weight: 500;
-    color: #dc2626;
-    margin-bottom: 18px;
+  .auth-divider-or {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
+    margin: 18px 0;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .auth-divider-or::before,
+  .auth-divider-or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e2e8f0;
+  }
+
+  .auth-divider-or span {
+    padding: 0 14px;
+  }
+
+  .auth-btn-secondary {
+    width: 100%;
+    height: 48px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     gap: 8px;
   }
 
-  /* ── REGISTER LINK ── */
-  .login-register-row {
+  .auth-btn-secondary:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+
+  .auth-bottom-switch {
     text-align: center;
-  }
-
-  .login-register-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.82rem;
-    font-weight: 400;
+    margin-top: 24px;
+    font-size: 0.84rem;
     color: #64748b;
-    transition: color 0.15s;
   }
 
-  .login-register-btn strong {
+  .auth-bottom-switch button {
+    border: none;
+    background: transparent;
     color: #0f172a;
     font-weight: 700;
+    cursor: pointer;
+    padding: 0 4px;
+    text-decoration: underline;
   }
 
-  .login-register-btn:hover {
-    color: #0f172a;
+  .auth-alert-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 14px;
+    padding: 12px 16px;
+    color: #dc2626;
+    font-size: 0.84rem;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.45;
   }
 
-  /* ── RIGHT FOOTER ── */
-  .login-right-footer {
-    text-align: center;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.72rem;
-    font-weight: 400;
-    color: #94a3b8;
-  }
-
-  /* ── RESPONSIVE ── */
-  @media (max-width: 1023px) {
-    .login-left { display: none !important; }
-    .login-right {
-      width: 100%;
-      padding: 2rem 1.5rem;
+  @media (max-width: 920px) {
+    .auth-main-card {
+      flex-direction: column;
+      border-radius: 28px;
+      max-width: 520px;
+    }
+    .auth-left-panel {
+      min-height: 260px;
+      padding: 32px 28px;
+    }
+    .auth-right-panel {
+      padding: 36px 28px;
+    }
+    .auth-hero-title {
+      font-size: 1.85rem;
     }
   }
-
-  /* ── SPIN ANIMATION ── */
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .spin { animation: spin 0.9s linear infinite; }
 `;
 
 export default function LoginPage({ onLoginSuccess, onNavigateToRegister }) {
@@ -499,7 +441,6 @@ export default function LoginPage({ onLoginSuccess, onNavigateToRegister }) {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -530,8 +471,8 @@ export default function LoginPage({ onLoginSuccess, onNavigateToRegister }) {
 
       if (userData.status && userData.status !== "active") {
         const statusMessages = {
-          pending_approval: "Akun masih menunggu persetujuan admin.",
-          rejected: "Akun ditolak atau dinonaktifkan oleh admin.",
+          pending_approval: "Akun Anda masih menunggu persetujuan dari Admin.",
+          rejected: "Akun ditolak atau dinonaktifkan oleh Admin.",
           inactive: "Akun sedang nonaktif.",
         };
         setErrorMessage(statusMessages[userData.status] || `Akun belum aktif (status: ${userData.status}).`);
@@ -559,249 +500,189 @@ export default function LoginPage({ onLoginSuccess, onNavigateToRegister }) {
     <>
       <style>{CSS}</style>
 
-      <div className="login-root">
-        {/* ══════════════════════════════════════════════
-            LEFT PANEL — Hero & Brand Story
-        ══════════════════════════════════════════════ */}
-        <div className="login-left">
-          {/* Top bar */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1 }}>
-            <div className="login-logo-badge">
-              <img src={logoJogja} alt="Logo Pemda" style={{ height: "22px", objectFit: "contain" }} />
-              <div className="login-logo-sep" />
-              <img src={logoKemenkes} alt="Logo Kemenkes" style={{ height: "15px", objectFit: "contain" }} />
-              <div className="login-logo-sep" />
-              <img src={logoPosyandu} alt="Logo Posyandu" style={{ height: "19px", objectFit: "contain" }} />
-            </div>
+      <div className="auth-screen-wrapper">
+        <div className="auth-main-card">
+          {/* ══════════════════════════════════════════════
+              PANEL KIRI: Visual Netral Soft & Info Sistem
+          ══════════════════════════════════════════════ */}
+          <div className="auth-left-panel">
+            <div className="auth-left-overlay" />
 
-            <div className="login-ilp-badge">
-              <div className="login-ilp-dot" />
-              <span>Integrasi Layanan Primer (ILP)</span>
+            <div className="auth-left-content">
+              {/* Badge Logo Lembaga Terpadu */}
+              <div className="auth-logos-badge">
+                <img
+                  src={logoJogja}
+                  alt="Pemerintah Kota Yogyakarta"
+                  className="auth-badge-logo"
+                  title="Pemerintah Kota Yogyakarta"
+                />
+                <div className="auth-logo-sep" />
+                <img
+                  src={logoKemenkes}
+                  alt="Kementerian Kesehatan RI"
+                  className="auth-badge-logo kemenkes"
+                  title="Kementerian Kesehatan RI"
+                />
+                <div className="auth-logo-sep" />
+                <img
+                  src={logoPosyandu}
+                  alt="Posyandu"
+                  className="auth-badge-logo posyandu"
+                  title="Posyandu"
+                />
+              </div>
+
+              {/* Identitas Ringkas Sistem */}
+              <div style={{ margin: "auto 0", paddingTop: "20px", paddingBottom: "20px" }}>
+                <div className="mb-3 d-inline-flex p-2 bg-white rounded-4 shadow-sm" style={{ backdropFilter: "blur(8px)" }}>
+                  <img src={logoSengkuyung} alt="Sengkuyung Katresnan" style={{ width: "68px", height: "68px", objectFit: "contain" }} />
+                </div>
+                <h1 className="auth-hero-title" style={{ fontSize: "2.1rem", marginBottom: "10px" }}>
+                  SENGKUYUNG KATRESNAN
+                </h1>
+                <p className="auth-hero-subtitle" style={{ fontSize: "0.95rem", lineHeight: "1.55", margin: 0, opacity: 0.9 }}>
+                  Sistem Informasi Posyandu Integrasi Layanan Primer (ILP) Kota Yogyakarta
+                </p>
+              </div>
+
+              {/* Footer Panel Kiri */}
+              <div className="auth-left-badge-footer">
+                <ShieldCheck size={16} style={{ color: "#cbd5e1" }} />
+                <span>Dinas Kesehatan Kota Yogyakarta</span>
+              </div>
             </div>
           </div>
 
-          {/* Center hero copy */}
-          <div style={{ position: "relative", zIndex: 1, maxWidth: "500px" }}>
-            <p className="login-eyebrow">Layanan Kesehatan Masyarakat Terpadu</p>
-
-            <h1 className="login-headline">
-              Masa Depan Layanan
-              <br />
-              Posyandu Terpadu
-              <span className="login-headline-accent">Ada di Sini</span>
-            </h1>
-
-            <p className="login-body">
-              Digitalisasi pencatatan 5 langkah berbasis 9 siklus hidup ILP secara akurat, modern, dan terhubung real-time dari Posyandu hingga Dinas Kesehatan.
+          {/* ══════════════════════════════════════════════
+              PANEL KANAN: Formulir Masuk Universal
+          ══════════════════════════════════════════════ */}
+          <div className="auth-right-panel">
+            <h2 className="auth-right-title">Masuk ke Sistem</h2>
+            <p className="auth-right-desc">
+              Silakan masukkan email dan kata sandi akun Anda untuk mengakses sistem layanan kesehatan.
             </p>
 
-            {/* Stat cards */}
-            <div className="login-stats">
-              <div className="login-stat-card">
-                <div className="login-stat-val" style={{ color: "#60a5fa" }}>9 Siklus</div>
-                <div className="login-stat-desc">Bumil, Balita, Remaja, Dewasa &amp; Lansia</div>
+            {errorMessage && (
+              <div className="auth-alert-box">
+                <span style={{ fontWeight: "bold" }}>⚠</span>
+                <span>{errorMessage}</span>
               </div>
-              <div className="login-stat-card">
-                <div className="login-stat-val" style={{ color: "#93c5fd" }}>5 Langkah</div>
-                <div className="login-stat-desc">Alur Standar Pemeriksaan ILP</div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              {/* Input Email / Username */}
+              <div className="auth-input-pill">
+                <span className="auth-input-pill-icon">
+                  <Mail size={18} />
+                </span>
+                <input
+                  type="text"
+                  inputMode="email"
+                  className="auth-field-input"
+                  placeholder="Email atau Nama Akun Petugas / Kader"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  autoComplete="username"
+                />
               </div>
-              <div className="login-stat-card">
-                <div className="login-stat-val" style={{ color: "#bfdbfe" }}>Sinkron</div>
-                <div className="login-stat-desc">Posyandu • Puskesmas • Dinkes</div>
+
+              {/* Input Kata Sandi */}
+              <div className="auth-input-pill">
+                <span className="auth-input-pill-icon">
+                  <Lock size={18} />
+                </span>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  className="auth-field-input"
+                  placeholder="Kata Sandi Akun"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="auth-pass-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex="-1"
+                  aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+                  title={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
-            </div>
-          </div>
 
-          {/* Bottom footer */}
-          <div className="login-left-footer">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <ShieldCheck size={15} style={{ color: "#60a5fa" }} />
-              <span>Sistem Terverifikasi &amp; Terenkripsi Faskes</span>
-            </div>
-            <span>Dinas Kesehatan &amp; Puskesmas</span>
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════════════
-            RIGHT PANEL — Login Form
-        ══════════════════════════════════════════════ */}
-        <div className="login-right">
-          {/* Top bar */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div className="login-brand">
-              <img src={logoPosyandu} alt="SENGKUYUNG KATRESNAN" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
-              <div>
-                <div className="login-brand-name">SENGKUYUNG KATRESNAN</div>
-                <div className="login-brand-sub">Sistem Informasi Posyandu</div>
-              </div>
-            </div>
-            <button type="button" className="login-help-btn" onClick={() => setShowHelpModal(true)}>
-              Bantuan
-            </button>
-          </div>
-
-          {/* Form */}
-          <div className="login-form-wrap">
-            <div className="login-card">
-              <h2 className="login-title">Selamat Datang<br />Kembali!</h2>
-              <p className="login-subtitle">
-                Masuk untuk mengelola data Posyandu &amp; sasaran terhubung ke database real-time.
-              </p>
-
-              {errorMessage && (
-                <div className="login-error">
-                  <span style={{ flexShrink: 0, marginTop: "1px" }}>⚠</span>
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit}>
-                {/* Email */}
-                <div className="login-field">
-                  <label className="login-label" htmlFor="login-email">Alamat Email</label>
-                  <div className="login-input-wrap">
-                    <span className="login-input-icon">
-                      <Mail size={15} />
-                    </span>
-                    <input
-                      id="login-email"
-                      type="email"
-                      className="login-input"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="nama@posyandu.org"
-                      required
-                      disabled={isLoading}
-                      autoComplete="email"
-                    />
-                  </div>
-                </div>
-
-                {/* Password */}
-                <div className="login-field">
-                  <div className="login-label-row">
-                    <label className="login-label" style={{ margin: 0 }} htmlFor="login-password">Kata Sandi</label>
-                    <a
-                      href="#lupa-password"
-                      className="login-forgot"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        showInfo("Pemulihan Kata Sandi", "Tautan instruksi reset kata sandi telah dikirimkan ke email Anda.");
-                      }}
-                    >
-                      Lupa kata sandi?
-                    </a>
-                  </div>
-                  <div className="login-input-wrap">
-                    <span className="login-input-icon">
-                      <Lock size={15} />
-                    </span>
-                    <input
-                      id="login-password"
-                      type={showPassword ? "text" : "password"}
-                      className="login-input"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                      disabled={isLoading}
-                      autoComplete="current-password"
-                    />
-                    <button
-                      type="button"
-                      className="login-eye-btn"
-                      onClick={() => setShowPassword(!showPassword)}
-                      tabIndex="-1"
-                      disabled={isLoading}
-                      aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
-                    >
-                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Remember me */}
-                <label className="login-remember" htmlFor="remember-me">
+              {/* Ingat Saya & Lupa Kata Sandi */}
+              <div className="auth-extra-row">
+                <label className="auth-remember-label">
                   <input
-                    id="remember-me"
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
                     disabled={isLoading}
                   />
-                  <span>Ingat saya di perangkat ini</span>
+                  <span>Ingat saya</span>
                 </label>
-
-                {/* Submit */}
-                <button type="submit" className="login-submit" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 size={16} className="spin" />
-                      <span>Memverifikasi…</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Masuk ke Sistem</span>
-                      <span style={{ fontSize: "1.05em" }}>→</span>
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {/* Register link */}
-              <div className="login-register-row">
-                <button type="button" className="login-register-btn" onClick={() => setShowRoleModal(true)}>
-                  Belum punya akun?{" "}
-                  <strong>Registrasi Akun Petugas / Kader →</strong>
-                </button>
+                <a
+                  href="#lupa-password"
+                  className="auth-forgot-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    showInfo("Bantuan Kata Sandi", "Silakan hubungi administrator Puskesmas atau Dinas Kesehatan untuk bantuan reset kata sandi.");
+                  }}
+                >
+                  Lupa kata sandi?
+                </a>
               </div>
-            </div>
-          </div>
 
-          {/* Footer */}
-          <div className="login-right-footer">
-            © 2026 SENGKUYUNG KATRESNAN &nbsp;·&nbsp; Terintegrasi Standar ILP Kemenkes RI
+              {/* Tombol Masuk */}
+              <button
+                type="submit"
+                className="auth-btn-primary"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 size={18} className="spin" />
+                    <span>Memverifikasi akun...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Masuk ke Sistem</span>
+                    <ArrowRight size={18} />
+                  </>
+                )}
+              </button>
+
+              {/* Pembatas Atau */}
+              <div className="auth-divider-or">
+                <span>Atau</span>
+              </div>
+
+              {/* Tombol Registrasi Akun Baru */}
+              <button
+                type="button"
+                className="auth-btn-secondary"
+                onClick={() => setShowRoleModal(true)}
+              >
+                <span>Daftar Akun Baru</span>
+              </button>
+
+            </form>
           </div>
         </div>
       </div>
 
-      {/* ── Modals ── */}
-      <RegisterRoleModal show={showRoleModal} onHide={() => setShowRoleModal(false)} onSelectRole={handleSelectRole} />
-
-      {showHelpModal && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setShowHelpModal(false)}
-        >
-          <div
-            style={{ background: "#fff", borderRadius: "20px", padding: "2rem", width: "100%", maxWidth: "400px", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", fontFamily: "'Outfit', sans-serif" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <h5 style={{ margin: 0, fontWeight: 700, fontSize: "1.1rem", letterSpacing: "-0.02em", color: "#0f172a" }}>Panduan Masuk Sistem</h5>
-              <button
-                style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", width: "32px", height: "32px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "1rem" }}
-                onClick={() => setShowHelpModal(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <p style={{ fontSize: "0.85rem", color: "#475569", lineHeight: 1.6, margin: "0 0 8px" }}>
-              Gunakan email dan password akun yang sudah terdaftar pada backend.
-            </p>
-            <p style={{ fontSize: "0.78rem", color: "#94a3b8", lineHeight: 1.6, margin: "0 0 24px" }}>
-              Jika mengalami kendala login, pastikan akun sudah terdaftar, terverifikasi, dan telah memperoleh persetujuan yang diperlukan.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowHelpModal(false)}
-              style={{ width: "100%", height: "46px", background: "#0f172a", color: "#fff", border: "none", borderRadius: "11px", fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "0.9rem", cursor: "pointer" }}
-            >
-              Tutup
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Modal Pilihan Peran Pendaftaran */}
+      <RegisterRoleModal
+        show={showRoleModal}
+        onHide={() => setShowRoleModal(false)}
+        onSelectRole={handleSelectRole}
+      />
     </>
   );
 }

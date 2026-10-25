@@ -1,13 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Search, FileText, ChevronRight, Heart, UserPlus, Calendar, Clock, MapPin, Users } from "lucide-react";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip as ChartTooltip, Filler, Legend, BarElement } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Filler, Legend, BarElement);
 
 export default function DashboardPage({ onNavigate, globalSasaranList = [], globalPemeriksaanData = {}, globalJadwalList = [], user }) {
-  const [hoveredCategory, setHoveredCategory] = useState(null);
-
   // Build dashboard statistics from backend-synced warga, pemeriksaan, and sesi data.
   const kategoriDistribution = useMemo(() => {
     const categories = [
@@ -50,29 +48,32 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
     const br = b.total ? b.hadir / b.total : 0;
     return br - ar;
   })[0] || { nama: "-", hadir: 0, total: 0 };
-  const maxBarValue = Math.max(1, ...kategoriDistribution.map((k) => k.total));
 
   const chartDataConfig = useMemo(() => {
     return {
-      labels: kategoriDistribution.map(cat => cat.nama),
+      labels: kategoriDistribution.map((cat) => cat.nama),
       datasets: [
         {
-          label: 'Sasaran Hadir',
-          data: kategoriDistribution.map(cat => cat.hadir),
-          backgroundColor: '#F25B8E',
-          borderRadius: 4,
-          barPercentage: 0.6,
-          categoryPercentage: 0.4,
+          label: "Sasaran Hadir",
+          data: kategoriDistribution.map((cat) => cat.hadir),
+          backgroundColor: "#F25B8E",
+          hoverBackgroundColor: "#d93c72",
+          borderRadius: 6,
+          barPercentage: 0.85,
+          categoryPercentage: 0.65,
+          maxBarThickness: 32,
         },
         {
-          label: 'Target Sasaran',
-          data: kategoriDistribution.map(cat => cat.total),
-          backgroundColor: '#cbd5e1',
-          borderRadius: 4,
-          barPercentage: 0.6,
-          categoryPercentage: 0.4,
-        }
-      ]
+          label: "Target Sasaran",
+          data: kategoriDistribution.map((cat) => cat.total),
+          backgroundColor: "#cbd5e1",
+          hoverBackgroundColor: "#94a3b8",
+          borderRadius: 6,
+          barPercentage: 0.85,
+          categoryPercentage: 0.65,
+          maxBarThickness: 32,
+        },
+      ],
     };
   }, [kategoriDistribution]);
 
@@ -80,18 +81,66 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'top', align: 'end' },
+      legend: {
+        position: "top",
+        align: "end",
+        labels: {
+          usePointStyle: true,
+          pointStyle: "rectRounded",
+          boxWidth: 12,
+          boxHeight: 12,
+          color: "#334155",
+          font: { size: 12, weight: "600" },
+          padding: 16,
+        },
+      },
       tooltip: {
+        backgroundColor: "#1e293b",
+        titleFont: { size: 13, weight: "bold" },
+        bodyFont: { size: 12 },
+        padding: 12,
+        cornerRadius: 8,
         callbacks: {
-          label: (context) => `${context.dataset.label}: ${context.parsed.y} Orang`
-        }
-      }
+          label: (context) => ` ${context.dataset.label}: ${context.parsed.y} Orang`,
+        },
+      },
     },
     scales: {
-      y: { beginAtZero: true, grid: { borderDash: [4, 4] } },
-      x: { grid: { display: false } }
+      y: {
+        beginAtZero: true,
+        ticks: {
+          stepSize: 1,
+          precision: 0,
+          color: "#64748b",
+          font: { size: 12, weight: "500" },
+          padding: 8,
+        },
+        grid: {
+          color: "#e2e8f0",
+          lineWidth: 1,
+        },
+        border: {
+          color: "#cbd5e1",
+        },
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+        border: {
+          color: "#cbd5e1",
+          width: 1,
+        },
+        ticks: {
+          color: "#334155",
+          font: { size: 11.5, weight: "600" },
+          padding: 8,
+          maxRotation: 0,
+          autoSkip: false,
+        },
+      },
     },
-    interaction: { mode: 'index', intersect: false }
+    interaction: { mode: "index", intersect: false },
   };
 
   return (
@@ -109,8 +158,8 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
             <div
               className="d-inline-flex align-items-center gap-1.5 fw-semibold px-3 py-1 rounded-pill mb-2"
               style={{
-                background: "rgba(255, 255, 255, 0.18)",
-                border: "1px solid rgba(255, 255, 255, 0.35)",
+                background: "rgba(255, 255, 255, 0.22)",
+                border: "1px solid rgba(255, 255, 255, 0.4)",
                 color: "#ffffff",
                 fontSize: "0.8rem",
               }}
@@ -119,7 +168,7 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
               <span>Jadwal Pelayanan Hari Ini</span>
             </div>
             <h3 className="fw-bold mb-1.5 text-white fs-4">{todaySchedule?.posyandu || user?.posyandu || "Jadwal Posyandu"}</h3>
-            <p className="mb-0 small" style={{ maxWidth: "640px", fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.92)" }}>
+            <p className="mb-0 small" style={{ maxWidth: "640px", fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.95)" }}>
               Pelayanan Posyandu dan pemantauan kesehatan siklus hidup ILP.
             </p>
           </div>
@@ -146,8 +195,8 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
       {/* 2. Aksi Cepat */}
       <div className="card card-custom p-4 bg-white border-0 shadow-sm rounded-4">
         <div className="mb-3">
-          <h5 className="fw-bold text-dark mb-1">Aksi Cepat</h5>
-          <p className="text-muted small mb-0">Akses langsung ke menu pelayanan dan pencatatan posyandu.</p>
+          <h6 className="fw-bold text-dark mb-1">Aksi Cepat</h6>
+          <p className="text-muted small mb-0" style={{ fontSize: "0.8rem" }}>Akses langsung ke menu pelayanan dan pencatatan posyandu.</p>
         </div>
 
         <div className="row g-3">
@@ -278,8 +327,8 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
         {/* Header */}
         <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-4 pb-3 border-bottom">
           <div>
-            <h5 className="fw-bold text-dark mb-1">Jumlah Sasaran &amp; Kehadiran per Kategori</h5>
-            <p className="text-muted small mb-0">Perbandingan sasaran terdaftar dan kehadiran pelayanan posyandu per kelompok usia.</p>
+            <h6 className="fw-bold text-dark mb-1">Jumlah Sasaran &amp; Kehadiran per Kategori</h6>
+            <p className="text-muted small mb-0" style={{ fontSize: "0.8rem" }}>Perbandingan sasaran terdaftar dan kehadiran pelayanan posyandu per kelompok usia.</p>
           </div>
 
           <div>
@@ -347,9 +396,15 @@ export default function DashboardPage({ onNavigate, globalSasaranList = [], glob
         </div>
 
         {/* Grafik Batang Komparasi */}
-        <div className="p-3 p-md-4 rounded-4 bg-light border">
-          {/* Visual Bar Chart */}
-          <div className="position-relative w-100 overflow-hidden" style={{ height: "300px" }}>
+        <div className="p-3 p-md-4 rounded-4 bg-white border shadow-sm">
+          <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+            <div>
+              <h6 className="fw-bold text-dark mb-1">Perbandingan Partisipasi Kehadiran per Kategori</h6>
+              <p className="text-muted small mb-0">Grafik perbandingan sasaran hadir vs target sasaran riil per siklus hidup.</p>
+            </div>
+          </div>
+
+          <div className="position-relative w-100" style={{ height: "320px" }}>
             {kategoriDistribution.length > 0 ? (
               <Bar data={chartDataConfig} options={chartOptions} />
             ) : (

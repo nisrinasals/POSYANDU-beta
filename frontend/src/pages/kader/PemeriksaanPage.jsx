@@ -5,7 +5,8 @@ import { useNotification } from "../../context/NotificationContext";
 import { validateNik, formatNikInput, validateMeasurements } from "../../utils/validators";
 import GrowthChartPlotter from "../../components/pemeriksaan/GrowthChartPlotter";
 import ImunisasiTableHistory from "../../components/pemeriksaan/ImunisasiTableHistory";
-import { mapFlatScreeningToBackend } from "../../utils/screeningPayload";
+import { mapFlatScreeningToBackend, unflattenScreeningFromBackend } from "../../utils/screeningPayload";
+import DetailRekapModal from "../../components/pemeriksaan/DetailRekapModal";
 import { pemeriksaanService, kunjunganService, wargaService, sesiService, imunisasiService } from "../../services";
 import { emptyImunisasiRows, mergeImunisasiRows } from "../../data/imunisasi";
 import { formatDateId, formatAgeFromMonths } from "../../utils/dataMappers";
@@ -304,7 +305,20 @@ function PeriodicScreeningPanel({ id, title, description, due, loading, checked,
   );
 }
 
-export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, globalSasaranList = [], setGlobalSasaranList, globalPemeriksaanData = {}, setGlobalPemeriksaanData, activePemeriksaanWargaId, onRefreshData, isModalMode = false, onCloseModal }) {
+export default function PemeriksaanPage({
+  activeSubmenu = "bumil",
+  onNavigate,
+  globalSasaranList = [],
+  setGlobalSasaranList,
+  globalPemeriksaanData = {},
+  setGlobalPemeriksaanData,
+  activePemeriksaanWargaId,
+  returnTo = null,
+  globalJadwalList = [],
+  onRefreshData,
+  isModalMode = false,
+  onCloseModal,
+}) {
   const getLocalDateOnly = () => {
     const now = new Date();
     const localMs = now.getTime() - now.getTimezoneOffset() * 60 * 1000;
@@ -312,13 +326,18 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   };
 
   useEffect(() => {
-    if (isModalMode && activePemeriksaanWargaId) {
-      setExaminationMode("sequential");
-      setSelectedWargaId(String(activePemeriksaanWargaId));
-      // Give it time to hydrate existing data from globalPemeriksaanData
-      setTimeout(() => setActiveStep(2), 50);
+    if (activePemeriksaanWargaId) {
+      const targetWargaId = String(activePemeriksaanWargaId);
+      setSelectedWargaId(targetWargaId);
+      setSelectedWargaStep2(targetWargaId);
+      setSelectedWargaStep3(targetWargaId);
+      setSelectedWargaStep4(targetWargaId);
+      setSelectedWargaStep5(targetWargaId);
+      setKehadiranWarga((prev) => ({ ...prev, [targetWargaId]: true }));
+      // Pindahkan langsung ke Langkah 2 untuk melanjutkan pengisian atau peninjauan
+      setTimeout(() => setActiveStep(2), 60);
     }
-  }, [isModalMode, activePemeriksaanWargaId]);
+  }, [activePemeriksaanWargaId]);
 
   const getLocalDateOffset = (days) => {
     const date = new Date();
@@ -337,13 +356,33 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       page: 1,
       limit: 100,
       posyandu_id: Number(posyanduId),
-      tanggal: targetDate,
     });
     const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : Array.isArray(sesiRes?.data?.items) ? sesiRes.data.items : [];
 
-    const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === targetDate);
+    // 1. Cek sesi tepat pada targetDate
+    let session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === targetDate);
+
+    // 2. Jika tidak ada sesi persis hari ini, cari sesi yang berstatus 'open' dalam rentang hari pelaksanaan s.d H+6
     if (!session?.id) {
-      throw new Error(`Tidak ada sesi Posyandu pada ${targetDate}. Pilih tanggal sesi yang tersedia.`);
+      const todayDate = new Date(`${targetDate}T00:00:00Z`);
+      const validOffsetSessions = sessions.filter((item) => {
+        if (item.status !== "open") return false;
+        const rawDate = String(item.tanggal_pelaksanaan || "").slice(0, 10);
+        if (!rawDate) return false;
+        const sessionDate = new Date(`${rawDate}T00:00:00Z`);
+        const diffDays = Math.floor((todayDate - sessionDate) / 86400000);
+        return diffDays >= 0 && diffDays <= 6;
+      });
+
+      if (validOffsetSessions.length > 0) {
+        // Ambil sesi paling baru yang masih dalam masa aktif H s.d H+6
+        validOffsetSessions.sort((a, b) => new Date(b.tanggal_pelaksanaan) - new Date(a.tanggal_pelaksanaan));
+        session = validOffsetSessions[0];
+      }
+    }
+
+    if (!session?.id) {
+      throw new Error(`Tidak ada sesi Posyandu yang aktif (dibuka) pada ${targetDate} atau rentang H s.d H+6.`);
     }
 
     return session;
@@ -449,7 +488,41 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   // Keterangan Waktu Kunjungan Langkah 1 (Presensi): Minggu (Bumil) / Bulan (Nifas, Bayi, Balita, Apras)
   // Format: { [wargaId]: string }
-  const [waktuKunjunganPresensi, setWaktuKunjunganPresensi] = useState({});
+  const getWaktuKunjunganStorageKey = useCallback((date) => `posyandu_waktu_kunjungan_${date}`, []);
+  const loadStoredWaktuKunjungan = useCallback((date) => {
+    try {
+      const raw = localStorage.getItem(`posyandu_waktu_kunjungan_${date}`);
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {};
+    }
+  }, []);
+
+  const [waktuKunjunganPresensi, setWaktuKunjunganPresensi] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`posyandu_waktu_kunjungan_${getLocalDateOnly()}`);
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {};
+    }
+  });
+
+  const handleUpdateWaktuKunjungan = (wId, val) => {
+    setWaktuKunjunganPresensi((prev) => {
+      const next = { ...prev, [wId]: val };
+      try {
+        localStorage.setItem(`posyandu_waktu_kunjungan_${presensiTanggal}`, JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+    if (examinationMode === "sequential" && selectedWargaId === wId) {
+      if (activeSubmenu === "bumil") {
+        setSequentialForm((prev) => ({ ...prev, usiaKehamilan: val }));
+      } else if (activeSubmenu === "nifas") {
+        setSequentialForm((prev) => ({ ...prev, waktuKunjunganNifas: val }));
+      }
+    }
+  };
 
   // State pencarian warga di Langkah 1 Presensi
   const [searchWargaQuery, setSearchWargaQuery] = useState("");
@@ -547,11 +620,26 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                 page: 1,
                 limit: 100,
                 posyandu_id: posyanduId,
-                tanggal: presensiTanggal,
               });
 
               const sessions = Array.isArray(sesiRes?.data) ? sesiRes.data : Array.isArray(sesiRes?.data?.items) ? sesiRes.data.items : [];
-              const session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === presensiTanggal);
+              let session = sessions.find((item) => String(item.tanggal_pelaksanaan).slice(0, 10) === presensiTanggal);
+
+              if (!session?.id) {
+                const todayDate = new Date(`${presensiTanggal}T00:00:00Z`);
+                const validOffsetSessions = sessions.filter((item) => {
+                  if (item.status !== "open") return false;
+                  const rawDate = String(item.tanggal_pelaksanaan || "").slice(0, 10);
+                  if (!rawDate) return false;
+                  const sessionDate = new Date(`${rawDate}T00:00:00Z`);
+                  const diffDays = Math.floor((todayDate - sessionDate) / 86400000);
+                  return diffDays >= 0 && diffDays <= 6;
+                });
+                if (validOffsetSessions.length > 0) {
+                  validOffsetSessions.sort((a, b) => new Date(b.tanggal_pelaksanaan) - new Date(a.tanggal_pelaksanaan));
+                  session = validOffsetSessions[0];
+                }
+              }
 
               if (!session?.id) return { posyanduId, session: null, visits: [] };
 
@@ -648,6 +736,24 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       cancelled = true;
     };
   }, [activeSubmenu, activeWargaList, presensiTanggal]);
+
+  // Hidrasi otomatis waktuKunjunganPresensi dari localStorage atau pemeriksaan backend
+  useEffect(() => {
+    const stored = loadStoredWaktuKunjungan(presensiTanggal);
+    const populated = { ...stored };
+    activeWargaList.forEach((w) => {
+      const id = String(w.id);
+      if (!populated[id]) {
+        const exam = globalPemeriksaanData?.[id] || globalPemeriksaanData?.[String(w.id)] || w.exam;
+        const examL1 = exam?.langkah1 || {};
+        const examDetail = exam?.detail_skrining?.pelayanan_kesehatan || {};
+        const fromProfile = w.usiaKehamilan || w.waktuKunjunganNifas || w.profileKehamilan?.usia_kehamilan || w.profile_kehamilan?.usia_kehamilan;
+        const val = examL1.usiaKehamilan || examL1.waktuKunjunganNifas || examDetail.usia_kehamilan || examDetail.waktu_nifas || fromProfile;
+        if (val) populated[id] = val;
+      }
+    });
+    setWaktuKunjunganPresensi(populated);
+  }, [activeWargaList, presensiTanggal, globalPemeriksaanData, loadStoredWaktuKunjungan]);
 
   useEffect(() => {
     if (availableWargaStep2.length > 0) {
@@ -1019,7 +1125,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     gulaDarah: "",
   });
 
-  const [langkah4Form, setLangkah4Form] = useState({
+  const getInitialLangkah4Form = () => ({
     isSkriningTahunan: false,
     isSkrining6Bulanan: false,
     batukTbc: "",
@@ -1099,6 +1205,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     skilasHilangMinat: "",
     skilasImunisasiCovid: "",
   });
+
+  const [langkah4Form, setLangkah4Form] = useState(getInitialLangkah4Form);
 
   const [langkah5Form, setLangkah5Form] = useState({
     topikPenyuluhan: "",
@@ -1245,7 +1353,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     alasanRujukan: "",
   });
 
-  // Helper setter/getter untuk field Langkah 4 (mendukung kedua mode)
+  const lastSelectedWargaIdRef = useRef(null);
+
+  // Helper setter/getter untuk field Langkah 4 (sinkron real-time untuk kedua mode)
   const updateLangkah4Value = (field, val) => {
     const updates = { [field]: val };
     if (field === "batukTbc") updates.batukBesarTbc = val;
@@ -1253,35 +1363,32 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     if (field === "pemberianTtd") updates.jumlahTtd = val;
     if (field === "jumlahTtd") updates.pemberianTtd = val;
 
-    if (examinationMode === "per-step") {
-      setLangkah4Form((prev) => {
-        const next = { ...prev, ...updates };
-        if (activeSubmenu === "lansia") {
-          const evalResult = evaluateSkilas(next);
-          if (evalResult.adaRisiko) {
-            setLangkah5Form((l5) => ({
-              ...l5,
-              statusRujukan: "Rujuk ke Puskesmas / Pustu",
-              topikPenyuluhan: l5.topikPenyuluhan || `Rujukan SKILAS: Domain ${evalResult.issues.join(", ")}`,
-            }));
-          }
-        }
-        return next;
-      });
-    } else {
-      setSequentialForm((prev) => {
-        const next = { ...prev, ...updates };
-        if (activeSubmenu === "lansia") {
-          const evalResult = evaluateSkilas(next);
-          if (evalResult.adaRisiko) {
-            next.statusRujukan = "Rujuk ke Puskesmas / Pustu";
-            if (!next.topikPenyuluhan) {
-              next.topikPenyuluhan = `Rujukan SKILAS: Domain ${evalResult.issues.join(", ")}`;
-            }
-          }
-        }
-        return next;
-      });
+    // Selalu perbarui kedua form (per-step & sequential) secara realtime
+    setLangkah4Form((prev) => ({ ...prev, ...updates }));
+    setSequentialForm((prev) => ({ ...prev, ...updates }));
+
+    const targetId = String(selectedWargaId || selectedWargaStep4 || "");
+    if (targetId) {
+      setStepDataByWarga((prev) => ({
+        ...prev,
+        [targetId]: {
+          ...(prev[targetId] || {}),
+          langkah4: { ...(prev[targetId]?.langkah4 || {}), ...updates },
+        },
+      }));
+    }
+
+    if (activeSubmenu === "lansia") {
+      const currentCombined = { ...(examinationMode === "per-step" ? langkah4Form : sequentialForm), ...updates };
+      const evalResult = evaluateSkilas(currentCombined);
+      if (evalResult.adaRisiko) {
+        const rujukUpdate = {
+          statusRujukan: "Rujuk ke Puskesmas / Pustu",
+          topikPenyuluhan: `Rujukan SKILAS: Domain ${evalResult.issues.join(", ")}`,
+        };
+        setLangkah5Form((l5) => ({ ...l5, ...rujukUpdate }));
+        setSequentialForm((s) => ({ ...s, ...rujukUpdate }));
+      }
     }
   };
 
@@ -1289,7 +1396,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   const isRemajaPerempuan = ["perempuan", "p", "wanita", "female"].includes(String(activeCitizenGender).trim().toLowerCase());
 
   const getLangkah4Value = (field) => {
-    const src = examinationMode === "per-step" ? langkah4Form : sequentialForm;
+    const targetId = String(selectedWargaId || selectedWargaStep4 || "");
+    const storedWargaL4 = targetId ? stepDataByWarga[targetId]?.langkah4 || {} : {};
+    const src = {
+      ...storedWargaL4,
+      ...(examinationMode === "per-step" ? langkah4Form : sequentialForm),
+    };
     if (!src) return "";
     if (field === "batukBesarTbc") return src.batukBesarTbc || src.batukTbc || "";
     if (field === "batukTbc") return src.batukTbc || src.batukBesarTbc || "";
@@ -1301,6 +1413,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
   // Automatically hydrate all 5 steps when a citizen is selected or category changes
   useEffect(() => {
     if (!currentSelectedWarga) return;
+    const isCitizenChanged = String(currentSelectedWarga.id) !== String(lastSelectedWargaIdRef.current);
+    lastSelectedWargaIdRef.current = String(currentSelectedWarga.id);
+
     const defaultGen = currentSelectedWarga.gender || "";
     const l1 = currentExamData?.langkah1 || {};
     const l4 = currentExamData?.langkah4 || {};
@@ -1308,226 +1423,113 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     const backendDetail = currentExamData?.detail_skrining || {};
     const backendRemajaAnnual = backendDetail?.pemeriksaan_tahunan_remaja_putri || {};
 
-    setLangkah1Form({
-      nik: currentSelectedWarga.nik || l1.nik || "",
-      nama: currentSelectedWarga.nama || l1.nama || "",
-      tglLahir: currentSelectedWarga.tglLahir || l1.tglLahir || "",
-      gender: defaultGen,
-      usiaKehamilan: l1.usiaKehamilan || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || currentSelectedWarga.usiaKehamilan || "",
-      waktuKunjunganNifas: l1.waktuKunjunganNifas || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || "",
-      usiaBayi: l1.usiaBayi || "",
-      usiaBalita: l1.usiaBalita || "",
-      usiaApras: l1.usiaApras || "",
-      checklistKia: l1.checklistKia || "",
-    });
+    const unflattenedL4 = unflattenScreeningFromBackend(getBackendCategory(activeSubmenu), backendDetail);
+    const effectiveL4 = { ...unflattenedL4, ...l4 };
 
-    // Step 2 selalu dimulai kosong saat sasaran dipilih.
-    // Data pengukuran lama tetap dipakai oleh Step 3 melalui backend plotting.
-    setLangkah2Form({
-      bb: "",
-      tb: "",
-      lila: "",
-      lk: "",
-      lp: "",
-      tensiSistol: "",
-      tensiDiastol: "",
-      gulaDarah: "",
-    });
+    setLangkah1Form((prev) => ({
+      nik: currentSelectedWarga.nik || l1.nik || prev.nik || "",
+      nama: currentSelectedWarga.nama || l1.nama || prev.nama || "",
+      tglLahir: currentSelectedWarga.tglLahir || l1.tglLahir || prev.tglLahir || "",
+      gender: defaultGen || prev.gender,
+      usiaKehamilan: l1.usiaKehamilan || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || currentSelectedWarga.usiaKehamilan || prev.usiaKehamilan || "",
+      waktuKunjunganNifas: l1.waktuKunjunganNifas || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || prev.waktuKunjunganNifas || "",
+      usiaBayi: l1.usiaBayi || prev.usiaBayi || "",
+      usiaBalita: l1.usiaBalita || prev.usiaBalita || "",
+      usiaApras: l1.usiaApras || prev.usiaApras || "",
+      checklistKia: l1.checklistKia || prev.checklistKia || "",
+    }));
+
+    if (isCitizenChanged) {
+      setLangkah2Form({
+        bb: "",
+        tb: "",
+        lila: "",
+        lk: "",
+        lp: "",
+        tensiSistol: "",
+        tensiDiastol: "",
+        gulaDarah: "",
+      });
+    }
 
     const hasAnnualData = Boolean(
       currentExamData?.is_skrining_tahunan ||
       backendDetail?.is_skrining_tahunan ||
       backendRemajaAnnual?.is_skrining_jiwa ||
       backendRemajaAnnual?.is_periksa_hb ||
-      l4.isSkriningTahunan ||
-      l4.is_skrining_tahunan ||
-      (l4.jiwaQ1 !== undefined && l4.jiwaQ1 !== "") ||
-      (l4.aksBab !== undefined && l4.aksBab !== "") ||
-      (l4.skilasOrientasi !== undefined && l4.skilasOrientasi !== "") ||
-      (l4.pumaJk !== undefined && l4.pumaJk !== "") ||
-      (l4.skriningJiwa && l4.skriningJiwa !== ""),
+      effectiveL4.isSkriningTahunan ||
+      effectiveL4.is_skrining_tahunan ||
+      (effectiveL4.jiwaQ1 !== undefined && effectiveL4.jiwaQ1 !== "") ||
+      (effectiveL4.aksBab !== undefined && effectiveL4.aksBab !== "") ||
+      (effectiveL4.skilasOrientasi !== undefined && effectiveL4.skilasOrientasi !== "") ||
+      (effectiveL4.pumaJk !== undefined && effectiveL4.pumaJk !== "") ||
+      (effectiveL4.skriningJiwa && effectiveL4.skriningJiwa !== ""),
     );
-    const hasSixMonthData = backendDetail?.is_skrining_6_bulanan === true || l4.isSkrining6Bulanan === true;
+    const hasSixMonthData = backendDetail?.is_skrining_6_bulanan === true || effectiveL4.isSkrining6Bulanan === true;
 
-    setLangkah4Form({
-      isSkriningTahunan: hasAnnualData,
-      isSkrining6Bulanan: hasSixMonthData,
-      batukTbc: l4.batukTbc || "",
-      demamTbc: l4.demamTbc || "",
-      bbTurunTbc: l4.bbTurunTbc || "",
-      kontakTbc: l4.kontakTbc || "",
-      lesuTbc: l4.lesuTbc || "",
-      jumlahTtd: l4.jumlahTtd || "",
-      pemberianTtd: l4.pemberianTtd || l4.jumlahTtd || "",
-      rutinTtd: l4.rutinTtd || "",
-      komposisiMtBumil: l4.komposisiMtBumil || "",
-      rutinMtBumil: l4.rutinMtBumil || "",
-      jumlahVitA: l4.jumlahVitA || "",
-      rutinVitA: l4.rutinVitA || "",
-      menyusui: l4.menyusui || "",
-      kbPascaPersalinan: l4.kbPascaPersalinan || "",
-      asiEksklusif: l4.asiEksklusif || "",
-      mpAsi: l4.mpAsi || "",
-      pmtPemulihan: l4.pmtPemulihan || "",
-      pmtHabis: l4.pmtHabis || "",
-      vitA: l4.vitA || "",
-      obatCacing: l4.obatCacing || "",
-      ikutKelasBalita: l4.ikutKelasBalita || "",
-      perkembanganSdidtk: l4.perkembanganSdidtk || "",
-      imunisasi: l4.imunisasi || "",
-      skriningPtm: l4.skriningPtm || "",
-      mataKanan: l4.mataKanan || "",
-      mataKiri: l4.mataKiri || "",
-      telingaKanan: l4.telingaKanan || "",
-      telingaKiri: l4.telingaKiri || "",
-      skriningJiwa: l4.skriningJiwa || "",
-      periksaHb: l4.periksaHb || "",
-      batukBesarTbc: l4.batukBesarTbc || "",
-      nafsuMakanTbc: l4.nafsuMakanTbc || "",
-      bbMenurunTbc: l4.bbMenurunTbc || "",
-      lemahLesuTbc: l4.lemahLesuTbc || "",
-      berkeringatMalamTbc: l4.berkeringatMalamTbc || "",
-      batukDarahTbc: l4.batukDarahTbc || "",
-      sesakNafasTbc: l4.sesakNafasTbc || "",
-      kolesterol: l4.kolesterol || "",
-      alatKontrasepsi: l4.alatKontrasepsi || "",
-      pumaJk: l4.pumaJk !== undefined ? l4.pumaJk : "",
-      pumaUsia: l4.pumaUsia !== undefined ? l4.pumaUsia : "",
-      pumaMerokok: l4.pumaMerokok !== undefined ? l4.pumaMerokok : "",
-      pumaNapasPendek: l4.pumaNapasPendek !== undefined ? l4.pumaNapasPendek : "",
-      pumaDahak: l4.pumaDahak !== undefined ? l4.pumaDahak : "",
-      pumaBatukFlu: l4.pumaBatukFlu !== undefined ? l4.pumaBatukFlu : "",
-      // C2. AKS - Lansia
-      aksBab: l4.aksBab !== undefined ? l4.aksBab : "",
-      aksBak: l4.aksBak !== undefined ? l4.aksBak : "",
-      aksCuciMuka: l4.aksCuciMuka !== undefined ? l4.aksCuciMuka : "",
-      aksWc: l4.aksWc !== undefined ? l4.aksWc : "",
-      aksMakan: l4.aksMakan !== undefined ? l4.aksMakan : "",
-      aksPindah: l4.aksPindah !== undefined ? l4.aksPindah : "",
-      aksJalan: l4.aksJalan !== undefined ? l4.aksJalan : "",
-      aksPakaian: l4.aksPakaian !== undefined ? l4.aksPakaian : "",
-      aksTangga: l4.aksTangga !== undefined ? l4.aksTangga : "",
-      aksMandi: l4.aksMandi !== undefined ? l4.aksMandi : "",
-      // C3. SKILAS - Lansia
-      skilasOrientasi: l4.skilasOrientasi || "",
-      skilasUlangKata: l4.skilasUlangKata || "",
-      skilasMobilisasi: l4.skilasMobilisasi || "",
-      skilasTesKursi: l4.skilasTesKursi || "",
-      skilasBbTurun: l4.skilasBbTurun || "",
-      skilasNafsuMakan: l4.skilasNafsuMakan || "",
-      skilasLilaKurang: l4.skilasLilaKurang || "",
-      skilasMasalahMata: l4.skilasMasalahMata || "",
-      skilasTesLihat: l4.skilasTesLihat || "",
-      skilasTesBisik: l4.skilasTesBisik || "",
-      skilasPerasaanSedih: l4.skilasPerasaanSedih || "",
-      skilasHilangMinat: l4.skilasHilangMinat || "",
-      skilasImunisasiCovid: l4.skilasImunisasiCovid || "",
+    setLangkah4Form((prev) => {
+      const merged = { ...effectiveL4 };
+      if (!isCitizenChanged) {
+        Object.keys(prev || {}).forEach((k) => {
+          if (prev[k] !== "" && prev[k] !== undefined && prev[k] !== null) {
+            merged[k] = prev[k];
+          }
+        });
+      }
+      return {
+        ...prev,
+        ...merged,
+        isSkriningTahunan: hasAnnualData || prev.isSkriningTahunan,
+        isSkrining6Bulanan: hasSixMonthData || prev.isSkrining6Bulanan,
+      };
     });
 
-    setLangkah5Form({
-      topikPenyuluhan: l5.topikPenyuluhan || "",
-      statusRujukan: l5.statusRujukan || "",
-      alasanRujukan: l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || "",
-    });
+    setLangkah5Form((prev) => ({
+      topikPenyuluhan: (!isCitizenChanged && prev.topikPenyuluhan) ? prev.topikPenyuluhan : (l5.topikPenyuluhan || ""),
+      statusRujukan: (!isCitizenChanged && prev.statusRujukan) ? prev.statusRujukan : (l5.statusRujukan || ""),
+      alasanRujukan: (!isCitizenChanged && prev.alasanRujukan) ? prev.alasanRujukan : (l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || ""),
+    }));
 
-    setSequentialForm({
-      isSkriningTahunan: hasAnnualData,
-      isSkrining6Bulanan: hasSixMonthData,
-      nik: currentSelectedWarga.nik || l1.nik || "",
-      nama: currentSelectedWarga.nama || l1.nama || "",
-      tglLahir: currentSelectedWarga.tglLahir || l1.tglLahir || "",
-      gender: defaultGen,
-      pekerjaan: currentSelectedWarga.pekerjaan || l1.pekerjaan || "",
-      statusPernikahan: currentSelectedWarga.statusPernikahan || l1.statusPernikahan || "",
-      sekolah: currentSelectedWarga.sekolah || l1.sekolah || "",
-      kelas: currentSelectedWarga.kelas || l1.kelas || "",
-      usiaKehamilan: l1.usiaKehamilan || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || currentSelectedWarga.usiaKehamilan || "",
-      waktuKunjunganNifas: l1.waktuKunjunganNifas || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || "",
-      usiaBayi: l1.usiaBayi || "",
-      usiaBalita: l1.usiaBalita || "",
-      usiaApras: l1.usiaApras || "",
-      checklistKia: l1.checklistKia || "",
-      tb: "",
-      bb: "",
-      lila: "",
-      lk: "",
-      lp: "",
-      tensiSistol: "",
-      tensiDiastol: "",
-      gulaDarah: "",
-      batukTbc: l4.batukTbc || "",
-      demamTbc: l4.demamTbc || "",
-      bbTurunTbc: l4.bbTurunTbc || "",
-      kontakTbc: l4.kontakTbc || "",
-      lesuTbc: l4.lesuTbc || "",
-      jumlahTtd: l4.jumlahTtd || "",
-      pemberianTtd: l4.pemberianTtd || l4.jumlahTtd || "",
-      rutinTtd: l4.rutinTtd || "",
-      komposisiMtBumil: l4.komposisiMtBumil || "",
-      rutinMtBumil: l4.rutinMtBumil || "",
-      jumlahVitA: l4.jumlahVitA || "",
-      rutinVitA: l4.rutinVitA || "",
-      menyusui: l4.menyusui || "",
-      kbPascaPersalinan: l4.kbPascaPersalinan || "",
-      asiEksklusif: l4.asiEksklusif || "",
-      mpAsi: l4.mpAsi || "",
-      pmtPemulihan: l4.pmtPemulihan || "",
-      pmtHabis: l4.pmtHabis || "",
-      vitA: l4.vitA || "",
-      obatCacing: l4.obatCacing || "",
-      ikutKelasBalita: l4.ikutKelasBalita || "",
-      perkembanganSdidtk: l4.perkembanganSdidtk || "",
-      imunisasi: l4.imunisasi || "",
-      skriningPtm: l4.skriningPtm || "",
-      mataKanan: l4.mataKanan || "",
-      mataKiri: l4.mataKiri || "",
-      telingaKanan: l4.telingaKanan || "",
-      telingaKiri: l4.telingaKiri || "",
-      skriningJiwa: l4.skriningJiwa || "",
-      periksaHb: l4.periksaHb || "",
-      batukBesarTbc: l4.batukBesarTbc || "",
-      nafsuMakanTbc: l4.nafsuMakanTbc || "",
-      bbMenurunTbc: l4.bbMenurunTbc || "",
-      lemahLesuTbc: l4.lemahLesuTbc || "",
-      berkeringatMalamTbc: l4.berkeringatMalamTbc || "",
-      batukDarahTbc: l4.batukDarahTbc || "",
-      sesakNafasTbc: l4.sesakNafasTbc || "",
-      kolesterol: l4.kolesterol || "",
-      alatKontrasepsi: l4.alatKontrasepsi || "",
-      pumaJk: l4.pumaJk !== undefined ? l4.pumaJk : "",
-      pumaUsia: l4.pumaUsia !== undefined ? l4.pumaUsia : "",
-      pumaMerokok: l4.pumaMerokok !== undefined ? l4.pumaMerokok : "",
-      pumaNapasPendek: l4.pumaNapasPendek !== undefined ? l4.pumaNapasPendek : "",
-      pumaDahak: l4.pumaDahak !== undefined ? l4.pumaDahak : "",
-      pumaBatukFlu: l4.pumaBatukFlu !== undefined ? l4.pumaBatukFlu : "",
-      // C2. AKS - Lansia
-      aksBab: l4.aksBab !== undefined ? l4.aksBab : "",
-      aksBak: l4.aksBak !== undefined ? l4.aksBak : "",
-      aksCuciMuka: l4.aksCuciMuka !== undefined ? l4.aksCuciMuka : "",
-      aksWc: l4.aksWc !== undefined ? l4.aksWc : "",
-      aksMakan: l4.aksMakan !== undefined ? l4.aksMakan : "",
-      aksPindah: l4.aksPindah !== undefined ? l4.aksPindah : "",
-      aksJalan: l4.aksJalan !== undefined ? l4.aksJalan : "",
-      aksPakaian: l4.aksPakaian !== undefined ? l4.aksPakaian : "",
-      aksTangga: l4.aksTangga !== undefined ? l4.aksTangga : "",
-      aksMandi: l4.aksMandi !== undefined ? l4.aksMandi : "",
-      // C3. SKILAS - Lansia
-      skilasOrientasi: l4.skilasOrientasi || "",
-      skilasUlangKata: l4.skilasUlangKata || "",
-      skilasMobilisasi: l4.skilasMobilisasi || "",
-      skilasTesKursi: l4.skilasTesKursi || "",
-      skilasBbTurun: l4.skilasBbTurun || "",
-      skilasNafsuMakan: l4.skilasNafsuMakan || "",
-      skilasLilaKurang: l4.skilasLilaKurang || "",
-      skilasMasalahMata: l4.skilasMasalahMata || "",
-      skilasTesLihat: l4.skilasTesLihat || "",
-      skilasTesBisik: l4.skilasTesBisik || "",
-      skilasPerasaanSedih: l4.skilasPerasaanSedih || "",
-      skilasHilangMinat: l4.skilasHilangMinat || "",
-      skilasImunisasiCovid: l4.skilasImunisasiCovid || "",
-      topikPenyuluhan: l5.topikPenyuluhan || "",
-      statusRujukan: l5.statusRujukan || "",
-      alasanRujukan: l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || "",
+    setSequentialForm((prev) => {
+      const merged = { ...effectiveL4 };
+      if (!isCitizenChanged) {
+        Object.keys(prev || {}).forEach((k) => {
+          if (prev[k] !== "" && prev[k] !== undefined && prev[k] !== null) {
+            merged[k] = prev[k];
+          }
+        });
+      }
+      return {
+        ...prev,
+        ...merged,
+        isSkriningTahunan: hasAnnualData || prev.isSkriningTahunan,
+        isSkrining6Bulanan: hasSixMonthData || prev.isSkrining6Bulanan,
+        nik: currentSelectedWarga.nik || l1.nik || prev.nik || "",
+        nama: currentSelectedWarga.nama || l1.nama || prev.nama || "",
+        tglLahir: currentSelectedWarga.tglLahir || l1.tglLahir || prev.tglLahir || "",
+        gender: defaultGen || prev.gender,
+        pekerjaan: currentSelectedWarga.pekerjaan || l1.pekerjaan || prev.pekerjaan || "",
+        statusPernikahan: currentSelectedWarga.statusPernikahan || l1.statusPernikahan || prev.statusPernikahan || "",
+        sekolah: currentSelectedWarga.sekolah || l1.sekolah || prev.sekolah || "",
+        kelas: currentSelectedWarga.kelas || l1.kelas || prev.kelas || "",
+        usiaKehamilan: l1.usiaKehamilan || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || currentSelectedWarga.usiaKehamilan || prev.usiaKehamilan || "",
+        waktuKunjunganNifas: l1.waktuKunjunganNifas || waktuKunjunganPresensi[String(currentSelectedWarga.id)] || prev.waktuKunjunganNifas || "",
+        usiaBayi: l1.usiaBayi || prev.usiaBayi || "",
+        usiaBalita: l1.usiaBalita || prev.usiaBalita || "",
+        usiaApras: l1.usiaApras || prev.usiaApras || "",
+        checklistKia: l1.checklistKia || prev.checklistKia || "",
+        tb: isCitizenChanged ? "" : (prev.tb || ""),
+        bb: isCitizenChanged ? "" : (prev.bb || ""),
+        lila: isCitizenChanged ? "" : (prev.lila || ""),
+        lk: isCitizenChanged ? "" : (prev.lk || ""),
+        lp: isCitizenChanged ? "" : (prev.lp || ""),
+        tensiSistol: isCitizenChanged ? "" : (prev.tensiSistol || ""),
+        tensiDiastol: isCitizenChanged ? "" : (prev.tensiDiastol || ""),
+        gulaDarah: isCitizenChanged ? "" : (prev.gulaDarah || ""),
+        topikPenyuluhan: (!isCitizenChanged && prev.topikPenyuluhan) ? prev.topikPenyuluhan : (l5.topikPenyuluhan || ""),
+        statusRujukan: (!isCitizenChanged && prev.statusRujukan) ? prev.statusRujukan : (l5.statusRujukan || ""),
+        alasanRujukan: (!isCitizenChanged && prev.alasanRujukan) ? prev.alasanRujukan : (l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || ""),
+      };
     });
   }, [currentSelectedWarga, currentExamData, activeSubmenu, currentCategory.label]);
 
@@ -1790,13 +1792,19 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       }));
       await saveImunisasiRows(targetWarga.id, imunisasiRowsByWarga[String(targetWarga.id)] || emptyImunisasiRows());
 
-      const statusRujukan = String(formData.statusRujukan || "").trim();
+      const backendPersistedRujukan = activeStep5BackendExam?.is_perlu_rujukan === true || Boolean(activeStep5BackendExam?.rujukan);
+      const effectiveIsPerluRujukan = Boolean(
+        step5AutoReferral.perluRujuk ||
+        backendPersistedRujukan ||
+        String(formData.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu"
+      );
+      const effectiveAlasanRujukan = String(formData.alasanRujukan || "").trim() || (step5AutoReferral.reasons.length > 0 ? step5AutoReferral.reasons.join("; ") : undefined);
 
       const step5Res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
         topik_penyuluhan: String(formData.topikPenyuluhan || "").trim(),
-        is_perlu_rujukan: statusRujukan === "Rujuk ke Puskesmas / Pustu",
-        alasan_rujukan: formData.alasanRujukan || undefined,
+        is_perlu_rujukan: effectiveIsPerluRujukan,
+        alasan_rujukan: effectiveIsPerluRujukan ? effectiveAlasanRujukan : undefined,
       });
       if (!step5Res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
 
@@ -1806,16 +1814,24 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       }
       setPemeriksaanByWarga((prev) => ({ ...prev, [String(targetWarga.id)]: step5Res.data.id || pemeriksaanId }));
 
-      setGlobalPemeriksaanData?.((prev) => ({ ...prev, [String(targetWarga.id)]: step5Res.data }));
+      setGlobalPemeriksaanData?.((prev) => ({
+        ...prev,
+        [String(targetWarga.id)]: {
+          ...step5Res.data,
+          rujukan: step5Res.rujukan,
+          referral_reasons: step5Res.referral_reasons,
+          hasil_plot: plottingRes?.data
+        }
+      }));
       setCompletedSteps((prev) => ({ ...prev, [String(targetWarga.id)]: { ...(prev[String(targetWarga.id)] || {}), step1: true, step2: true, step3: true, step4: true, step5: true } }));
 
       setShowSequentialPreviewModal(false);
       setActiveStep(1);
-      showSuccess("Pemeriksaan Tersimpan", `Data pemeriksaan untuk "${targetWarga.nama || "Warga"}" berhasil disimpan ke database.`);
+      showSuccess("Pemeriksaan Tersimpan", `Data pemeriksaan untuk "${targetWarga.nama || "Warga"}" berhasil disimpan.`);
       onRefreshData?.();
     } catch (err) {
       console.error("Gagal menyimpan pemeriksaan:", err);
-      showWarning("Gagal Menyimpan Pemeriksaan", err?.message || "Data gagal disimpan ke backend.");
+      showWarning("Gagal Menyimpan Pemeriksaan", err?.message || "Data pemeriksaan gagal disimpan.");
     }
   };
 
@@ -1857,10 +1873,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
           },
         }));
       }
-      showSuccess("Presensi Tersimpan", `Presensi ${hadirIds.length} sasaran berhasil disimpan ke database.`);
+      showSuccess("Presensi Tersimpan", `Presensi ${hadirIds.length} sasaran berhasil disimpan.`);
       onRefreshData?.();
     } catch (err) {
-      showWarning("Gagal Menyimpan Presensi", err?.message || "Presensi gagal disimpan ke backend.");
+      showWarning("Gagal Menyimpan Presensi", err?.message || "Presensi gagal disimpan.");
     }
   };
 
@@ -1874,7 +1890,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     }
 
     if (!user?.posyandu_id) {
-      showWarning("Posyandu Belum Terhubung", "Akun kader belum memiliki Posyandu pada backend.");
+      showWarning("Posyandu Belum Terhubung", "Akun kader belum terhubung ke Posyandu.");
       return;
     }
 
@@ -1888,7 +1904,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         kategori_sasaran: getBackendCategory(activeSubmenu),
       });
       const created = res?.data;
-      if (!created?.id) throw new Error("Backend tidak mengembalikan data warga yang baru dibuat.");
+      if (!created?.id) throw new Error("Gagal menerima data warga baru dari sistem.");
       const mapped = mapBackendWargaToFrontend(created);
       setGlobalSasaranList?.((prev) => [mapped, ...(prev || []).filter((x) => String(x.id) !== String(mapped.id))]);
       setStepDataByWarga((prev) => ({ ...prev, [String(mapped.id)]: { warga: mapped, langkah1: { ...langkah1Form } } }));
@@ -1898,10 +1914,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       setSelectedWargaStep3(String(mapped.id));
       setSelectedWargaStep4(String(mapped.id));
       setSelectedWargaStep5(String(mapped.id));
-      showSuccess("Sasaran Tersimpan", `Data warga "${mapped.nama}" berhasil disimpan ke database.`);
+      showSuccess("Sasaran Tersimpan", `Data warga "${mapped.nama}" berhasil disimpan.`);
       onRefreshData?.();
     } catch (err) {
-      showWarning("Gagal Menyimpan Sasaran", err?.message || "Data warga gagal disimpan ke backend.");
+      showWarning("Gagal Menyimpan Sasaran", err?.message || "Data warga gagal disimpan.");
     }
   };
 
@@ -1945,9 +1961,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       setLangkah2Form({ bb: "", tb: "", lila: "", lk: "", lp: "", tensiSistol: "", tensiDiastol: "", gulaDarah: "" });
       setSelectedWargaStep2(nextWarga ? String(nextWarga.id) : "");
       await fetchBackendPlottingForWarga(savedWargaId, res.data.id);
-      showSuccess("Langkah 2 Tersimpan", `Pengukuran untuk "${warga?.nama || "Warga"}" berhasil disimpan ke database.`);
+      showSuccess("Langkah 2 Tersimpan", `Pengukuran untuk "${warga?.nama || "Warga"}" berhasil disimpan.`);
     } catch (err) {
-      showWarning("Gagal Menyimpan Pengukuran", err?.message || "Pengukuran gagal disimpan ke backend.");
+      showWarning("Gagal Menyimpan Pengukuran", err?.message || "Pengukuran gagal disimpan.");
     }
   };
 
@@ -1978,16 +1994,16 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     const warga = getWargaForId(targetId);
     const plotting = backendPlottingByWarga[targetId];
     if (!warga) {
-      showWarning("Pilih Sasaran Warga", "Silakan pilih sasaran dari data backend.");
+      showWarning("Pilih Sasaran Warga", "Silakan pilih sasaran terlebih dahulu.");
       return;
     }
     if (!plotting) {
-      showWarning("Plotting Belum Tersedia", "Simpan Langkah 2 terlebih dahulu agar hasil plotting dari backend tersedia.");
+      showWarning("Plotting Belum Tersedia", "Simpan Langkah 2 terlebih dahulu agar grafik plotting terhitung otomatis.");
       return;
     }
     setStepDataByWarga((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), warga, langkah3: plotting } }));
     setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step3: true } }));
-    showSuccess("Langkah 3 Tersedia", `Hasil plotting untuk "${warga.nama || "Warga"}" diambil dari backend.`);
+    showSuccess("Langkah 3 Tersedia", `Hasil plotting grafik untuk "${warga.nama || "Warga"}" berhasil dimuat.`);
   };
 
   const handleSaveLangkah4 = async (e) => {
@@ -2014,7 +2030,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         is_skrining_tahunan: Boolean(langkah4Form.isSkriningTahunan),
         is_skrining_6_bulanan: Boolean(langkah4Form.isSkrining6Bulanan) && ["dewasa", "lansia", "uskrem_6_14", "uskrem_15_18"].includes(getBackendCategory(activeSubmenu)),
       });
-      if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 4.");
+      if (!res?.data?.id) throw new Error("Gagal menerima hasil skrining dari sistem.");
       setPeriodicScreeningInfo((previous) => ({
         loading: false,
         lastSixMonthDate: langkah4Form.isSkrining6Bulanan ? presensiTanggal : previous.lastSixMonthDate,
@@ -2026,9 +2042,15 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       setStepDataByWarga((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), warga, langkah4: screeningForm } }));
       setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step4: true } }));
       setBackendStep4CompletedWarga((prev) => ({ ...prev, [targetId]: true }));
-      showSuccess("Langkah 4 Tersimpan", `Skrining untuk "${warga?.nama || "Warga"}" berhasil disimpan ke database.`);
+
+      // Reset form langkah 4 dan pindahkan dropdown ke warga berikutnya (seperti di Langkah 2)
+      setLangkah4Form(getInitialLangkah4Form());
+      const nextWarga = availableWargaStep4.find((item) => String(item.id) !== targetId);
+      setSelectedWargaStep4(nextWarga ? String(nextWarga.id) : "");
+
+      showSuccess("Langkah 4 Tersimpan", `Skrining untuk "${warga?.nama || "Warga"}" berhasil disimpan.`);
     } catch (err) {
-      showWarning("Gagal Menyimpan Skrining", err?.message || "Skrining gagal disimpan ke backend.");
+      showWarning("Gagal Menyimpan Skrining", err?.message || "Skrining gagal disimpan.");
     }
   };
 
@@ -2048,13 +2070,21 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     const warga = getWargaForId(targetId);
     try {
       const kunjunganId = kunjunganIdByWarga[targetId] || (await ensureKunjunganId(warga, presensiTanggal));
+      const backendPersistedRujukan = activeStep5BackendExam?.is_perlu_rujukan === true || Boolean(activeStep5BackendExam?.rujukan);
+      const effectiveIsPerluRujukan = Boolean(
+        step5AutoReferral.perluRujuk ||
+        backendPersistedRujukan ||
+        String(formToSave.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu"
+      );
+      const effectiveAlasanRujukan = String(formToSave.alasanRujukan || "").trim() || (step5AutoReferral.reasons.length > 0 ? step5AutoReferral.reasons.join("; ") : undefined);
+
       const res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
         topik_penyuluhan: String(formToSave.topikPenyuluhan || "").trim(),
-        is_perlu_rujukan: String(formToSave.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu",
-        alasan_rujukan: String(formToSave.alasanRujukan || "").trim() || undefined,
+        is_perlu_rujukan: effectiveIsPerluRujukan,
+        alasan_rujukan: effectiveIsPerluRujukan ? effectiveAlasanRujukan : undefined,
       });
-      if (!res?.data?.id) throw new Error("Backend tidak mengembalikan data pemeriksaan setelah Step 5.");
+      if (!res?.data?.id) throw new Error("Gagal menyelesaikan pemeriksaan di sistem.");
 
       const savedRujukanStatus = res?.rujukan || res?.data?.is_perlu_rujukan === true ? "Rujuk ke Puskesmas / Pustu" : "Tidak Perlu Rujukan";
       const savedLangkah5 = {
@@ -2086,10 +2116,10 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       setSequentialForm((prev) => ({ ...prev, ...savedLangkah5 }));
       setCompletedSteps((prev) => ({ ...prev, [targetId]: { ...(prev[targetId] || {}), step5: true } }));
       setBackendStep5CompletedWarga((prev) => ({ ...prev, [targetId]: true }));
-      showSuccess("Langkah 5 Tersimpan", `Pemeriksaan untuk "${warga?.nama || "Warga"}" selesai dan tersimpan di database.`);
+      showSuccess("Langkah 5 Tersimpan", `Pemeriksaan untuk "${warga?.nama || "Warga"}" telah selesai dan berhasil disimpan.`);
       onRefreshData?.();
     } catch (err) {
-      showWarning("Gagal Menyelesaikan Pemeriksaan", err?.message || "Langkah 5 gagal disimpan ke backend.");
+      showWarning("Gagal Menyelesaikan Pemeriksaan", err?.message || "Langkah 5 gagal disimpan.");
     }
   };
 
@@ -2098,7 +2128,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
     if (e?.preventDefault) e.preventDefault();
     if (activeStep === 1) {
       if (!selectedWargaId) {
-        showWarning("Pilih Sasaran Warga", "Silakan pilih sasaran dari database terlebih dahulu.");
+        showWarning("Pilih Sasaran Warga", "Silakan pilih sasaran warga terlebih dahulu.");
         return;
       }
       const w = getWargaForId(selectedWargaId);
@@ -2254,6 +2284,19 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         return;
       }
     }
+
+    if (!backendPlottingByWarga[targetId]) {
+      const examId = pemeriksaanByWarga[targetId] || globalPemeriksaanData?.[targetId]?.id;
+      if (examId) {
+        try {
+          const plotRes = await pemeriksaanService.getStep3Plotting(examId);
+          if (plotRes?.data) {
+            setBackendPlottingByWarga((prev) => ({ ...prev, [targetId]: plotRes.data }));
+          }
+        } catch (_) {}
+      }
+    }
+
     setShowSequentialPreviewModal(true);
   };
 
@@ -2284,10 +2327,19 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   const activeBackendPlotting = useMemo(() => {
     const targetId = examinationMode === "sequential" ? selectedWargaId : selectedWargaStep3;
-    return targetId ? backendPlottingByWarga[String(targetId)] || null : null;
-  }, [examinationMode, selectedWargaId, selectedWargaStep3, backendPlottingByWarga]);
+    if (!targetId) return null;
+    return backendPlottingByWarga[String(targetId)] || stepDataByWarga[String(targetId)]?.langkah3 || null;
+  }, [examinationMode, selectedWargaId, selectedWargaStep3, backendPlottingByWarga, stepDataByWarga]);
 
-  const plottingResult = activeBackendPlotting?.hasil_plot || null;
+  const plottingResult = useMemo(() => {
+    const raw = activeBackendPlotting?.hasil_plot;
+    if (!raw || typeof raw !== "object") return null;
+    const inner = raw.hasil_plot && typeof raw.hasil_plot === "object" ? raw.hasil_plot : {};
+    return {
+      ...raw,
+      ...inner,
+    };
+  }, [activeBackendPlotting]);
 
   const activeStep5TargetId = examinationMode === "per-step" ? selectedWargaStep5 : selectedWargaId;
   const activeStep5BackendExam = useMemo(() => {
@@ -2403,117 +2455,137 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
 
   const content = (
     <div className="container-fluid p-0">
-      {/* Top Banner Header Card (Original Style with Icon & Title) */}
-      <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "20px" }}>
-        <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-          <div className="d-flex align-items-center gap-3">
-            <div className="bg-primary text-white rounded-4 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "56px", height: "56px" }}>
-              <Stethoscope size={28} />
-            </div>
-            <div>
-              <span className="badge bg-primary-subtle text-primary fw-bold px-3 py-1 rounded-pill mb-1 small">Form Pemeriksaan 5 Langkah</span>
-              <h2 className="fw-bold text-dark mb-1">{currentCategory.label}</h2>
-              <p className="text-secondary small mb-0">Alur pencatatan dan evaluasi kesehatan berkala per-langkah</p>
-            </div>
-          </div>
-
-          {/* Top Right Header Buttons: Segmented [Pilih Langkah] [Bertahap] & Kembali Button */}
-          <div className="d-flex align-items-center gap-2">
-            <div className="d-inline-flex align-items-center bg-light p-1 rounded-pill border shadow-xs" style={{ borderColor: "#cbd5e1" }}>
-              <button
-                type="button"
-                className={`btn btn-sm rounded-pill px-3 py-1.5 fw-semibold transition-all ${examinationMode === "per-step" ? "bg-white text-dark shadow-sm border" : "text-secondary border-0"}`}
-                style={{ fontSize: "0.825rem" }}
-                onClick={() => {
-                  const targetId = String(selectedWargaId || selectedWargaStep4 || "");
-                  setSelectedWargaStep2(targetId);
-                  setSelectedWargaStep3(targetId);
-                  setSelectedWargaStep4(targetId);
-                  setSelectedWargaStep5(targetId);
-                  setLangkah1Form((previous) => ({ ...previous, ...sequentialForm }));
-                  setLangkah2Form((previous) => ({ ...previous, ...sequentialForm }));
-                  setLangkah4Form((previous) => ({ ...previous, ...sequentialForm }));
-                  setLangkah5Form((previous) => ({ ...previous, ...sequentialForm }));
-                  setExaminationMode("per-step");
-                }}
-              >
-                Pilih Langkah
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm rounded-pill px-3 py-1.5 fw-semibold transition-all ${examinationMode === "sequential" ? "text-white shadow-sm border-0" : "text-secondary border-0"}`}
-                style={{
-                  backgroundColor: examinationMode === "sequential" ? "#2b2e4a" : "transparent",
-                  fontSize: "0.825rem",
-                }}
-                onClick={() => {
-                  const targetId = String(selectedWargaStep4 || selectedWargaStep2 || selectedWargaStep3 || selectedWargaStep5 || selectedWargaId || "");
-                  if (targetId) setSelectedWargaId(targetId);
-                  setSequentialForm((previous) => ({ ...previous, ...langkah1Form, ...langkah2Form, ...langkah4Form, ...langkah5Form }));
-                  setExaminationMode("sequential");
-                }}
-              >
-                Bertahap
-              </button>
+      {/* Top Banner Header Card */}
+      {!isModalMode ? (
+        <div className="card card-custom p-4 bg-white border-0 shadow-sm mb-4" style={{ borderRadius: "20px" }}>
+          <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+            <div className="d-flex align-items-center gap-3">
+              <div className="bg-primary text-white rounded-4 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "56px", height: "56px" }}>
+                <Stethoscope size={28} />
+              </div>
+              <div>
+                <span className="badge bg-primary-subtle text-primary fw-bold px-3 py-1 rounded-pill mb-1 small">Form Pemeriksaan 5 Langkah</span>
+                <h2 className="fw-bold text-dark mb-1">{currentCategory.label}</h2>
+                <p className="text-secondary small mb-0">Alur pencatatan dan evaluasi kesehatan berkala per-langkah</p>
+              </div>
             </div>
 
-            <button className="btn btn-outline-secondary rounded-3 py-2 px-3 d-flex align-items-center gap-2 shadow-sm" style={{ fontSize: "0.875rem" }} onClick={() => onNavigate("data-sasaran")}>
-              <ArrowLeft size={15} />
-              <span>Kembali ke Data Sasaran</span>
-            </button>
+            {/* Top Right Header Buttons: Segmented [Pilih Langkah] [Bertahap] & Kembali Button */}
+            <div className="d-flex align-items-center gap-2">
+              <div className="d-inline-flex align-items-center bg-light p-1 rounded-pill border shadow-xs" style={{ borderColor: "#cbd5e1" }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm rounded-pill px-3 py-1.5 fw-semibold transition-all ${examinationMode === "per-step" ? "bg-white text-dark shadow-sm border" : "text-secondary border-0"}`}
+                  style={{ fontSize: "0.825rem" }}
+                  onClick={() => {
+                    const targetId = String(selectedWargaId || selectedWargaStep4 || "");
+                    setSelectedWargaStep2(targetId);
+                    setSelectedWargaStep3(targetId);
+                    setSelectedWargaStep4(targetId);
+                    setSelectedWargaStep5(targetId);
+                    setLangkah1Form((previous) => ({ ...previous, ...sequentialForm }));
+                    setLangkah2Form((previous) => ({ ...previous, ...sequentialForm }));
+                    setLangkah4Form((previous) => ({ ...previous, ...sequentialForm }));
+                    setLangkah5Form((previous) => ({ ...previous, ...sequentialForm }));
+                    setExaminationMode("per-step");
+                  }}
+                >
+                  Pilih Langkah
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm rounded-pill px-3 py-1.5 fw-semibold transition-all ${examinationMode === "sequential" ? "text-white shadow-sm border-0" : "text-secondary border-0"}`}
+                  style={{
+                    backgroundColor: examinationMode === "sequential" ? "#2b2e4a" : "transparent",
+                    fontSize: "0.825rem",
+                  }}
+                  onClick={() => {
+                    const targetId = String(selectedWargaStep4 || selectedWargaStep2 || selectedWargaStep3 || selectedWargaStep5 || selectedWargaId || "");
+                    if (targetId) setSelectedWargaId(targetId);
+                    setSequentialForm((previous) => ({ ...previous, ...langkah1Form, ...langkah2Form, ...langkah4Form, ...langkah5Form }));
+                    setExaminationMode("sequential");
+                  }}
+                >
+                  Bertahap
+                </button>
+              </div>
+
+              <button
+                className="btn btn-outline-secondary rounded-3 py-2 px-3 d-flex align-items-center gap-2 shadow-sm"
+                style={{ fontSize: "0.875rem" }}
+                onClick={() => {
+                  if (returnTo === "rekap-pemeriksaan") {
+                    onNavigate?.("rekap-pemeriksaan");
+                  } else {
+                    onNavigate?.("data-sasaran");
+                  }
+                }}
+              >
+                <ArrowLeft size={15} />
+                <span>{returnTo === "rekap-pemeriksaan" ? "Kembali ke Rekap Pemeriksaan" : "Kembali ke Data Sasaran"}</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Main Examination Card Container */}
-      <div className="card card-custom bg-white border-0 shadow-sm overflow-hidden" style={{ borderRadius: "20px" }}>
+      <div className={`card card-custom bg-white border-0 shadow-sm overflow-hidden ${isModalMode ? "mb-0" : ""}`} style={{ borderRadius: isModalMode ? "14px" : "20px" }}>
         {/* ========================================================================= */}
         {/* MODE 2 (BERTAHAP): STEPPER LINGKARAN (1) -> (2) -> (3) -> (4) -> (5) */}
         {/* ========================================================================= */}
         {examinationMode === "sequential" ? (
-          <div className="d-flex align-items-center justify-content-center my-4 py-3">
-            {[1, 2, 3, 4, 5].map((stepNum, idx) => (
-              <React.Fragment key={stepNum}>
-                <div
-                  className={`rounded-circle d-flex align-items-center justify-content-center fw-bold transition-all shadow-sm ${
-                    activeStep === stepNum ? "bg-dark text-white" : activeStep > stepNum ? "bg-secondary text-white" : "bg-light text-secondary border"
-                  }`}
-                  style={{
-                    width: "58px",
-                    height: "58px",
-                    fontSize: "1.35rem",
-                    backgroundColor: activeStep === stepNum ? "#2b2e4a" : activeStep > stepNum ? "#475569" : "#e2e8f0",
-                    color: activeStep === stepNum || activeStep > stepNum ? "#ffffff" : "#64748b",
-                    cursor: "default",
-                    userSelect: "none",
-                  }}
-                  title={`Langkah ${stepNum}`}
-                >
-                  {stepNum}
-                </div>
-
-                {idx < 4 && (
-                  <div className="mx-2 mx-md-4 text-muted d-flex align-items-center">
-                    <span style={{ fontSize: "1.4rem", fontWeight: "bold", color: "#94a3b8" }}>&rarr;</span>
+          <div className={`d-flex align-items-center justify-content-center ${isModalMode ? "my-2.5 py-1" : "my-4 py-3"}`}>
+            {[1, 2, 3, 4, 5].map((stepNum, idx) => {
+              const circleSize = isModalMode ? "38px" : "58px";
+              const fontSize = isModalMode ? "0.95rem" : "1.35rem";
+              const arrowSize = isModalMode ? "1.05rem" : "1.4rem";
+              return (
+                <React.Fragment key={stepNum}>
+                  <div
+                    className={`rounded-circle d-flex align-items-center justify-content-center fw-bold transition-all shadow-sm ${
+                      activeStep === stepNum ? "bg-dark text-white" : activeStep > stepNum ? "bg-secondary text-white" : "bg-light text-secondary border"
+                    }`}
+                    style={{
+                      width: circleSize,
+                      height: circleSize,
+                      fontSize: fontSize,
+                      backgroundColor: activeStep === stepNum ? "#2b2e4a" : activeStep > stepNum ? "#475569" : "#e2e8f0",
+                      color: activeStep === stepNum || activeStep > stepNum ? "#ffffff" : "#64748b",
+                      cursor: isModalMode ? "pointer" : "default",
+                      userSelect: "none",
+                    }}
+                    title={`Langkah ${stepNum}`}
+                    onClick={() => {
+                      if (isModalMode) setActiveStep(stepNum);
+                    }}
+                  >
+                    {stepNum}
                   </div>
-                )}
-              </React.Fragment>
-            ))}
+
+                  {idx < 4 && (
+                    <div className={`${isModalMode ? "mx-2" : "mx-2 mx-md-4"} text-muted d-flex align-items-center`}>
+                      <span style={{ fontSize: arrowSize, fontWeight: "bold", color: "#94a3b8" }}>&rarr;</span>
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
         ) : (
           /* ========================================================================= */
           /* MODE 1 (PILIH LANGKAH): TABS ASLI LANGKAH 1 - 5 */
           /* ========================================================================= */
-          <div className="d-flex border-bottom overflow-x-auto bg-light p-3 gap-3">
+          <div className={`d-flex border-bottom overflow-x-auto bg-light ${isModalMode ? "p-2 gap-2" : "p-3 gap-3"}`}>
             {[1, 2, 3, 4, 5].map((stepNum) => {
               const isActive = activeStep === stepNum;
               return (
                 <button
                   key={stepNum}
                   type="button"
-                  className={`py-3 px-4.5 rounded-3 fw-bold text-nowrap transition-all border ${isActive ? "bg-white text-primary border-2 border-primary shadow-sm" : "bg-white text-secondary border-light-subtle shadow-xs"}`}
+                  className={`${isModalMode ? "py-1.5 px-3" : "py-3 px-4.5"} rounded-3 fw-bold text-nowrap transition-all border ${isActive ? "bg-white text-primary border-2 border-primary shadow-sm" : "bg-white text-secondary border-light-subtle shadow-xs"}`}
                   style={{
-                    fontSize: "1.1rem",
+                    fontSize: isModalMode ? "0.85rem" : "1.1rem",
                     cursor: "pointer",
                     transition: "all 0.2s ease",
                     color: isActive ? "#F25B8E" : "#334155",
@@ -2531,13 +2603,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
         )}
 
         {/* Gray Container Form Area */}
-        <div className="p-4 p-md-5" style={{ backgroundColor: "#cbd5e1" }}>
-
+        <div className={isModalMode ? "p-3 p-md-3.5" : "p-4 p-md-5"} style={{ backgroundColor: "#cbd5e1" }}>
 
           {/* Target Citizen Identity Indicator (For Sequential Mode) */}
           {examinationMode === "sequential" && activeStep > 1 && activeTargetWarga && (
-            <div className="d-flex justify-content-end mb-3">
-              <div className="bg-white px-3 py-2 rounded-3 border-0 shadow-sm d-flex align-items-center gap-2">
+            <div className={`d-flex justify-content-end ${isModalMode ? "mb-2.5" : "mb-3"}`}>
+              <div className="bg-white px-3 py-1.5 rounded-3 border-0 shadow-sm d-flex align-items-center gap-2">
                 <span className="fw-bold text-dark small mb-0">Sasaran Diperiksa:</span>
                 <span className="fw-semibold text-primary small d-flex align-items-center gap-1">
                   {activeTargetWarga.nama}
@@ -2568,15 +2639,15 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           {presensiSesiAktif.lokasi ? ` · ${presensiSesiAktif.lokasi}` : ""}
                         </span>
                         <span className={`badge ${presensiSesiAktif.status === "open" ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary"}`}>
-                          {presensiSesiAktif.status === "open" ? "Dibuka" : "Ditutup"}
+                          {presensiSesiAktif.status === "open" ? "Dibuka (Aktif H s.d H+6)" : "Ditutup"}
                         </span>
                       </div>
                     ) : (
-                      <div className="small fw-semibold text-danger">Belum ada sesi Posyandu pada hari ini</div>
+                      <div className="small fw-semibold text-danger">Belum ada sesi Posyandu yang dibuka (H s.d H+6)</div>
                     )}
                   </div>
                 </div>
-                <div className="small text-muted mt-2">Sesi berstatus Dibuka dapat diproses pada hari pelaksanaan. Sesi Ditutup tidak dapat diubah.</div>
+                <div className="small text-muted mt-2">Sesi berstatus Dibuka dapat diproses dan diedit pada hari pelaksanaan hingga 7 hari (H s.d H+6). Sesi Ditutup tidak dapat diubah oleh kader.</div>
               </div>
 
               {/* =================================================================== */}
@@ -2643,6 +2714,16 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                 <div className="fw-semibold text-dark mb-1">Sasaran Tidak Ditemukan</div>
                                 <p className="text-muted small mb-0">
                                   Tidak ada sasaran <strong>{currentCategory.label}</strong> yang cocok dengan kata kunci "<strong>{searchWargaQuery}</strong>".
+                                </p>
+                              </div>
+                            ) : activeWargaList.length === 0 ? (
+                              <div className="d-flex flex-column align-items-center justify-content-center py-3">
+                                <div className="p-2.5 bg-light rounded-circle mb-2 text-muted">
+                                  <Users size={20} />
+                                </div>
+                                <div className="fw-semibold text-dark small mb-0.5">Belum Ada Data Sasaran {currentCategory.label}</div>
+                                <p className="text-muted small mb-0" style={{ maxWidth: "420px", fontSize: "0.8rem" }}>
+                                  Data sasaran kategori <strong>{currentCategory.label}</strong> belum terdaftar. Silakan tambahkan sasaran melalui menu <strong>Data Sasaran</strong>.
                                 </p>
                               </div>
                             ) : (
@@ -2722,13 +2803,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                     className="form-select form-select-sm bg-white border text-dark py-1"
                                     style={{ fontSize: "0.82rem" }}
                                     value={waktuKunjunganPresensi[wId] || ""}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setWaktuKunjunganPresensi((prev) => ({ ...prev, [wId]: val }));
-                                      if (examinationMode === "sequential" && selectedWargaId === wId) {
-                                        setSequentialForm((prev) => ({ ...prev, usiaKehamilan: val }));
-                                      }
-                                    }}
+                                    onChange={(e) => handleUpdateWaktuKunjungan(wId, e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <option value="">-- Pilih --</option>
@@ -2748,13 +2823,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                     className="form-select form-select-sm bg-white border text-dark py-1 mb-1"
                                     style={{ fontSize: "0.82rem" }}
                                     value={waktuKunjunganPresensi[wId] || ""}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setWaktuKunjunganPresensi((prev) => ({ ...prev, [wId]: val }));
-                                      if (examinationMode === "sequential" && selectedWargaId === wId) {
-                                        setSequentialForm((prev) => ({ ...prev, waktuKunjunganNifas: val }));
-                                      }
-                                    }}
+                                    onChange={(e) => handleUpdateWaktuKunjungan(wId, e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <option value="">-- Pilih --</option>
@@ -2960,7 +3029,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       ) : (
                         availableWargaStep2.map((w) => (
                           <option key={w.id} value={String(w.id)}>
-                            {w.nama} - NIK {String(w.nik).slice(-4)}
+                            {w.nama} - {w.nik || ""}
                           </option>
                         ))
                       )}
@@ -3183,7 +3252,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       ) : (
                         availableWargaStep3.map((w) => (
                           <option key={w.id} value={String(w.id)}>
-                            {w.nama} - NIK {String(w.nik || "").slice(-4)}
+                            {w.nama} - {w.nik || ""}
                           </option>
                         ))
                       )}
@@ -3248,6 +3317,8 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         const saved = stepDataByWarga[wId]?.langkah4;
                         if (saved) {
                           setLangkah4Form({ ...saved });
+                        } else {
+                          setLangkah4Form(getInitialLangkah4Form());
                         }
                       }}
                     >
@@ -3256,7 +3327,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                       ) : (
                         availableWargaStep4.map((w) => (
                           <option key={w.id} value={String(w.id)}>
-                            {w.nama} - NIK {String(w.nik).slice(-4)}
+                            {w.nama} - {w.nik || ""}
                           </option>
                         ))
                       )}
@@ -3749,7 +3820,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           {/* Tabel 4 Pertanyaan Skrining Kesehatan Jiwa */}
                           <div className="table-responsive border rounded-3 mb-3">
                             <table className="table table-bordered align-middle mb-0 text-center" style={{ borderColor: "#cbd5e1" }}>
-                              <thead style={{ backgroundColor: "#dbeafe", color: "#1e3a8a" }}>
+                              <thead style={{ backgroundColor: "#e8effa", color: "#0f2b5c" }}>
                                 <tr style={{ fontSize: "0.82rem" }}>
                                   <th style={{ width: "45px" }} className="py-2.5 px-2 fw-bold text-center">
                                     No
@@ -3821,7 +3892,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                                           />
                                         </td>
                                       ))}
-                                      <td className="text-center fw-bold py-2" style={{ backgroundColor: "#f8fafc", color: numVal !== null ? "#1e3a8a" : "#94a3b8" }}>
+                                      <td className="text-center fw-bold py-2" style={{ backgroundColor: "#f8fafc", color: numVal !== null ? "#0f2b5c" : "#94a3b8" }}>
                                         {numVal !== null ? numVal : "—"}
                                       </td>
                                     </tr>
@@ -5342,7 +5413,7 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           ) : (
                             availableWargaStep5.map((w) => (
                               <option key={w.id} value={String(w.id)}>
-                                {w.nama} - NIK {String(w.nik).slice(-4)}
+                                {w.nama} - {w.nik || ""}
                               </option>
                             ))
                           )}
@@ -5371,14 +5442,12 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         rows="3"
                         className="form-control form-control-custom bg-white border-0 py-3"
                         placeholder="Tulis topik edukasi yang diberikan (Contoh: Gizi Seimbang Balita &amp; Pencegahan Stunting)"
-                        value={examinationMode === "per-step" ? langkah5Form.topikPenyuluhan : sequentialForm.topikPenyuluhan}
+                        value={examinationMode === "per-step" ? (langkah5Form.topikPenyuluhan || sequentialForm.topikPenyuluhan) : (sequentialForm.topikPenyuluhan || langkah5Form.topikPenyuluhan)}
                         required
                         onChange={(e) => {
-                          if (examinationMode === "per-step") {
-                            setLangkah5Form((prev) => ({ ...prev, topikPenyuluhan: e.target.value  }));
-                          } else {
-                            setSequentialForm((prev) => ({ ...prev, topikPenyuluhan: e.target.value  }));
-                          }
+                          const val = e.target.value;
+                          setLangkah5Form((prev) => ({ ...prev, topikPenyuluhan: val }));
+                          setSequentialForm((prev) => ({ ...prev, topikPenyuluhan: val }));
                         }}
                       />
                     </div>
@@ -5391,11 +5460,9 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                         disabled={step5AutoReferral.perluRujuk || backendPersistedRujukan}
                         onChange={(e) => {
                           if (!step5AutoReferral.perluRujuk && !backendPersistedRujukan) {
-                            if (examinationMode === "per-step") {
-                              setLangkah5Form((prev) => ({ ...prev, statusRujukan: e.target.value  }));
-                            } else {
-                              setSequentialForm((prev) => ({ ...prev, statusRujukan: e.target.value  }));
-                            }
+                            const val = e.target.value;
+                            setLangkah5Form((prev) => ({ ...prev, statusRujukan: val }));
+                            setSequentialForm((prev) => ({ ...prev, statusRujukan: val }));
                           }
                         }}
                       >
@@ -5430,13 +5497,11 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
                           maxLength={1000}
                           className="form-control form-control-custom bg-white border-0 py-3"
                           placeholder="Tuliskan indikasi rujukan manual jika tidak muncul dari skrining otomatis"
-                          value={examinationMode === "per-step" ? langkah5Form.alasanRujukan || "" : sequentialForm.alasanRujukan || ""}
+                          value={examinationMode === "per-step" ? (langkah5Form.alasanRujukan || sequentialForm.alasanRujukan || "") : (sequentialForm.alasanRujukan || langkah5Form.alasanRujukan || "")}
                           onChange={(event) => {
-                            if (examinationMode === "per-step") {
-                              setLangkah5Form((previous) => ({ ...previous, alasanRujukan: event.target.value }));
-                            } else {
-                              setSequentialForm((previous) => ({ ...previous, alasanRujukan: event.target.value }));
-                            }
+                            const val = event.target.value;
+                            setLangkah5Form((previous) => ({ ...previous, alasanRujukan: val }));
+                            setSequentialForm((previous) => ({ ...previous, alasanRujukan: val }));
                           }}
                           required={!step5AutoReferral.perluRujuk}
                         />
@@ -5475,625 +5540,172 @@ export default function PemeriksaanPage({ activeSubmenu = "bumil", onNavigate, g
       </div>
 
       {/* MODAL PREVIEW MODE BERTAHAP (SEBELUM DISIMPAN) */}
-      {showSequentialPreviewModal && (
-        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.6)", zIndex: 1060 }} tabIndex="-1">
-          <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-            <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
-              <div className="modal-header bg-dark text-white p-3 px-4">
-                <div>
-                  <span className="badge bg-warning text-dark fw-bold mb-1">PREVIEW HASIL PEMERIKSAAN BERTAHAP (LANGKAH 1 - 5)</span>
-                  <h4 className="modal-title fw-bold text-white mb-0">Konfirmasi Simpan Data</h4>
-                  <div className="text-white-50 small">Kategori: {currentCategory.label}</div>
-                </div>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setShowSequentialPreviewModal(false)}></button>
-              </div>
+      {showSequentialPreviewModal &&
+        (() => {
+          const targetId = String(selectedWargaId || selectedWargaStep5 || "");
+          const previewWarga = activeWargaList.find((w) => String(w.id) === targetId) || currentSelectedWarga || {};
 
-              <div className="modal-body p-4 bg-light">
-                <div className="alert bg-white border border-warning-subtle text-dark rounded-3 p-3 mb-4 shadow-xs">
-                  <strong>ⓘ Mohon periksa kembali ringkasan data dari Langkah 1 s/d Langkah 5 sebelum menekan Konfirmasi Simpan.</strong>
-                </div>
+          const currentL2 = {
+            bb_kg: sequentialForm.bb ? Number(sequentialForm.bb) : langkah2Form.bb ? Number(langkah2Form.bb) : undefined,
+            tb_cm: sequentialForm.tb ? Number(sequentialForm.tb) : langkah2Form.tb ? Number(langkah2Form.tb) : undefined,
+            lila_cm: sequentialForm.lila ? Number(sequentialForm.lila) : langkah2Form.lila ? Number(langkah2Form.lila) : undefined,
+            lingkar_kepala_cm: sequentialForm.lk ? Number(sequentialForm.lk) : langkah2Form.lk ? Number(langkah2Form.lk) : undefined,
+            lingkar_perut_cm: sequentialForm.lp ? Number(sequentialForm.lp) : langkah2Form.lp ? Number(langkah2Form.lp) : undefined,
+            td_sistole: sequentialForm.tensiSistol ? Number(sequentialForm.tensiSistol) : langkah2Form.tensiSistol ? Number(langkah2Form.tensiSistol) : undefined,
+            td_diastole: sequentialForm.tensiDiastol ? Number(sequentialForm.tensiDiastol) : langkah2Form.tensiDiastol ? Number(langkah2Form.tensiDiastol) : undefined,
+            kadar_gula: sequentialForm.gulaDarah ? Number(sequentialForm.gulaDarah) : langkah2Form.gulaDarah ? Number(langkah2Form.gulaDarah) : undefined,
+          };
 
-                {(() => {
-                  const previewWarga = activeWargaList.find((w) => String(w.id) === String(selectedWargaId)) || {};
+          const storedL4 = stepDataByWarga[targetId]?.langkah4 || {};
+          const activeL4 = {
+            ...storedL4,
+            ...sequentialForm,
+            ...langkah4Form,
+          };
 
-                  // PUMA evaluation
-                  const pumaEvaluation = (() => {
-                    const jk = sequentialForm.pumaJk;
-                    const usia = sequentialForm.pumaUsia;
-                    const rokok = sequentialForm.pumaMerokok;
-                    const np = sequentialForm.pumaNapasPendek;
-                    const dh = sequentialForm.pumaDahak;
-                    const bt = sequentialForm.pumaBatukFlu;
+          const screeningPayload = mapFlatScreeningToBackend(getBackendCategory(activeSubmenu), activeL4);
 
-                    const isAny = [jk, usia, rokok, np, dh, bt].some((v) => v !== "" && v !== undefined && v !== null);
-                    if (!isAny) {
-                      return { score: "-", text: "Belum Diisi", isRisiko: false };
-                    }
-                    const score =
-                      (jk !== "" && jk !== undefined ? Number(jk) : 0) +
-                      (usia !== "" && usia !== undefined ? Number(usia) : 0) +
-                      (rokok !== "" && rokok !== undefined ? Number(rokok) : 0) +
-                      (np === "Ya" || np === 1 ? 1 : 0) +
-                      (dh === "Ya" || dh === 1 ? 1 : 0) +
-                      (bt === "Ya" || bt === 1 ? 1 : 0);
-                    const isRisiko = score > 6;
-                    const statusText = score === 6 ? "Skor Ambigu" : isRisiko ? "Risiko Tinggi PPOK" : "Risiko Rendah PPOK";
-                    return {
-                      score,
-                      text: `${score} (${statusText})`,
-                      isRisiko,
-                    };
-                  })();
+          const plotData = backendPlottingByWarga[targetId] || stepDataByWarga[targetId]?.langkah3 || activeBackendPlotting || null;
+          const rawPlot = plotData?.hasil_plot || plotData;
 
-                  const renderColorCoded = (value) => {
-                    if (!value) return <span className="text-muted">-</span>;
-                    const valLower = String(value).toLowerCase();
-                    if (valLower.includes("normal") || valLower.includes("baik") || valLower.includes("aman") || valLower.includes("tidak_terindikasi") || valLower === "n") {
-                      return <span className="text-success fw-bold">{value}</span>;
-                    } else if (valLower.includes("waspada") || valLower.includes("prediab") || valLower.includes("risiko_rendah") || valLower.includes("kuning")) {
-                      return <span className="text-warning fw-bold">{value}</span>;
-                    } else if (valLower.includes("tinggi") || valLower.includes("bahaya") || valLower.includes("diabetisi") || valLower.includes("risiko") || valLower.includes("merah") || valLower.includes("rujukan")) {
-                      return <span className="text-danger fw-bold">{value}</span>;
-                    }
-                    return <span className="fw-semibold text-dark">{value}</span>;
-                  };
+          const backendPersistedRujukan = activeStep5BackendExam?.is_perlu_rujukan === true || Boolean(activeStep5BackendExam?.rujukan);
+          const isRujuk = Boolean(
+            step5AutoReferral.perluRujuk ||
+            backendPersistedRujukan ||
+            sequentialForm.statusRujukan === "Rujuk ke Puskesmas / Pustu" ||
+            langkah5Form.statusRujukan === "Rujuk ke Puskesmas / Pustu"
+          );
+          const statusRujukanVal = isRujuk ? "Rujuk ke Puskesmas / Pustu" : "Tidak Perlu Rujukan";
 
-                  // Kolesterol evaluation
-                  const kolesterolEval = (() => {
-                    if (!sequentialForm.kolesterol) return "-";
-                    const kNum = parseInt(sequentialForm.kolesterol);
-                    if (isNaN(kNum)) return sequentialForm.kolesterol;
-                    if (kNum >= 200) return <span className="text-danger fw-bold">{kNum} mg/dL (Tinggi ≥ 200 mg/dL)</span>;
-                    return <span className="text-success fw-bold">{kNum} mg/dL (Normal &lt; 200 mg/dL)</span>;
-                  })();
+          const manualAlasan = sequentialForm.alasanRujukan || langkah5Form.alasanRujukan || "";
+          const autoAlasan = step5AutoReferral.reasons.length > 0 ? step5AutoReferral.reasons.join("; ") : "";
+          const finalAlasan = [autoAlasan, manualAlasan].filter(Boolean).join(" - ") || (isRujuk ? "Indikasi medis hasil pemeriksaan & skrining" : "");
 
-                  // Gula Darah evaluation
-                  const gulaDarahEval = (() => {
-                    if (!sequentialForm.gulaDarah) return "-";
-                    const gNum = parseInt(sequentialForm.gulaDarah);
-                    if (isNaN(gNum)) return sequentialForm.gulaDarah;
-                    if (gNum >= 200) return <span className="text-danger fw-bold">{gNum} mg/dL (Diabetisi ≥ 200 mg/dL)</span>;
-                    if (gNum >= 140) return <span className="text-warning fw-bold">{gNum} mg/dL (Prediabetisi 140–199 mg/dL)</span>;
-                    return <span className="text-success fw-bold">{gNum} mg/dL (Normal &lt; 140 mg/dL)</span>;
-                  })();
+          const previewExamData = {
+            kategori_sasaran: getBackendCategory(activeSubmenu),
+            langkah1: {
+              nik: previewWarga.nik || sequentialForm.nik,
+              nama_lengkap: previewWarga.nama || sequentialForm.nama,
+              tglLahir: previewWarga.tglLahir || sequentialForm.tglLahir,
+              jenis_kelamin: ["bumil", "nifas"].includes(activeSubmenu) ? "Perempuan" : previewWarga.gender || sequentialForm.gender,
+              alamat: previewWarga.alamat,
+              usiaKehamilan: sequentialForm.usiaKehamilan,
+              waktuKunjunganNifas: sequentialForm.waktuKunjunganNifas,
+              usiaBayi: sequentialForm.usiaBayi,
+              usiaBalita: sequentialForm.usiaBalita,
+              usiaApras: sequentialForm.usiaApras,
+              statusPernikahan: sequentialForm.statusPernikahan,
+            },
+            pengukuran_step_2: currentL2,
+            langkah2: currentL2,
+            hasil_plot: rawPlot,
+            detail_skrining: screeningPayload,
+            langkah4: screeningPayload,
+            langkah5: {
+              topikPenyuluhan: sequentialForm.topikPenyuluhan || langkah5Form.topikPenyuluhan || "-",
+              statusRujukan: statusRujukanVal,
+              is_perlu_rujukan: isRujuk,
+              alasanRujukan: finalAlasan,
+            },
+            rujukan: isRujuk
+              ? {
+                  status_rujukan: statusRujukanVal,
+                  alasan_rujukan: finalAlasan,
+                }
+              : null,
+            is_perlu_rujukan: isRujuk,
+            topik_penyuluhan: sequentialForm.topikPenyuluhan || langkah5Form.topikPenyuluhan || "-",
+          };
 
-                  // TBC Gejala for Dewasa & Lansia
-                  const tbcAdultGejala = (() => {
-                    const batukVal = sequentialForm.batukBesarTbc || sequentialForm.batukTbc;
-                    const flags = [
-                      batukVal === "Ya" ? "Batuk Berdahak ≥ 2 Minggu" : null,
-                      sequentialForm.nafsuMakanTbc === "Ya" ? "Nafsu Makan Turun" : null,
-                      sequentialForm.bbMenurunTbc === "Ya" ? "BB Menurun" : null,
-                      sequentialForm.lemahLesuTbc === "Ya" ? "Lemah / Lesu" : null,
-                      sequentialForm.berkeringatMalamTbc === "Ya" ? "Keringat Malam" : null,
-                      sequentialForm.batukDarahTbc === "Ya" ? "Batuk Berdarah" : null,
-                      sequentialForm.sesakNafasTbc === "Ya" ? "Sesak Nafas" : null,
-                    ].filter(Boolean);
-
-                    const isFilled = [batukVal, sequentialForm.nafsuMakanTbc, sequentialForm.bbMenurunTbc, sequentialForm.lemahLesuTbc, sequentialForm.berkeringatMalamTbc, sequentialForm.batukDarahTbc, sequentialForm.sesakNafasTbc].some(
-                      (v) => v !== "" && v !== undefined,
-                    );
-
-                    if (flags.length > 0) return { text: `Berisiko TBC (${flags.join(", ")})`, isRisiko: true };
-                    if (isFilled) return { text: "Tidak Ada Gejala TBC (Normal)", isRisiko: false };
-                    return { text: "Tidak Ada Gejala TBC (Normal)", isRisiko: false };
-                  })();
-
-                  // TBC Gejala for Children & Maternal
-                  const tbcChildGejala = (() => {
-                    const batukVal = sequentialForm.batukTbc || sequentialForm.batukBesarTbc;
-                    const flags = [
-                      batukVal === "Ya" ? "Batuk ≥ 2 mgg" : null,
-                      sequentialForm.demamTbc === "Ya" ? "Demam > 2 mgg" : null,
-                      sequentialForm.bbTurunTbc === "Ya" ? "BB Turun / Tidak Naik" : null,
-                      sequentialForm.kontakTbc === "Ya" ? "Kontak Pasien TBC" : null,
-                      sequentialForm.lesuTbc === "Ya" ? "Lesu / Lemas" : null,
-                    ].filter(Boolean);
-
-                    const isFilled = [batukVal, sequentialForm.demamTbc, sequentialForm.bbTurunTbc, sequentialForm.kontakTbc, sequentialForm.lesuTbc].some((v) => v !== "" && v !== undefined);
-
-                    if (flags.length > 0) return { text: `Berisiko TBC (${flags.join(", ")})`, isRisiko: true };
-                    if (isFilled) return { text: "Tidak Ada Gejala TBC (Normal)", isRisiko: false };
-                    return { text: "Tidak Ada Gejala TBC (Normal)", isRisiko: false };
-                  })();
-
-                  return (
-                    <>
-                      {/* LANGKAH 1 */}
-                      <style>{`
-                        .preview-grid > div {
-                          background-color: #f8f9fa !important;
-                          border-radius: 0.5rem;
-                          padding: 0.5rem 0.75rem !important;
-                          border: 2px solid white;
-                        }
-                        .preview-grid strong {
-                          display: block;
-                          font-size: 0.8rem;
-                          color: #6c757d;
-                          margin-bottom: 0.2rem;
-                          font-weight: 500;
-                        }
-                        .preview-grid > div > span:not(.badge):not(.text-muted) {
-                          font-weight: 600;
-                          color: #212529;
-                        }
-                      `}</style>
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-dark mb-0">Langkah 1: Identitas Sasaran</h6>
-                          <span className="badge bg-light text-secondary border fw-semibold">Pendaftaran</span>
-                        </div>
-                        <div className="row g-2 small preview-grid">
-                          <div className="col-6">
-                            <strong>NIK:</strong> {sequentialForm.nik || previewWarga.nik || ""}
-                          </div>
-                          <div className="col-6">
-                            <strong>Nama Lengkap:</strong> {sequentialForm.nama || previewWarga.nama || ""}
-                          </div>
-                          <div className="col-6">
-                            <strong>Tanggal Lahir:</strong> {formatDateId(sequentialForm.tglLahir || previewWarga.tglLahir)}
-                          </div>
-                          <div className="col-6">
-                            <strong>Jenis Kelamin:</strong> {["bumil", "nifas"].includes(activeSubmenu) ? "Perempuan" : sequentialForm.gender || previewWarga.gender || ""}
-                          </div>
-
-                          {["usekrem-15-18", "dewasa", "lansia", "bumil", "nifas"].includes(activeSubmenu) && (
-                            <div className="col-12">
-                              <strong>Status Pernikahan:</strong> {sequentialForm.statusPernikahan || previewWarga.statusPernikahan || ""}
-                            </div>
-                          )}
-
-                          {activeSubmenu === "bumil" && (
-                            <div className="col-12 mt-2 pt-1 border-top">
-                              <strong>Usia Kehamilan:</strong> <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">{sequentialForm.usiaKehamilan || ""}</span>
-                            </div>
-                          )}
-                          {activeSubmenu === "nifas" && (
-                            <div className="col-12 mt-2 pt-1 border-top">
-                              <strong>Waktu Kunjungan:</strong> <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">{sequentialForm.waktuKunjunganNifas || ""}</span>
-                            </div>
-                          )}
-                          {["bayi-0-11", "balita-12-59", "apras"].includes(activeSubmenu) && (
-                            <div className="col-12 mt-2 pt-1 border-top">
-                              <strong>{activeSubmenu === "bayi-0-11" ? "Umur Bayi:" : activeSubmenu === "balita-12-59" ? "Umur Balita:" : "Umur Apras:"}</strong>{" "}
-                              <span className="badge bg-light text-dark border fw-medium px-2 py-1 ms-1">
-                                {(activeSubmenu === "bayi-0-11" ? sequentialForm.usiaBayi : activeSubmenu === "balita-12-59" ? sequentialForm.usiaBalita : sequentialForm.usiaApras) || ""}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* LANGKAH 2 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-dark mb-0">Langkah 2: Skrining Penimbangan &amp; Pengukuran</h6>
-                          <span className="badge bg-light text-secondary border fw-semibold">Pengukuran Fisik</span>
-                        </div>
-                        <div className="row g-2 small preview-grid">
-                          <div className="col-6">
-                            <strong>Berat Badan (BB):</strong> {sequentialForm.bb ? `${sequentialForm.bb} kg` : "-"}
-                          </div>
-                          {activeSubmenu !== "nifas" && activeSubmenu !== "bumil" && (
-                            <div className="col-6">
-                              <strong>{["bayi-0-11", "balita-12-59"].includes(activeSubmenu) ? "Panjang / Tinggi Badan (PB/TB):" : "Tinggi Badan (TB):"}</strong> {sequentialForm.tb ? `${sequentialForm.tb} cm` : "-"}
-                            </div>
-                          )}
-                          {["bumil", "bayi-0-11", "balita-12-59", "apras", "dewasa", "lansia"].includes(activeSubmenu) && (
-                            <div className="col-6">
-                              <strong>Lingkar Lengan (LiLA):</strong> {sequentialForm.lila ? `${sequentialForm.lila} cm` : "-"}
-                            </div>
-                          )}
-                          {["usekrem-15-18", "dewasa", "lansia"].includes(activeSubmenu) && (
-                            <div className="col-6">
-                              <strong>Lingkar Perut (LP):</strong> {sequentialForm.lp ? `${sequentialForm.lp} cm` : "-"}
-                            </div>
-                          )}
-                          {["bayi-0-11", "balita-12-59"].includes(activeSubmenu) && (
-                            <div className="col-6">
-                              <strong>Lingkar Kepala (LK):</strong> {sequentialForm.lk ? `${sequentialForm.lk} cm` : "-"}
-                            </div>
-                          )}
-                          {["bumil", "nifas", "usekrem-15-18", "dewasa", "lansia"].includes(activeSubmenu) && (
-                            <div className="col-6">
-                              <strong>Tekanan Darah:</strong> {sequentialForm.tensiSistol && sequentialForm.tensiDiastol ? `${sequentialForm.tensiSistol}/${sequentialForm.tensiDiastol} mmHg` : "-"}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* LANGKAH 3 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-dark mb-0">Langkah 3: Plotting Evaluasi Otomatis</h6>
-                          <span className="badge bg-light text-secondary border fw-semibold">Hasil Plotting Sistem</span>
-                        </div>
-                        <div className="row g-2 small preview-grid">
-                          {["dewasa", "lansia"].includes(activeSubmenu) && (
-                            <>
-                              <div className="col-6">
-                                <strong>Plotting IMT:</strong> {renderColorCoded(plottingResult?.imt?.kategori)} <span className="text-muted">({plottingResult?.imt?.imt ?? "-"} kg/m²)</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Plotting LiLA:</strong> {renderColorCoded(plottingResult?.lila?.kategori)}
-                              </div>
-                              <div className="col-6">
-                                <strong>Tekanan Darah:</strong> {renderColorCoded(plottingResult?.tekanan_darah?.kategori)}
-                              </div>
-                              <div className="col-6">
-                                <strong>Lingkar Perut:</strong> {renderColorCoded(plottingResult?.lingkar_perut?.kategori)}
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "usekrem-15-18" && (
-                            <>
-                              <div className="col-6">
-                                <strong>Plotting IMT:</strong> {renderColorCoded(plottingResult?.imt?.kategori || plottingResult?.imtu?.kategori)} <span className="text-muted">({plottingResult?.imt?.imt || plottingResult?.imtu?.nilai_riil || "-"} kg/m²)</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Tekanan Darah:</strong> {renderColorCoded(plottingResult?.tekanan_darah?.kategori)}
-                              </div>
-                              <div className="col-6">
-                                <strong>Lingkar Perut:</strong> {renderColorCoded(plottingResult?.lingkar_perut?.kategori)}
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "usekrem-6-14" && (
-                            <div className="col-12">
-                              <strong>Plotting IMT/U:</strong> {renderColorCoded(plottingResult?.imtu?.kategori)} <span className="text-muted">({plottingResult?.imtu?.nilai_riil ?? "-"} kg/m²)</span>
-                            </div>
-                          )}
-
-                          {activeSubmenu === "apras" && (
-                            <>
-                              <div className="col-6">
-                                <strong>Plotting IMT/U:</strong> {renderColorCoded(plottingResult?.imtu?.kategori)} <span className="text-muted">({plottingResult?.imtu?.nilai_riil ?? "-"} kg/m²)</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Plotting LiLA:</strong> {renderColorCoded(plottingResult?.lila?.kategori)}
-                              </div>
-                            </>
-                          )}
-
-                          {["bayi-0-11", "balita-12-59"].includes(activeSubmenu) && (
-                            <>
-                              <div className="col-6">
-                                <strong>BB / Usia (BB/U):</strong> {renderColorCoded(plottingResult?.bbu?.kategori)}
-                              </div>
-                              <div className="col-6">
-                                <strong>PB/TB / Usia:</strong> {renderColorCoded(plottingResult?.tbu?.kategori)}
-                              </div>
-                              <div className="col-6">
-                                <strong>BB / PB (TB):</strong> {renderColorCoded(plottingResult?.bb_panjang_tinggi?.kategori)}
-                              </div>
-                              <div className="col-6">
-                                <strong>Status LiLA:</strong> {renderColorCoded(plottingResult?.lila?.kategori)}
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "bumil" && (
-                            <>
-                              {plottingResult?.imt && (
-                                <div className="col-6">
-                                  <strong>Status IMT:</strong> {renderColorCoded(plottingResult.imt.kategori)} <span className="text-muted">({plottingResult.imt.imt ?? "-"} kg/m²)</span>
-                                </div>
-                              )}
-                              {plottingResult?.lila && (
-                                <div className="col-6">
-                                  <strong>Status LiLA:</strong> {renderColorCoded(plottingResult.lila.kategori)}
-                                </div>
-                              )}
-                              {plottingResult?.tekanan_darah && (
-                                <div className="col-12">
-                                  <strong>Tekanan Darah:</strong> {renderColorCoded(plottingResult.tekanan_darah.kategori)}
-                                </div>
-                              )}
-                            </>
-                          )}
-
-
-                          {activeSubmenu === "nifas" && (
-                            <>
-                              {plottingResult?.imt && (
-                                <div className="col-6">
-                                  <strong>Status IMT:</strong> {renderColorCoded(plottingResult.imt.kategori)} <span className="text-muted">({plottingResult.imt.imt ?? "-"} kg/m²)</span>
-                                </div>
-                              )}
-                              {plottingResult?.tekanan_darah && (
-                                <div className="col-6">
-                                  <strong>Tekanan Darah:</strong> {renderColorCoded(plottingResult.tekanan_darah.kategori)}
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* LANGKAH 4 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-dark mb-0">Langkah 4: Skrining PTM, TBC &amp; Kesehatan</h6>
-                          <span className="badge bg-light text-secondary border fw-semibold">Pelayanan Kesehatan</span>
-                        </div>
-                        <div className="row g-2 small preview-grid">
-                          {activeSubmenu === "lansia" && (
-                            <>
-                              <div className="col-6">
-                                <strong>Kadar Gula Darah:</strong> {gulaDarahEval}
-                              </div>
-                              <div className="col-6">
-                                <strong>Kadar Kolesterol:</strong> {kolesterolEval}
-                              </div>
-                              <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcAdultGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcAdultGejala.text}</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || "-"} • Kiri: {sequentialForm.mataKiri || "-"}
-                              </div>
-                              <div className="col-6">
-                                <strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || "-"} • Kiri: {sequentialForm.telingaKiri || "-"}
-                              </div>
-                              <div className="col-12 pt-2 border-top">
-                                <strong>C.1 Skrining PPOK (PUMA):</strong> <span className={`badge ${pumaEvaluation.isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success"} px-2 py-1 ms-1`}>{pumaEvaluation.text}</span>
-                              </div>
-                              <div className="col-12">
-                                <strong>C.2 Skor AKS (Barthel):</strong>{" "}
-                                <span className="fw-semibold text-dark">
-                                  {currentAks.total}/20 ({currentAks.kategori})
-                                </span>
-                              </div>
-                              <div className="col-12">
-                                <strong>C.3 Status SKILAS:</strong> <span className="fw-semibold text-dark">{currentSkilas.statusText}</span>
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "dewasa" && (
-                            <>
-                              <div className="col-6">
-                                <strong>Kadar Gula Darah:</strong> {gulaDarahEval}
-                              </div>
-                              <div className="col-6">
-                                <strong>Kadar Kolesterol:</strong> {kolesterolEval}
-                              </div>
-                              <div className="col-6">
-                                <strong>Alat Kontrasepsi:</strong> {sequentialForm.alatKontrasepsi || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcAdultGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcAdultGejala.text}</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Tes Penglihatan (Hitung Jari):</strong> Kanan: {sequentialForm.mataKanan || "-"} • Kiri: {sequentialForm.mataKiri || "-"}
-                              </div>
-                              <div className="col-6">
-                                <strong>Tes Pendengaran (Berbisik):</strong> Kanan: {sequentialForm.telingaKanan || "-"} • Kiri: {sequentialForm.telingaKiri || "-"}
-                              </div>
-                              <div className="col-12 pt-2 border-top">
-                                <strong>C.1 Skrining PPOK (PUMA):</strong> <span className={`badge ${pumaEvaluation.isRisiko ? "bg-danger text-white" : "bg-success-subtle text-success"} px-2 py-1 ms-1`}>{pumaEvaluation.text}</span>
-                              </div>
-                            </>
-                          )}
-
-                          {["usekrem-6-14", "usekrem-15-18"].includes(activeSubmenu) && (
-                            <>
-                              <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Skrining Penglihatan:</strong> Kanan: {sequentialForm.mataKanan || "-"} • Kiri: {sequentialForm.mataKiri || "-"}
-                              </div>
-                              <div className="col-6">
-                                <strong>Skrining Pendengaran:</strong> Kanan: {sequentialForm.telingaKanan || "-"} • Kiri: {sequentialForm.telingaKiri || "-"}
-                              </div>
-                              <div className="col-6">
-                                <strong>Skrining Jiwa:</strong> {sequentialForm.skriningJiwa || "-"}
-                              </div>
-                              <div className="col-6">
-                                <strong>Skrining Anemia / Periksa Hb:</strong> {sequentialForm.periksaHb || "-"}
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "apras" && (
-                            <>
-                              <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Pemberian Obat Cacing:</strong> {sequentialForm.obatCacing || ""}
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "balita-12-59" && (
-                            <>
-                              <div className="col-12">
-                                <strong>Imunisasi:</strong>
-                                <div className="table-responsive mt-2">
-                                  <table className="table table-sm align-middle mb-0">
-                                    <thead>
-                                      <tr>
-                                        <th>Jenis</th>
-                                        <th>Status</th>
-                                        <th>Tanggal</th>
-                                        <th>Tempat</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {activeImunisasiRows.map((row) => (
-                                        <tr key={row.jenis_imunisasi}>
-                                          <td>{row.jenis_imunisasi}</td>
-                                          <td>{row.is_diberikan ? "Diberikan" : "Belum diberikan"}</td>
-                                          <td>{row.is_diberikan ? formatDateId(row.tanggal_imunisasi) || "-" : "-"}</td>
-                                          <td>{row.is_diberikan ? row.tempat || "-" : "-"}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                              <div className="col-6">
-                                <strong>Pemberian MP-ASI:</strong> {sequentialForm.mpAsi || ""}
-                              </div>
-                              <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>PMT Pemulihan:</strong> {sequentialForm.pmtPemulihan || ""} (Dihabiskan: {sequentialForm.pmtHabis || ""})
-                              </div>
-                              <div className="col-6">
-                                <strong>Kapsul Vitamin A:</strong> {sequentialForm.vitA || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Obat Cacing:</strong> {sequentialForm.obatCacing || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Mengikuti Kelas Ibu Balita:</strong> {sequentialForm.ikutKelasBalita || ""}
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "bayi-0-11" && (
-                            <>
-                              <div className="col-12">
-                                <strong>Imunisasi:</strong>
-                                <div className="table-responsive mt-2">
-                                  <table className="table table-sm align-middle mb-0">
-                                    <thead>
-                                      <tr>
-                                        <th>Jenis</th>
-                                        <th>Status</th>
-                                        <th>Tanggal</th>
-                                        <th>Tempat</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {activeImunisasiRows.map((row) => (
-                                        <tr key={row.jenis_imunisasi}>
-                                          <td>{row.jenis_imunisasi}</td>
-                                          <td>{row.is_diberikan ? "Diberikan" : "Belum diberikan"}</td>
-                                          <td>{row.is_diberikan ? formatDateId(row.tanggal_imunisasi) || "-" : "-"}</td>
-                                          <td>{row.is_diberikan ? row.tempat || "-" : "-"}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                              <div className="col-6">
-                                <strong>Pemberian ASI Eksklusif:</strong> {sequentialForm.asiEksklusif || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Pemberian MP-ASI:</strong> {sequentialForm.mpAsi || ""}
-                              </div>
-                              <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>PMT Pemulihan:</strong> {sequentialForm.pmtPemulihan || ""} (Dihabiskan: {sequentialForm.pmtHabis || ""})
-                              </div>
-                              <div className="col-6">
-                                <strong>Kapsul Vitamin A:</strong> {sequentialForm.vitA || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Mengikuti Kelas Ibu Balita:</strong> {sequentialForm.ikutKelasBalita || ""}
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "bumil" && (
-                            <>
-                              <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Pemberian TTD:</strong> {sequentialForm.pemberianTtd || sequentialForm.jumlahTtd || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Rutin Minum TTD:</strong> {sequentialForm.rutinTtd || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Komposisi MT Bumil:</strong> {sequentialForm.komposisiMtBumil || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Rutin Konsumsi MT:</strong> {sequentialForm.rutinMtBumil || ""}
-                              </div>
-                            </>
-                          )}
-
-                          {activeSubmenu === "nifas" && (
-                            <>
-                              <div className="col-12">
-                                <strong>Evaluasi Gejala TBC:</strong> <span className={tbcChildGejala.isRisiko ? "text-danger fw-bold" : "text-dark"}>{tbcChildGejala.text}</span>
-                              </div>
-                              <div className="col-6">
-                                <strong>Pemberian Vitamin A:</strong> {sequentialForm.jumlahVitA || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Rutin Minum Vitamin A:</strong> {sequentialForm.rutinVitA || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Pelayanan KB Pasca Persalinan:</strong> {sequentialForm.kbPascaPersalinan || ""}
-                              </div>
-                              <div className="col-6">
-                                <strong>Menjaga Kondisi ASI / Menyusui:</strong> {sequentialForm.menyusui || ""}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* LANGKAH 5 */}
-                      <div className="card border-0 shadow-sm rounded-3 p-3 mb-3 bg-white">
-                        <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
-                          <h6 className="fw-bold text-dark mb-0">Langkah 5: Penyuluhan &amp; Rujukan</h6>
-                          <span className="badge bg-light text-secondary border fw-semibold">Tindak Lanjut</span>
-                        </div>
-                        <div className="row g-2 small preview-grid">
-                          <div className="col-12">
-                            <strong>Topik Penyuluhan:</strong> {sequentialForm.topikPenyuluhan || ""}
-                          </div>
-
-                          <div className="col-6">
-                            <strong>Status Rujukan:</strong> <span className="badge bg-light text-dark border fw-semibold">{sequentialForm.statusRujukan || ""}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-
-              <div className="modal-footer bg-white p-3 px-4 justify-content-between">
-                <button type="button" className="btn btn-outline-secondary btn-sm px-4 rounded-3" onClick={() => setShowSequentialPreviewModal(false)}>
-                  &larr; Edit Data
-                </button>
-                <button type="button" className="btn btn-dark-custom btn-sm px-4 rounded-3 text-white fw-bold" style={{ backgroundColor: "#2b2e4a" }} onClick={handleSaveSequentialAll}>
-                  ✓ Konfirmasi &amp; Simpan Pemeriksaan
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+          return (
+            <DetailRekapModal
+              citizen={previewWarga}
+              examData={previewExamData}
+              show={true}
+              isPreview={true}
+              previewTitle={`Konfirmasi Simpan Data - ${currentCategory.label}`}
+              onClose={() => setShowSequentialPreviewModal(false)}
+              onConfirmSave={handleSaveSequentialAll}
+            />
+          );
+        })()}
     </div>
   );
 
   if (isModalMode) {
     return (
-      <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}>
-        <div className="modal-dialog modal-fullscreen">
-          <div className="modal-content bg-light">
-            <div className="modal-header bg-white border-bottom shadow-sm z-1">
-               <h5 className="modal-title fw-bold">Edit Pemeriksaan</h5>
-               <button type="button" className="btn-close" onClick={onCloseModal}></button>
+      <div
+        className="modal show d-block"
+        style={{ backgroundColor: "rgba(0,0,0,0.6)", zIndex: 1050, overflowY: "auto" }}
+        tabIndex="-1"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onCloseModal?.();
+        }}
+      >
+        <div className="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable my-2 my-md-3" style={{ maxWidth: "1140px", maxHeight: "95vh" }}>
+          <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden d-flex flex-column" style={{ maxHeight: "95vh" }}>
+            <div className="modal-header bg-white border-bottom px-3.5 py-2.5 d-flex align-items-center justify-content-between flex-shrink-0 shadow-xs z-1">
+              <div className="d-flex align-items-center gap-2.5">
+                <div className="bg-primary text-white rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "38px", height: "38px" }}>
+                  <Stethoscope size={20} />
+                </div>
+                <div>
+                  <div className="d-flex align-items-center gap-2">
+                    <h5 className="modal-title fw-bold text-dark mb-0 fs-6">Edit Pemeriksaan</h5>
+                    <span className="badge bg-primary-subtle text-primary fw-semibold px-2 py-0.5 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                      {currentCategory.label}
+                    </span>
+                  </div>
+                  <div className="text-muted" style={{ fontSize: "0.78rem" }}>
+                    Perbarui data &amp; evaluasi kesehatan sasaran
+                  </div>
+                </div>
+              </div>
+
+              <div className="d-flex align-items-center gap-2">
+                <div className="d-inline-flex align-items-center bg-light p-0.5 rounded-pill border" style={{ borderColor: "#cbd5e1" }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm rounded-pill px-2.5 py-1 fw-semibold transition-all ${examinationMode === "per-step" ? "bg-white text-dark shadow-sm border" : "text-secondary border-0"}`}
+                    style={{ fontSize: "0.78rem" }}
+                    onClick={() => {
+                      const targetId = String(selectedWargaId || selectedWargaStep4 || "");
+                      setSelectedWargaStep2(targetId);
+                      setSelectedWargaStep3(targetId);
+                      setSelectedWargaStep4(targetId);
+                      setSelectedWargaStep5(targetId);
+                      setLangkah1Form((previous) => ({ ...previous, ...sequentialForm }));
+                      setLangkah2Form((previous) => ({ ...previous, ...sequentialForm }));
+                      setLangkah4Form((previous) => ({ ...previous, ...sequentialForm }));
+                      setLangkah5Form((previous) => ({ ...previous, ...sequentialForm }));
+                      setExaminationMode("per-step");
+                    }}
+                  >
+                    Pilih Langkah
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm rounded-pill px-2.5 py-1 fw-semibold transition-all ${examinationMode === "sequential" ? "text-white shadow-sm border-0" : "text-secondary border-0"}`}
+                    style={{
+                      backgroundColor: examinationMode === "sequential" ? "#2b2e4a" : "transparent",
+                      fontSize: "0.78rem",
+                    }}
+                    onClick={() => {
+                      const targetId = String(selectedWargaStep4 || selectedWargaStep2 || selectedWargaStep3 || selectedWargaStep5 || selectedWargaId || "");
+                      if (targetId) setSelectedWargaId(targetId);
+                      setSequentialForm((previous) => ({ ...previous, ...langkah1Form, ...langkah2Form, ...langkah4Form, ...langkah5Form }));
+                      setExaminationMode("sequential");
+                    }}
+                  >
+                    Bertahap
+                  </button>
+                </div>
+
+                <button type="button" className="btn-close shadow-none ms-1" onClick={onCloseModal} aria-label="Tutup"></button>
+              </div>
             </div>
-            <div className="modal-body p-0" style={{ overflowY: "auto", position: "relative" }}>
-               {content}
+            <div className="modal-body p-2 p-md-3 bg-light overflow-y-auto" style={{ maxHeight: "calc(95vh - 65px)" }}>
+              {content}
             </div>
           </div>
         </div>

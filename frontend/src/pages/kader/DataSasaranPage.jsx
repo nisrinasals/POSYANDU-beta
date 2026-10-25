@@ -685,7 +685,7 @@ export default function DataSasaranPage({
 
       setSasaranList([createdItem, ...sasaranList.filter((s) => s.nik !== createdItem.nik)]);
       setShowCategoryFormModal(false);
-      showSuccess("Data Sasaran Tersimpan", `Berhasil menyimpan data sasaran [${selectedCategory?.title || "Warga"}] atas nama "${createdItem.nama}" ke database.`);
+      showSuccess("Data Sasaran Tersimpan", `Berhasil menyimpan data sasaran [${selectedCategory?.title || "Warga"}] atas nama "${createdItem.nama}".`);
       onRefreshData?.();
     } catch (err) {
       console.error("Gagal simpan sasaran:", err);
@@ -719,7 +719,7 @@ export default function DataSasaranPage({
         }
       }
 
-      showWarning("Gagal Menyimpan ke Database", err.message || "Gagal menyimpan data ke database server.");
+      showWarning("Gagal Menyimpan Data", err.message || "Gagal menyimpan data sasaran.");
     }
   };
 
@@ -851,7 +851,7 @@ export default function DataSasaranPage({
       onRefreshData?.();
     } catch (err) {
       console.error("Gagal menyimpan mutasi:", err);
-      showWarning("Gagal Menyimpan Mutasi", err.message || "Gagal memproses mutasi pada database server.");
+      showWarning("Gagal Menyimpan Mutasi", err.message || "Gagal memproses mutasi sasaran.");
     }
   };
 
@@ -932,7 +932,7 @@ export default function DataSasaranPage({
         const refreshedWarga = mapBackendWargaToFrontend(detailRes?.data || detailRes);
         setSasaranList((prev) => (prev || []).map((item) => (String(item.id) === String(selectedSasaran.id) ? refreshedWarga : item)));
         setShowEditModal(false);
-        showSuccess("Pembaruan Berhasil", `Data sasaran "${selectedSasaran?.nama || "Warga"}" berhasil diperbarui di database.`);
+        showSuccess("Pembaruan Berhasil", `Data sasaran "${selectedSasaran?.nama || "Warga"}" berhasil diperbarui.`);
         onRefreshData?.();
       } catch (err) {
         console.error("Backend edit warga error:", err);
@@ -1205,7 +1205,7 @@ export default function DataSasaranPage({
                             <div key={i} className="p-2 border-bottom text-dark" style={{ cursor: "pointer", fontSize: "0.85rem" }} onClick={() => handleSelectNameSuggestion(s)}>
                               <div className="fw-semibold">{s.nama}</div>
                               <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                                NIK: {s.nik || "-"} | {s.kategori}
+                                {s.nik || "-"} | {s.kategori}
                               </div>
                             </div>
                           ))}
@@ -1422,7 +1422,7 @@ export default function DataSasaranPage({
                             <div key={i} className="p-2 border-bottom text-dark" style={{ cursor: "pointer", fontSize: "0.85rem" }} onClick={() => handleSelectNameSuggestion(s)}>
                               <div className="fw-semibold">{s.nama}</div>
                               <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                                NIK: {s.nik || "-"} | {s.kategori}
+                                {s.nik || "-"} | {s.kategori}
                               </div>
                             </div>
                           ))}

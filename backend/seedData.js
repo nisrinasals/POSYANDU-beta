@@ -9,15 +9,15 @@ const {
   Puskesmas,
   Posyandu,
   User,
-  SesiPosyandu,
+  AuditLog,
 } = require("./models");
 
 async function seedDatabase() {
   try {
-    console.log("=== MEMULAI SEEDING DATABASE POSYANDU ===");
+    console.log("=== MEMULAI SEEDING DATABASE POSYANDU ILP RESMI KOTA YOGYAKARTA ===");
     await sequelize.authenticate();
 
-    // Reset PostgreSQL sequences to match MAX(id)
+    // 1. Reset PostgreSQL sequences to match MAX(id)
     const tables = ["kecamatan", "kelurahan", "puskesmas", "posyandu", "users", "sesi_posyandu"];
     for (const tbl of tables) {
       try {
@@ -27,81 +27,67 @@ async function seedDatabase() {
       } catch (e) {}
     }
 
-    // 1. Seed Default Kecamatan & Kelurahan
-    console.log("1. Seeding Kecamatan & Kelurahan...");
-    let kecamatanCilodong = await Kecamatan.findOne({ where: { nama_kecamatan: "Cilodong" } });
-    if (!kecamatanCilodong) {
-      kecamatanCilodong = await Kecamatan.create({ nama_kecamatan: "Cilodong" });
+    // 2. Bersihkan Data Dummy (jika ada)
+    console.log("1. Membersihkan data dummy (Cilodong, Sukamaju, Puskesmas Demo)...");
+    const dummyEmails = [
+      "kader@posyandu.test",
+      "kader@gmail.com",
+      "admin.pkm.sukamaju@gmail.com",
+      "staf.pkm.sukamaju@gmail.com",
+      "kader.posyandu.melati@gmail.com",
+      "salsadilla4455@gmail.com",
+      "kaderposyandu@gmail.com",
+      "puskemas@gmail.com",
+      "puskesmas.test@jogjakota.go.id",
+      "admin@dinkes.jogjakota.go.id",
+      "superadmin@posyandu.jogjakota.go.id",
+      "superadmin@posyandu.org",
+      "superadmin.posyandu@gmail.com",
+      "kader1@gmail.com",
+      "kadersatu@gmail.com",
+    ];
+    const dummyUsers = await User.findAll({ where: { email: dummyEmails } });
+    if (dummyUsers.length > 0) {
+      const dummyIds = dummyUsers.map((u) => u.id);
+      await AuditLog.update({ user_id: null }, { where: { user_id: dummyIds } });
+      await User.destroy({ where: { id: dummyIds } });
     }
+    await Posyandu.destroy({ where: { id: [1, 2, 3] } }).catch(() => {});
+    await Puskesmas.destroy({ where: { id: [1, 2] } }).catch(() => {});
+    await Kelurahan.destroy({ where: { nama_kelurahan: "Sukamaju" } }).catch(() => {});
+    await Kecamatan.destroy({ where: { nama_kecamatan: ["Kecamatan Demo", "Cilodong"] } }).catch(() => {});
 
-    let kelurahanSukamaju = await Kelurahan.findOne({ where: { nama_kelurahan: "Sukamaju", kecamatan_id: kecamatanCilodong.id } });
-    if (!kelurahanSukamaju) {
-      kelurahanSukamaju = await Kelurahan.create({ nama_kelurahan: "Sukamaju", kecamatan_id: kecamatanCilodong.id });
-    }
-
-    // 2. Seed Default Puskesmas
-    console.log("2. Seeding Puskesmas...");
-    let puskesmasSukamaju = await Puskesmas.findOne({ where: { kode_puskesmas: "PKM-SUKAMAJU" } });
-    if (!puskesmasSukamaju) {
-      puskesmasSukamaju = await Puskesmas.create({
-        kode_puskesmas: "PKM-SUKAMAJU",
-        nama_puskesmas: "Puskesmas Pembina Sukamaju",
-        kelurahan_id: kelurahanSukamaju.id,
-        alamat: "Jl. Raya Bogor KM 35, Sukamaju, Cilodong",
-      });
-    }
-
-    // 3. Seed Default Posyandu
-    console.log("3. Seeding Posyandu Default (Melati & Mawar)...");
-    let posyanduMelati = await Posyandu.findOne({ where: { nama_posyandu: "Posyandu Melati", kelurahan_id: kelurahanSukamaju.id } });
-    if (!posyanduMelati) {
-      posyanduMelati = await Posyandu.create({
-        nama_posyandu: "Posyandu Melati",
-        kelurahan_id: kelurahanSukamaju.id,
-        puskesmas_id: puskesmasSukamaju.id,
-        alamat: "Balai Warga RW 04, Sukamaju",
-      });
-    }
-
-    let posyanduMawar = await Posyandu.findOne({ where: { nama_posyandu: "Posyandu Mawar", kelurahan_id: kelurahanSukamaju.id } });
-    if (!posyanduMawar) {
-      posyanduMawar = await Posyandu.create({
-        nama_posyandu: "Posyandu Mawar",
-        kelurahan_id: kelurahanSukamaju.id,
-        puskesmas_id: puskesmasSukamaju.id,
-        alamat: "Balai RW 02, Sukamaju",
-      });
-    }
-
-    // Load Data Posyandu 2026 (611 Posyandu Resmi) jika ada
+    // 3. Load Data Posyandu Resmi 2026 Kota Yogyakarta
     const posyanduDataPath = path.join(__dirname, "../frontend/src/data/daftarPosyandu2026.json");
     if (fs.existsSync(posyanduDataPath)) {
-      console.log("3b. Seeding Data Master Posyandu 2026 (611 Posyandu)...");
+      console.log("2. Memverifikasi & Menyemai Data Master Posyandu 2026...");
       const listData = require(posyanduDataPath);
       for (const item of listData) {
-        if (!item.nama) continue;
+        if (!item.nama || !item.kecamatan || !item.kelurahan || !item.puskesmas) continue;
 
-        let kec = await Kecamatan.findOne({ where: { nama_kecamatan: item.kecamatan || "Cilodong" } });
-        if (!kec) {
-          kec = await Kecamatan.create({ nama_kecamatan: item.kecamatan || "Cilodong" });
-        }
+        let [kec] = await Kecamatan.findOrCreate({
+          where: { nama_kecamatan: item.kecamatan },
+          defaults: { nama_kecamatan: item.kecamatan },
+        });
 
-        let kel = await Kelurahan.findOne({ where: { nama_kelurahan: item.kelurahan || "Sukamaju", kecamatan_id: kec.id } });
-        if (!kel) {
-          kel = await Kelurahan.create({ nama_kelurahan: item.kelurahan || "Sukamaju", kecamatan_id: kec.id });
-        }
+        let [kel] = await Kelurahan.findOrCreate({
+          where: { nama_kelurahan: item.kelurahan, kecamatan_id: kec.id },
+          defaults: { nama_kelurahan: item.kelurahan, kecamatan_id: kec.id },
+        });
 
-        let pkm = await Puskesmas.findOne({ where: { nama_puskesmas: item.puskesmas || "Puskesmas Pembina Sukamaju" } });
-        if (!pkm) {
-          pkm = await Puskesmas.create({
-            kode_puskesmas: `PKM-${String(item.puskesmas || "PKM").toUpperCase().replace(/\s+/g, "-")}`,
-            nama_puskesmas: item.puskesmas || "Puskesmas Pembina Sukamaju",
+        let [pkm] = await Puskesmas.findOrCreate({
+          where: { nama_puskesmas: item.puskesmas },
+          defaults: {
+            kode_puskesmas: `PKM-${String(item.puskesmas).toUpperCase().replace(/\s+/g, "-")}`,
+            nama_puskesmas: item.puskesmas,
             kelurahan_id: kel.id,
-            alamat: `Jl. Puskesmas ${item.puskesmas || ""}`,
-          });
-        }
+            alamat: `Jl. Puskesmas ${item.puskesmas}`,
+          },
+        });
 
-        let pos = await Posyandu.findOne({ where: { nama_posyandu: item.nama, kelurahan_id: kel.id } });
+        let pos = await Posyandu.findOne({
+          where: { nama_posyandu: item.nama, kelurahan_id: kel.id },
+        });
         if (!pos) {
           await Posyandu.create({
             nama_posyandu: item.nama,
@@ -111,93 +97,155 @@ async function seedDatabase() {
           });
         }
       }
-      console.log("   + Data Master Posyandu 2026 berhasil disemai!");
+      console.log("   + Master Data Wilayah resmi siap.");
     }
 
-    // 4. Seed Users Akun Resmi Gmail untuk semua Role (Super Admin, Dinkes Admin, Dinkes Staf, Puskesmas Admin, Puskesmas Staf, Kader)
-    console.log("4. Seeding Akun Login Gmail untuk semua Role...");
-    const passwordHash = await bcrypt.hash("12345678", 10);
+    // 4. Helper Slug Puskesmas
+    const getPuskesmasSlug = (nama) => {
+      return nama
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[^a-z0-9]/g, "")
+        .replace(/i+$/, (match) => {
+          if (match === "ii") return "2";
+          if (match === "i") return "1";
+          return match;
+        });
+    };
 
-    const defaultUsers = [
-      {
-        email: "superadmin@gmail.com",
+    // 5. Seed Akun Super Admin
+    console.log("3. Seeding Akun Super Admin...");
+    const saEmail = "superadmin@gmail.com";
+    const saPassword = "superadmin";
+    const saHash = await bcrypt.hash(saPassword, 10);
+    const existingSA = await User.findOne({ where: { email: saEmail } });
+    if (!existingSA) {
+      await User.create({
+        email: saEmail,
+        password_hash: saHash,
         nama_lengkap: "Super Administrator Sistem",
         role: "sa",
-        telepon: "088888888888",
         status: "active",
         email_verified: true,
         email_verified_at: new Date(),
-      },
+        token_version: 1,
+      });
+      console.log(`   + Created: ${saEmail} (Password: ${saPassword})`);
+    } else {
+      await existingSA.update({
+        password_hash: saHash,
+        status: "active",
+        email_verified: true,
+      });
+      console.log(`   * Updated: ${saEmail} (Password: ${saPassword})`);
+    }
+
+    // 6. Seed Akun Dinkes
+    console.log("4. Seeding Akun Dinas Kesehatan...");
+    const dinkesUsers = [
       {
         email: "admindinkes@gmail.com",
-        nama_lengkap: "dr. H. Rahmat Hidayat, M.Kes",
+        password: "admindinkes",
+        nama_lengkap: "Admin Dinas Kesehatan Kota Yogyakarta",
         role: "dinkesAdmin",
-        telepon: "081298765432",
-        status: "active",
-        email_verified: true,
-        email_verified_at: new Date(),
       },
       {
         email: "stafdinkes@gmail.com",
-        nama_lengkap: "Anisa Mayasari, SKM",
+        password: "stafdinkes",
+        nama_lengkap: "Staf Dinas Kesehatan Kota Yogyakarta",
         role: "dinkes",
-        telepon: "081298765433",
-        status: "active",
-        email_verified: true,
-        email_verified_at: new Date(),
-      },
-      {
-        email: "adminpuskesmas@gmail.com",
-        nama_lengkap: "dr. Hendra Setiawan",
-        role: "puskesmasAdmin",
-        puskesmas_id: puskesmasSukamaju.id,
-        telepon: "081387654321",
-        status: "active",
-        email_verified: true,
-        email_verified_at: new Date(),
-      },
-      {
-        email: "userpuskesmas@gmail.com",
-        nama_lengkap: "dr. Sarah Amanda Putri",
-        role: "puskesmas",
-        puskesmas_id: puskesmasSukamaju.id,
-        telepon: "081387654322",
-        status: "active",
-        email_verified: true,
-        email_verified_at: new Date(),
-      },
-      {
-        email: "kaderposyandu@gmail.com",
-        nama_lengkap: "Dzakiyah Al Zahrani",
-        role: "kader",
-        posyandu_id: posyanduMelati.id,
-        telepon: "088227683468",
-        status: "active",
-        email_verified: true,
-        email_verified_at: new Date(),
       },
     ];
-
-    for (const u of defaultUsers) {
-      const existing = await User.findOne({ where: { email: u.email } });
+    for (const d of dinkesUsers) {
+      const hash = await bcrypt.hash(d.password, 10);
+      const existing = await User.findOne({ where: { email: d.email } });
       if (!existing) {
         await User.create({
-          ...u,
-          password_hash: passwordHash,
-          token_version: 1,
-        });
-        console.log(`   + Created user: ${u.email} [${u.role}]`);
-      } else {
-        await existing.update({
+          email: d.email,
+          password_hash: hash,
+          nama_lengkap: d.nama_lengkap,
+          role: d.role,
           status: "active",
           email_verified: true,
-          password_hash: passwordHash,
+          email_verified_at: new Date(),
+          token_version: 1,
         });
-        console.log(`   * Updated user: ${u.email} [${u.role}]`);
+        console.log(`   + Created: ${d.email} (Password: ${d.password})`);
+      } else {
+        await existing.update({
+          password_hash: hash,
+          nama_lengkap: d.nama_lengkap,
+          role: d.role,
+          status: "active",
+          email_verified: true,
+        });
+        console.log(`   * Updated: ${d.email} (Password: ${d.password})`);
       }
     }
 
-    console.log("=== SEEDING DATABASE SELESAI DENGAN SUKSES! ===");
+    // 7. Seed Akun 18 Puskesmas Resmi
+    console.log("5. Seeding Akun 18 Puskesmas Resmi Kota Yogyakarta...");
+    const pkmRealList = await Puskesmas.findAll({ order: [["id", "ASC"]] });
+    for (const pkm of pkmRealList) {
+      const slug = getPuskesmasSlug(pkm.nama_puskesmas);
+      const email = `${slug}@gmail.com`;
+      const oldEmail = `puskesmas.${slug}@gmail.com`;
+      const password = slug;
+      const hash = await bcrypt.hash(password, 10);
+      const nama = `Admin Puskesmas ${pkm.nama_puskesmas}`;
+
+      let existing = await User.findOne({ where: { email: [email, oldEmail] } });
+      if (!existing) {
+        await User.create({
+          email,
+          password_hash: hash,
+          nama_lengkap: nama,
+          role: "puskesmasAdmin",
+          puskesmas_id: pkm.id,
+          status: "active",
+          email_verified: true,
+          email_verified_at: new Date(),
+          token_version: 1,
+        });
+        console.log(`   + Created: ${email} [${pkm.nama_puskesmas}] (Password: ${password})`);
+      } else {
+        await existing.update({
+          email,
+          password_hash: hash,
+          nama_lengkap: nama,
+          role: "puskesmasAdmin",
+          puskesmas_id: pkm.id,
+          status: "active",
+          email_verified: true,
+        });
+        console.log(`   * Updated: ${email} [${pkm.nama_puskesmas}] (Password: ${password})`);
+      }
+    }
+
+    // 8. Seed Fallback Puskesmas & Kader
+    console.log("6. Seeding Fallback Puskesmas & Kader...");
+    const gedongtengenPkm = pkmRealList.find((p) => p.nama_puskesmas.toLowerCase().includes("gedong"));
+    const fallbackList = [
+      { email: "adminpuskesmas@gmail.com", password: "adminpuskesmas", pkmId: gedongtengenPkm?.id },
+      { email: "userpuskesmas@gmail.com", password: "userpuskesmas", pkmId: gedongtengenPkm?.id },
+      { email: "kaderadas@gmail.com", password: "kaderadas" },
+      { email: "kaderdua@gmail.com", password: "kaderdua" },
+    ];
+    for (const f of fallbackList) {
+      const existing = await User.findOne({ where: { email: f.email } });
+      if (existing) {
+        const hash = await bcrypt.hash(f.password, 10);
+        await existing.update({
+          password_hash: hash,
+          ...(f.pkmId ? { puskesmas_id: f.pkmId } : {}),
+          status: "active",
+          email_verified: true,
+        });
+        console.log(`   * Updated: ${f.email} (Password: ${f.password})`);
+      }
+    }
+
+    console.log("\n=== SEEDING BERHASIL DENGAN SUKSES! ===");
     process.exit(0);
   } catch (error) {
     console.error("Gagal melakukan seeding:", error);

@@ -1,4 +1,4 @@
-const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, SesiPosyandu, ProfileKehamilan, Rujukan, Imunisasi } = require("../models");
+const { Pemeriksaan, KunjunganPosyandu, Warga, Posyandu, Puskesmas, SesiPosyandu, ProfileKehamilan, Rujukan, Imunisasi } = require("../models");
 const { Op, fn, col } = require("sequelize");
 const ExcelJS = require("exceljs");
 const { tentukanKategoriAktif, tentukanPeriodePemeriksaan, getLatestPregnancyProfile, hitungUmur } = require("../utils/kategoriHelper");
@@ -269,6 +269,11 @@ const getAllPemeriksaan = async (req, res, next) => {
             },
           ],
         },
+        {
+          model: Rujukan,
+          as: "rujukan",
+          required: false,
+        },
       ],
     });
 
@@ -469,73 +474,236 @@ const exportPemeriksaanExcel = async (req, res, next) => {
       ],
     });
 
+    // Metadata Wilayah Otomatis dan Akurat
+    let wilayahNama = "DINAS KESEHATAN KOTA YOGYAKARTA";
+    let wilayahDusun = "Seluruh Wilayah Kota";
+    let wilayahDesa = "Seluruh Kelurahan";
+    let wilayahKecamatan = "Kota Yogyakarta";
+
+    if (posyandu_id) {
+      const posData = await Posyandu.findByPk(posyandu_id, {
+        include: [{ model: Puskesmas, as: "puskesmas", required: false }],
+      });
+      if (posData) {
+        wilayahNama = `POSYANDU ${posData.nama_posyandu.toUpperCase()}`;
+        wilayahDusun = posData.dusun || "-";
+        wilayahDesa = posData.desa_kelurahan || "-";
+        wilayahKecamatan = posData.kecamatan || posData.puskesmas?.kecamatan || "Kota Yogyakarta";
+      }
+    } else if (req.user?.posyandu_id) {
+      const posData = await Posyandu.findByPk(req.user.posyandu_id, {
+        include: [{ model: Puskesmas, as: "puskesmas", required: false }],
+      });
+      if (posData) {
+        wilayahNama = `POSYANDU ${posData.nama_posyandu.toUpperCase()}`;
+        wilayahDusun = posData.dusun || "-";
+        wilayahDesa = posData.desa_kelurahan || "-";
+        wilayahKecamatan = posData.kecamatan || posData.puskesmas?.kecamatan || "Kota Yogyakarta";
+      }
+    } else if (req.user?.puskesmas_id) {
+      const pkmData = await Puskesmas.findByPk(req.user.puskesmas_id);
+      if (pkmData) {
+        wilayahNama = `PUSKESMAS ${pkmData.nama_puskesmas.toUpperCase()}`;
+        wilayahDusun = "Wilayah Kerja Puskesmas";
+        wilayahDesa = "Wilayah Kerja Puskesmas";
+        wilayahKecamatan = pkmData.kecamatan || "Kota Yogyakarta";
+      }
+    }
+
+    if (req.query.nama_posyandu && req.query.nama_posyandu.trim()) wilayahNama = req.query.nama_posyandu.toUpperCase();
+    if (req.query.dusun && req.query.dusun.trim() && req.query.dusun !== "-") wilayahDusun = req.query.dusun;
+    if (req.query.desa_kelurahan && req.query.desa_kelurahan.trim() && req.query.desa_kelurahan !== "-") wilayahDesa = req.query.desa_kelurahan;
+    if (req.query.kecamatan && req.query.kecamatan.trim() && req.query.kecamatan !== "-") wilayahKecamatan = req.query.kecamatan;
+
     const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Sistem Sengkuyung Katresnan ILP";
+    workbook.created = new Date();
+
     const screeningConfig = await getScreeningConfig();
     const exportGroups = template_rekap ? [template_rekap] : Object.keys(REKAP_GROUPS);
+
     for (const group of exportGroups) {
+      const groupTitle = REKAP_TITLES[group] || group;
       const worksheet = workbook.addWorksheet(group);
       const columns = REKAP_EXPORT_COLUMNS[group];
-      worksheet.columns = columns.map(({ key }, index) => ({ key, width: index === 0 ? 20 : 16, style: { alignment: { horizontal: "center", vertical: "middle", wrapText: true } } }));
       const plainRows = rows.map((row) => (typeof row.get === "function" ? row.get({ plain: true }) : row));
-      const groupTitle = REKAP_TITLES[group] || group;
 
-      worksheet.addRow([`REKAPITULASI HASIL PEMERIKSAAN ${groupTitle.toUpperCase()}`]);
-      worksheet.mergeCells(1, 1, 1, columns.length);
-      worksheet.getRow(1).font = { bold: true, size: 14 };
-      worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle" };
-      worksheet.getRow(1).height = 24;
+      // 1. KOP RESMI DOKUMEN (Baris 1 - 7)
+      worksheet.addRow(["PEMERINTAH KOTA YOGYAKARTA - DINAS KESEHATAN"]);
+      worksheet.getRow(1).font = { bold: true, size: 11, color: { argb: "FF334155" } };
 
-      const { nama_posyandu, dusun, desa_kelurahan, kecamatan } = req.query;
-      const userPosyandu = nama_posyandu || req.user?.posyandu?.nama_posyandu || "POSYANDU";
-      worksheet.addRow([userPosyandu.toUpperCase()]);
-      worksheet.mergeCells(2, 1, 2, columns.length);
-      worksheet.getRow(2).font = { bold: true };
-      worksheet.getRow(2).alignment = { horizontal: "center", vertical: "middle" };
-      worksheet.addRow([]);
-      worksheet.addRow(["Dusun / RT / RW", ":", dusun || req.user?.posyandu?.dusun || ""]);
-      worksheet.addRow(["Desa / Kelurahan / Nagari", ":", desa_kelurahan || req.user?.posyandu?.desa_kelurahan || ""]);
-      worksheet.addRow(["Kecamatan", ":", kecamatan || req.user?.posyandu?.kecamatan || ""]);
+      worksheet.addRow(["REKAPITULASI PELAYANAN POSYANDU INTEGRASI LAYANAN PRIMER (ILP)"]);
+      worksheet.getRow(2).font = { bold: true, size: 13, color: { argb: "FF0F172A" } };
 
+      worksheet.addRow([`FORMAT: ${groupTitle.toUpperCase()}`]);
+      worksheet.getRow(3).font = { bold: true, size: 10, color: { argb: "FF1D4ED8" } };
+
+      worksheet.addRow([]); // Baris 4: Spasi kosong
+
+      // Baris 5: Posyandu & Periode
+      const row5 = worksheet.addRow(["Posyandu / Faskes", `: ${wilayahNama}`, "", "Periode Tahun", `: ${start_date && end_date ? `${start_date.slice(0, 4)}` : "Semua Tahun"}`]);
+      row5.font = { size: 10 };
+      row5.getCell(1).font = { bold: true, size: 10, color: { argb: "FF475569" } };
+      row5.getCell(2).font = { bold: true, size: 10, color: { argb: "FF0F172A" } };
+      row5.getCell(4).font = { bold: true, size: 10, color: { argb: "FF475569" } };
+      row5.getCell(5).font = { bold: true, size: 10, color: { argb: "FF0F172A" } };
+
+      // Baris 6: Dusun & Tanggal Cetak
+      const tglCetak = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+      const row6 = worksheet.addRow(["Dusun / RT / RW", `: ${wilayahDusun}`, "", "Tanggal Cetak", `: ${tglCetak}`]);
+      row6.font = { size: 10 };
+      row6.getCell(1).font = { bold: true, size: 10, color: { argb: "FF475569" } };
+      row6.getCell(2).font = { size: 10, color: { argb: "FF0F172A" } };
+      row6.getCell(4).font = { bold: true, size: 10, color: { argb: "FF475569" } };
+      row6.getCell(5).font = { size: 10, color: { argb: "FF0F172A" } };
+
+      // Baris 7: Kelurahan & Kecamatan
+      const row7 = worksheet.addRow(["Desa / Kelurahan", `: ${wilayahDesa}`, "", "Kecamatan", `: ${wilayahKecamatan}`]);
+      row7.font = { size: 10 };
+      row7.getCell(1).font = { bold: true, size: 10, color: { argb: "FF475569" } };
+      row7.getCell(2).font = { size: 10, color: { argb: "FF0F172A" } };
+      row7.getCell(4).font = { bold: true, size: 10, color: { argb: "FF475569" } };
+      row7.getCell(5).font = { size: 10, color: { argb: "FF0F172A" } };
+
+      worksheet.addRow([]); // Baris 8: Spasi kosong sebelum tabel
+
+      // 2. KELOMPOK HEADER TABEL (Baris 9 & 10)
+      const columnGroups = [];
+      columns.slice(1).forEach((colItem) => {
+        const label = getRekapColumnGroup(colItem.key);
+        const previousGroup = columnGroups[columnGroups.length - 1];
+        if (previousGroup?.label === label) previousGroup.columns.push(colItem);
+        else columnGroups.push({ label, columns: [colItem] });
+      });
+
+      // Row 9: Group Header (Tingkat 1)
+      const groupHeaderValues = new Array(columns.length + 1).fill("");
+      groupHeaderValues[1] = columns[0].label; // "Bulan dan Tahun"
+      let curCol = 2;
+      for (const colGrp of columnGroups) {
+        groupHeaderValues[curCol] = colGrp.label;
+        curCol += colGrp.columns.length;
+      }
+      const groupHeaderRow = worksheet.addRow(groupHeaderValues.slice(1));
+      groupHeaderRow.height = 30;
+
+      // Row 10: Sub Header (Tingkat 2)
+      const subHeaderValues = columns.map((c) => c.label);
+      const subHeaderRow = worksheet.addRow(subHeaderValues);
+      subHeaderRow.height = 44;
+
+      // Merge baris 9 & 10 untuk Kolom A ("Bulan dan Tahun")
+      worksheet.mergeCells(9, 1, 10, 1);
+
+      // Merge horizontal untuk masing-masing group header di baris 9
+      let mergeStart = 2;
+      for (const colGrp of columnGroups) {
+        if (colGrp.columns.length > 1) {
+          worksheet.mergeCells(9, mergeStart, 9, mergeStart + colGrp.columns.length - 1);
+        }
+        mergeStart += colGrp.columns.length;
+      }
+
+      // Styling Header (Row 9 & Row 10)
+      const headerBorder = {
+        top: { style: "thin", color: { argb: "FF94A3B8" } },
+        bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+        left: { style: "thin", color: { argb: "FF94A3B8" } },
+        right: { style: "thin", color: { argb: "FF94A3B8" } },
+      };
+
+      for (let c = 1; c <= columns.length; c++) {
+        const cell9 = groupHeaderRow.getCell(c);
+        cell9.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A8A" } };
+        cell9.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
+        cell9.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell9.border = headerBorder;
+
+        const cell10 = subHeaderRow.getCell(c);
+        cell10.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
+        cell10.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 9 };
+        cell10.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell10.border = headerBorder;
+      }
+      groupHeaderRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A8A" } };
+      groupHeaderRow.getCell(1).font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
+
+      // 3. BARIS DATA BULANAN (Baris 11 - 22)
       const aggregateRows = aggregateRekapRows(plainRows, group, screeningConfig);
       const rowsByPeriod = new Map(aggregateRows.map((row) => [row.bulan_tahun, row]));
-      const columnGroups = [];
-      columns.slice(1).forEach((column) => {
-        const label = getRekapColumnGroup(column.key);
-        const previousGroup = columnGroups[columnGroups.length - 1];
-        if (previousGroup?.label === label) previousGroup.columns.push(column);
-        else columnGroups.push({ label, columns: [column] });
-      });
-
-      const groupHeader = worksheet.addRow([]);
-      groupHeader.getCell(1).value = columns[0].label;
-      worksheet.mergeCells(7, 1, 8, 1);
-      let firstColumn = 2;
-      for (const columnGroup of columnGroups) {
-        groupHeader.getCell(firstColumn).value = columnGroup.label;
-        if (columnGroup.columns.length > 1) worksheet.mergeCells(7, firstColumn, 7, firstColumn + columnGroup.columns.length - 1);
-        firstColumn += columnGroup.columns.length;
-      }
-      groupHeader.font = { bold: true };
-      groupHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDE5F0" } };
-      groupHeader.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-      groupHeader.height = 34;
-
-      const columnHeader = worksheet.getRow(8);
-      columns.slice(1).forEach((column, index) => {
-        columnHeader.getCell(index + 2).value = column.label;
-      });
-      columnHeader.font = { bold: true };
-      columnHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDE5F0" } };
-      columnHeader.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-      columnHeader.height = 48;
-
       const monthPeriods = getExportMonthPeriods(aggregateRows, start_date, end_date);
-      for (const period of monthPeriods) {
-        const row = rowsByPeriod.get(period.key) || {};
-        worksheet.addRow(columns.map(({ key }) => (key === "bulan_tahun" ? period.label : row[key] || 0)));
+
+      const cellBorder = {
+        top: { style: "thin", color: { argb: "FFE2E8F0" } },
+        bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+        left: { style: "thin", color: { argb: "FFE2E8F0" } },
+        right: { style: "thin", color: { argb: "FFE2E8F0" } },
+      };
+
+      const columnSums = new Array(columns.length).fill(0);
+
+      monthPeriods.forEach((period, pIdx) => {
+        const aggRow = rowsByPeriod.get(period.key) || {};
+        const rowVals = columns.map(({ key }, colIdx) => {
+          if (key === "bulan_tahun") return period.label;
+          const val = Number(aggRow[key]) || 0;
+          columnSums[colIdx] += val;
+          return val;
+        });
+
+        const dataRow = worksheet.addRow(rowVals);
+        dataRow.height = 22;
+        const isOdd = pIdx % 2 === 1;
+
+        for (let c = 1; c <= columns.length; c++) {
+          const cell = dataRow.getCell(c);
+          cell.alignment = { horizontal: "center", vertical: "middle" };
+          cell.font = { size: 9.5 };
+          cell.border = cellBorder;
+          if (isOdd) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+          }
+          if (c > 1) {
+            cell.numFmt = "#,##0";
+          }
+        }
+      });
+
+      // 4. BARIS TOTAL TAHUNAN (Baris 23)
+      const totalVals = columns.map(({ key }, colIdx) => {
+        if (key === "bulan_tahun") return "TOTAL TAHUNAN";
+        return columnSums[colIdx];
+      });
+      const totalRow = worksheet.addRow(totalVals);
+      totalRow.height = 25;
+      const totalBorder = {
+        top: { style: "thin", color: { argb: "FF64748B" } },
+        bottom: { style: "double", color: { argb: "FF0F172A" } },
+        left: { style: "thin", color: { argb: "FFCBD5E1" } },
+        right: { style: "thin", color: { argb: "FFCBD5E1" } },
+      };
+
+      for (let c = 1; c <= columns.length; c++) {
+        const cell = totalRow.getCell(c);
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.font = { bold: true, size: 10, color: { argb: "FF0F172A" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
+        cell.border = totalBorder;
+        if (c > 1) {
+          cell.numFmt = "#,##0";
+        }
       }
 
-      worksheet.views = [{ state: "frozen", xSplit: 1, ySplit: 8, topLeftCell: "B9" }];
+      // 5. ATUR LEBAR KOLOM (Presisi & Rapi)
+      worksheet.getColumn(1).width = 20;
+      columns.slice(1).forEach((colItem, idx) => {
+        const colNum = idx + 2;
+        const labelLen = (colItem.label || "").length;
+        worksheet.getColumn(colNum).width = Math.max(14, Math.min(Math.ceil(labelLen * 0.75), 24));
+      });
+
+      // 6. FREEZE PANES BEBAS BUG DOUBLE ROW
+      worksheet.views = [{ state: "frozen", xSplit: 1, ySplit: 10, topLeftCell: "B11", activeCell: "B11" }];
       worksheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
     }
 
@@ -605,11 +773,36 @@ const getPemeriksaanById = async (req, res, next) => {
     const prevAnnual = pemeriksaan.kunjungan?.warga_id ? await getPreviousAnnualScreening(pemeriksaan.kunjungan.warga_id, targetYear, pemeriksaan.id) : null;
     const isAnnualCompleted = Boolean(prevAnnual || pemeriksaan.detail_skrining?.is_skrining_tahunan === true);
 
+    const wargaData = pemeriksaan.kunjungan?.warga || {};
+    const plotData = evaluasiPemeriksaan({
+      bb_kg: pemeriksaan.bb_kg,
+      tb_cm: pemeriksaan.tb_cm,
+      lingkar_kepala_cm: pemeriksaan.lingkar_kepala_cm,
+      lila_cm: pemeriksaan.lila_cm,
+      lingkar_perut_cm: pemeriksaan.lingkar_perut_cm,
+      td_sistole: pemeriksaan.td_sistole,
+      td_diastole: pemeriksaan.td_diastole,
+      kadar_gula: pemeriksaan.kadar_gula,
+      kategori_sasaran: pemeriksaan.kategori_sasaran,
+      jenis_kelamin: wargaData.jenis_kelamin,
+      tanggal_lahir: wargaData.tanggal_lahir,
+      tanggal_pemeriksaan: pemeriksaan.tanggal,
+      zscores: {
+        zscore_bbu: pemeriksaan.zscore_bbu,
+        zscore_pbu: pemeriksaan.zscore_pbu,
+        zscore_tbu: pemeriksaan.zscore_tbu,
+        zscore_bbpb: pemeriksaan.zscore_bbpb,
+        zscore_bbtb: pemeriksaan.zscore_bbtb,
+        zscore_imtu: pemeriksaan.zscore_imtu,
+      },
+    });
+
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil detail data pemeriksaan.",
       data: {
         ...pemeriksaan.toJSON(),
+        hasil_plot: plotData,
         is_annual_screening_completed: isAnnualCompleted,
         previous_annual_screening: prevAnnual ? { id: prevAnnual.id, tanggal: prevAnnual.tanggal, detail_skrining: prevAnnual.detail_skrining } : null,
       },

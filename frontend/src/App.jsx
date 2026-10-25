@@ -30,7 +30,8 @@ import { authService, sesiService, pemeriksaanService, userService, posyanduServ
 
 import wargaService from "./services/wargaService";
 
-import { mapBackendWargaToFrontend, mapBackendSesiToFrontend } from "./utils/dataMappers";
+import { mapBackendWargaToFrontend, mapBackendSesiToFrontend, cleanPuskesmasName, cleanPosyanduName } from "./utils/dataMappers";
+import { recordLogin } from "./utils/loginTracker";
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -73,6 +74,8 @@ export default function App() {
   const [globalRujukanList, setGlobalRujukanList] = useState([]);
 
   const [activePemeriksaanWargaId, setActivePemeriksaanWargaId] = useState(null);
+
+  const [pemeriksaanReturnTo, setPemeriksaanReturnTo] = useState(null);
 
   const [categoryFilterParam, setCategoryFilterParam] = useState("Semua Kategori");
 
@@ -184,6 +187,8 @@ export default function App() {
               // walaupun lookup posyandu gagal.
             }
           }
+
+          recordLogin(u);
         }
       } catch (err) {
         console.info("Token sesi lokal, menggunakan profil tersimpan.");
@@ -196,20 +201,8 @@ export default function App() {
     const isSA = currentBackendRole === "sa";
     const isDinkesAdminRole = ["dinkesAdmin", "dinkes-admin"].includes(currentBackendRole);
     const isDinkesRole = ["dinkes", "dinkesAdmin", "dinkes-staf", "dinkes-admin"].includes(currentBackendRole);
-
-    const isStafRole = ["dinkes-staf", "puskesmas-staf"].includes(currentBackendRole);
-    const canAccessPersonalData = (isSA || !isDinkesRole || isDinkesAdminRole) && !isStafRole;
     const isPuskesmasRole = ["puskesmas", "puskesmasAdmin", "puskesmas-admin", "puskesmas-staf", "puskesmas-user"].includes(currentBackendRole);
-
-    if (!canAccessPersonalData) {
-      setGlobalPemeriksaanData({});
-      setGlobalSasaranList([]);
-    }
-
-    if (!isPuskesmasRole) {
-      setGlobalPosyanduList([]);
-      setGlobalRujukanList([]);
-    }
+    const canAccessPersonalData = true; // Otorisasi data dikendalikan langsung oleh token backend
 
     // =======================================================
     // STATISTIK SASARAN
@@ -301,13 +294,14 @@ export default function App() {
 
             const statusLangkah = exam?.kunjungan?.status_langkah;
 
-            const isCompleted = statusLangkah === "langkah_5";
+            const isCompleted = !!exam || statusLangkah === "langkah_5" || statusLangkah === "selesai";
 
             if (isCompleted) {
               return {
                 ...w,
                 statusPemeriksaan: "Sudah",
-                tglPeriksa: exam?.tanggal ? String(exam.tanggal).split("T")[0] : "",
+                tglPeriksa: exam?.tanggal ? String(exam.tanggal).split("T")[0] : (w.tglPeriksa || ""),
+                exam: exam,
               };
             }
 
@@ -329,7 +323,32 @@ export default function App() {
     // =======================================================
     try {
       const posyanduRes = await posyanduService.getAllPosyandu();
-      setGlobalPosyanduList(Array.isArray(posyanduRes?.data) ? posyanduRes.data : []);
+      const rawPosList = Array.isArray(posyanduRes?.data) ? posyanduRes.data : [];
+      const cleanPosList = rawPosList.map((p) => ({
+        ...p,
+        nama: cleanPosyanduName(p.nama || p.nama_posyandu || ""),
+        puskesmas: cleanPuskesmasName(p.puskesmas || p.puskesmas?.nama_puskesmas || ""),
+      }));
+      setGlobalPosyanduList(cleanPosList);
+
+      // Sinkronkan ke globalSasaranList jika ada warga yang belum punya puskesmas
+      setGlobalSasaranList((prevList) => {
+        if (!Array.isArray(prevList) || prevList.length === 0) return prevList;
+        return prevList.map((item) => {
+          if (item.puskesmas && !item.puskesmas.toLowerCase().startsWith("puskesmas")) return item;
+          const match = cleanPosList.find(
+            (p) => (item.posyandu_id && p.id === item.posyandu_id) || (p.nama && p.nama.toLowerCase() === (item.posyandu || "").toLowerCase())
+          );
+          if (match?.puskesmas) {
+            return {
+              ...item,
+              puskesmas: cleanPuskesmasName(match.puskesmas),
+              posyandu: cleanPosyanduName(item.posyandu || match.nama || ""),
+            };
+          }
+          return item;
+        });
+      });
     } catch (err) {
       console.error("Gagal mengambil data Posyandu secara global:", err);
       setGlobalPosyanduList([]);
@@ -471,6 +490,8 @@ export default function App() {
         prev.profile_picture,
     }));
 
+    recordLogin(loginData);
+
     setActiveMenu("dashboard");
 
     setIsAuthenticated(true);
@@ -480,7 +501,10 @@ export default function App() {
   // NAVIGATION HANDLER
   // =========================================================
   const handleNavigate = (menu, submenu = null, options = {}) => {
-    setActiveMenu(menu);
+    const isStafUser = user?.roleType === "puskesmas-staf" || user?.roleType === "dinkes-staf";
+    const targetMenu = isStafUser && (menu === "data-sasaran" || menu === "pemantauan-rujukan") ? "laporan-ekspor" : menu;
+
+    setActiveMenu(targetMenu);
 
     if (submenu) {
       setActiveSubmenu(submenu);
@@ -490,6 +514,12 @@ export default function App() {
       setActivePemeriksaanWargaId(options.wargaId);
     } else if (menu !== "pemeriksaan") {
       setActivePemeriksaanWargaId(null);
+    }
+
+    if (options.returnTo) {
+      setPemeriksaanReturnTo(options.returnTo);
+    } else if (menu !== "pemeriksaan") {
+      setPemeriksaanReturnTo(null);
     }
 
     if (options.kategori) {
@@ -556,12 +586,13 @@ export default function App() {
             globalStatistikSasaran={globalStatistikSasaran}
             isGlobalStatistikLoading={isGlobalStatistikLoading}
             globalJadwalList={globalJadwalList}
+            globalPosyanduList={globalPosyanduList}
             onRefreshData={fetchBackendData}
           />
         )}
 
         {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kader" && (
-          <PuskesmasVerifikasiKaderPage activeSubmenu="kader" onRefreshData={fetchBackendData} />
+          <PuskesmasVerifikasiKaderPage activeSubmenu="kader" onRefreshData={fetchBackendData} user={user} themeColor="#475569" />
         )}
         {(activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu !== "kader" && (
           <SAVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} user={user} />
@@ -591,10 +622,13 @@ export default function App() {
           <PuskesmasRekapitulasiPage
             globalSasaranList={globalSasaranList}
             globalPemeriksaanData={globalPemeriksaanData}
+            globalStatistikSasaran={globalStatistikSasaran}
+            globalPosyanduList={globalPosyanduList}
             onNavigate={handleNavigate}
             onRefreshData={fetchBackendData}
             user={user}
             userRole={"sa"}
+            theme={"sa"}
           />
         )}
 
@@ -628,13 +662,16 @@ export default function App() {
             user={user}
             globalStatistikSasaran={globalStatistikSasaran}
             isGlobalStatistikLoading={isGlobalStatistikLoading}
+            globalSasaranList={globalSasaranList}
+            globalPemeriksaanData={globalPemeriksaanData}
+            globalPosyanduList={globalPosyanduList}
             globalJadwalList={globalJadwalList}
             onRefreshData={fetchBackendData}
           />
         )}
 
         {isDinkesAdmin && (activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu === "kader" && (
-          <PuskesmasVerifikasiKaderPage activeSubmenu="kader" onRefreshData={fetchBackendData} />
+          <PuskesmasVerifikasiKaderPage activeSubmenu="kader" onRefreshData={fetchBackendData} user={user} themeColor="#0f2b5c" />
         )}
         {isDinkesAdmin && (activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && activeSubmenu !== "kader" && (
           <DinkesVerifikasiAkunPage activeSubmenu={activeSubmenu || "puskesmas"} onRefreshData={fetchBackendData} user={user} />
@@ -662,6 +699,7 @@ export default function App() {
           <PuskesmasRekapitulasiPage
             globalSasaranList={globalSasaranList}
             globalPemeriksaanData={globalPemeriksaanData}
+            globalStatistikSasaran={globalStatistikSasaran}
             onNavigate={handleNavigate}
             onRefreshData={fetchBackendData}
             user={user}
@@ -695,12 +733,13 @@ export default function App() {
     return (
       <AppLayout user={user} activeMenu={activeMenu} activeSubmenu={activeSubmenu} onNavigate={handleNavigate} onLogout={handleLogout}>
         {isPuskesmasAdmin && (activeMenu === "verifikasi-kader" || activeMenu === "verifikasi-akun" || activeMenu === "manajemen-akun") && (
-          <PuskesmasVerifikasiKaderPage activeSubmenu={activeSubmenu || "kader"} onRefreshData={fetchBackendData} />
+          <PuskesmasVerifikasiKaderPage activeSubmenu={activeSubmenu || "kader"} onRefreshData={fetchBackendData} user={user} themeColor="#3b7d6b" />
         )}
 
         {activeMenu === "dashboard" && (
           <PuskesmasDashboardPage
             onNavigate={handleNavigate}
+            user={user}
             globalSasaranList={globalSasaranList}
             globalPemeriksaanData={globalPemeriksaanData}
             globalJadwalList={globalJadwalList}
@@ -714,7 +753,7 @@ export default function App() {
 
         {activeMenu === "jadwal" && <PuskesmasJadwalPage globalJadwalList={globalJadwalList} setGlobalJadwalList={setGlobalJadwalList} onRefreshData={fetchBackendData} />}
 
-        {activeMenu === "data-sasaran" && (
+        {activeMenu === "data-sasaran" && isPuskesmasAdmin && (
           <PuskesmasDataSasaranPage
             globalSasaranList={globalSasaranList}
             globalPemeriksaanData={globalPemeriksaanData}
@@ -725,12 +764,13 @@ export default function App() {
           />
         )}
 
-        {activeMenu === "pemantauan-rujukan" && <PuskesmasPemantauanRujukanPage globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} onRefreshData={fetchBackendData} />}
+        {activeMenu === "pemantauan-rujukan" && isPuskesmasAdmin && <PuskesmasPemantauanRujukanPage globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} onRefreshData={fetchBackendData} />}
 
         {activeMenu === "laporan-ekspor" && (
           <PuskesmasRekapitulasiPage
             globalSasaranList={globalSasaranList}
             globalPemeriksaanData={globalPemeriksaanData}
+            globalStatistikSasaran={globalStatistikSasaran}
             onNavigate={handleNavigate}
             onRefreshData={fetchBackendData}
             user={user}
@@ -761,7 +801,7 @@ export default function App() {
   // KADER
   // =========================================================
   return (
-    <AppLayout user={user} activeMenu={activeMenu} activeSubmenu={activeSubmenu} onNavigate={handleNavigate} onLogout={handleLogout}>
+    <AppLayout user={user} activeMenu={activeMenu} activeSubmenu={activeSubmenu} onNavigate={handleNavigate} onLogout={handleLogout} globalJadwalList={globalJadwalList}>
       {activeMenu === "dashboard" && (
         <DashboardPage onNavigate={handleNavigate} user={user} globalJadwalList={globalJadwalList} globalSasaranList={globalSasaranList} globalPemeriksaanData={globalPemeriksaanData} onRefreshData={fetchBackendData} />
       )}
@@ -801,6 +841,8 @@ export default function App() {
           globalPemeriksaanData={globalPemeriksaanData}
           setGlobalPemeriksaanData={setGlobalPemeriksaanData}
           activePemeriksaanWargaId={activePemeriksaanWargaId}
+          returnTo={pemeriksaanReturnTo}
+          globalJadwalList={globalJadwalList}
           onRefreshData={fetchBackendData}
         />
       )}

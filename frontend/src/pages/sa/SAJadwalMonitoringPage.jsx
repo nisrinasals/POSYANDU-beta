@@ -3,7 +3,7 @@ import { Calendar, Clock, MapPin, Search, Eye, Filter, UserCheck, ChevronLeft, C
 import { formatDateId } from "../../utils/dataMappers";
 
 export default function SAJadwalMonitoringPage({ globalJadwalList = [], user }) {
-  const themeColor = "#6b4e31";
+  const themeColor = "#475569";
   const [searchQuery, setSearchQuery] = useState("");
   const [bulanFilter, setBulanFilter] = useState("Semua");
   const [selectedPuskesmas, setSelectedPuskesmas] = useState("Semua");

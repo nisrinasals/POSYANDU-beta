@@ -38,7 +38,17 @@ export default function PuskesmasVerifikasiKaderPage({
   onToggleStafStatus: propOnToggleStafStatus,
   onToggleKaderStatus: propOnToggleKaderStatus,
   onRefreshData,
+  user,
+  themeColor,
 }) {
+  const activeTheme =
+    themeColor ||
+    (user?.roleType === "sa" || user?.role?.toLowerCase().includes("super")
+      ? "#475569"
+      : user?.roleType === "dinkes" || user?.role?.toLowerCase().includes("dinkes")
+      ? "#0f2b5c"
+      : "#3b7d6b");
+
   const { showConfirm, showSuccess, showWarning } = useNotification();
   const isKader = activeSubmenu === "kader";
   const isStaf = activeSubmenu === "staf";
@@ -78,13 +88,13 @@ export default function PuskesmasVerifikasiKaderPage({
             nik: u.nik || "",
             email: u.email || "",
             telepon: u.no_telepon || u.telepon || "",
-            posyandu: u.posyandu?.nama_posyandu || u.posyandu || "",
+            posyandu: (u.posyandu?.nama_posyandu || u.posyandu || "").replace(/^posyandu\s+/i, "").trim(),
             rw: u.rw || "",
-            tglDaftar: formatDateId(u.email_verified_at || u.verified_at || u.createdAt),
+            tglDaftar: formatDateId(u.created_at || u.createdAt || u.email_verified_at || u.verified_at) || formatDateId(new Date()),
             status: u.status === "pending_approval" ? "pending" : u.status || "",
             bidangJabatan: u.jabatan || u.bidangJabatan || "",
             unitKategori: u.unit || "",
-            puskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas || "",
+            puskesmas: (u.puskesmas?.nama_puskesmas || u.puskesmas || "").replace(/^puskesmas\s+/i, "").trim(),
           };
           if (role.includes("kader")) {
             kaders.push(mappedUser);
@@ -349,7 +359,7 @@ export default function PuskesmasVerifikasiKaderPage({
           <div className="d-flex align-items-center gap-2">
             <button
               className={`btn d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-bold transition-all ${activeTab === "pending" ? "text-white shadow-sm" : "btn-light border text-secondary"}`}
-              style={{ backgroundColor: activeTab === "pending" ? "#428A75" : undefined }}
+              style={{ backgroundColor: activeTab === "pending" ? activeTheme : undefined }}
               onClick={() => setActiveTab("pending")}
             >
               <Clock size={16} />
@@ -359,7 +369,7 @@ export default function PuskesmasVerifikasiKaderPage({
 
             <button
               className={`btn d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-bold transition-all ${activeTab === "active" ? "text-white shadow-sm" : "btn-light border text-secondary"}`}
-              style={{ backgroundColor: activeTab === "active" ? "#428A75" : undefined }}
+              style={{ backgroundColor: activeTab === "active" ? activeTheme : undefined }}
               onClick={() => setActiveTab("active")}
             >
               <UserCheck size={16} />
@@ -377,7 +387,7 @@ export default function PuskesmasVerifikasiKaderPage({
             )}
             <button
               className="btn d-flex align-items-center gap-2 fw-semibold rounded-3 bg-white border"
-              style={{ color: "#428A75", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}
+              style={{ color: activeTheme, boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}
               onClick={() => fetchUsers(false)}
               disabled={isRefreshing}
             >
@@ -418,7 +428,7 @@ export default function PuskesmasVerifikasiKaderPage({
           )}
 
           <div className="col-12 col-md-2 d-flex gap-2">
-            <button className="btn text-white flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold rounded-3" style={{ backgroundColor: "#428A75" }}>
+            <button className="btn text-white flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold rounded-3" style={{ backgroundColor: activeTheme }}>
               <Filter size={16} />
               <span>Filter</span>
             </button>
@@ -465,7 +475,7 @@ export default function PuskesmasVerifikasiKaderPage({
                           {item.nama}
                         </div>
                         <div className="text-muted font-monospace small" style={{ fontSize: "0.75rem" }}>
-                          {item.nik}
+                          {item.nik || "-"}
                         </div>
                       </td>
                       <td>
@@ -499,7 +509,7 @@ export default function PuskesmasVerifikasiKaderPage({
                           <div className="d-flex align-items-center justify-content-center gap-2">
                             <button
                               className="btn text-white btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 fw-semibold shadow-xs"
-                              style={{ backgroundColor: "#428A75" }}
+                              style={{ backgroundColor: activeTheme }}
                               onClick={() => handleApproveKader(item.id, item.nama)}
                               title="Setujui pendaftaran kader"
                             >
@@ -534,7 +544,7 @@ export default function PuskesmasVerifikasiKaderPage({
               <thead>
                 <tr>
                   <th style={{ width: "50px" }}>NO</th>
-                  <th>NAMA LENGKAP</th>
+                  <th>NAMA LENGKAP &amp; NIK</th>
                   <th>EMAIL &amp; TELEPON</th>
                   <th>TANGGAL DAFTAR</th>
                   <th>STATUS</th>
@@ -550,8 +560,11 @@ export default function PuskesmasVerifikasiKaderPage({
                         <div className="fw-bold text-dark" style={{ fontSize: "0.875rem" }}>
                           {item.nama}
                         </div>
+                        <div className="text-muted font-monospace small" style={{ fontSize: "0.75rem" }}>
+                          {item.nik || "-"}
+                        </div>
                         {item.bidangJabatan && (
-                          <div className="text-muted small" style={{ fontSize: "0.75rem" }}>
+                          <div className="text-muted small" style={{ fontSize: "0.72rem" }}>
                             {item.bidangJabatan}
                           </div>
                         )}
@@ -576,7 +589,7 @@ export default function PuskesmasVerifikasiKaderPage({
                           <div className="d-flex align-items-center justify-content-center gap-2">
                             <button
                               className="btn text-white btn-sm py-1.5 px-3 d-flex align-items-center gap-1 rounded-2 fw-semibold shadow-xs"
-                              style={{ backgroundColor: "#428A75" }}
+                              style={{ backgroundColor: activeTheme }}
                               onClick={() => handleApproveStaf(item.id, item.nama)}
                               title="Setujui pendaftaran staf puskesmas"
                             >
@@ -630,8 +643,8 @@ export default function PuskesmasVerifikasiKaderPage({
                         <div className="fw-bold text-dark" style={{ fontSize: "0.875rem" }}>
                           {item.nama}
                         </div>
-                        <div className="text-muted font-monospace" style={{ fontSize: "0.75rem" }}>
-                          {item.nik || ""}
+                        <div className="text-muted font-monospace small" style={{ fontSize: "0.75rem" }}>
+                          {item.nik || "-"}
                         </div>
                       </td>
                       <td>

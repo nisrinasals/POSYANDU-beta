@@ -47,19 +47,19 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
   const getRoleTheme = () => {
     if (isDinkes) {
       return {
-        primary: "#1e3a8a",
-        primaryHover: "#172554",
-        bgLight: "#e0e7ff",
-        textColor: "#1e3a8a",
+        primary: "#0f2b5c",
+        primaryHover: "#0a1e40",
+        bgLight: "rgba(15, 43, 92, 0.08)",
+        textColor: "#0f2b5c",
       };
     }
 
     if (isPuskesmas) {
       return {
-        primary: "#428A75",
-        primaryHover: "#2E4E52",
-        bgLight: "rgba(66, 138, 117, 0.12)",
-        textColor: "#428A75",
+        primary: "#3b7d6b",
+        primaryHover: "#2e6354",
+        bgLight: "rgba(59, 125, 107, 0.1)",
+        textColor: "#3b7d6b",
       };
     }
 

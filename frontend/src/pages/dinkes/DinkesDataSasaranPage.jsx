@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Search, Eye, Filter, Info, ChevronLeft, ChevronRight, Building2, X } from "lucide-react";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
-import { formatDateId } from "../../utils/dataMappers";
+import { formatDateId, cleanPuskesmasName, cleanPosyanduName } from "../../utils/dataMappers";
 
 export default function DinkesDataSasaranPage({
   globalSasaranList = [],
@@ -15,7 +15,7 @@ export default function DinkesDataSasaranPage({
   setCategoryFilterParam,
   user,
 }) {
-  const themeColor = user?.roleType === "sa" ? "#6b4e31" : "#1e3a8a";
+  const themeColor = user?.roleType === "sa" ? "#475569" : "#0f2b5c";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Semua Status");
@@ -25,18 +25,19 @@ export default function DinkesDataSasaranPage({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
-  // Available Puskesmas List
+  // Available Puskesmas List (Bersih tanpa prefix Puskesmas)
   const availablePuskesmasList = useMemo(() => {
-    return [...new Set(globalPosyanduList.map((item) => item.puskesmas).filter(Boolean))].sort();
+    return [...new Set(globalPosyanduList.map((item) => cleanPuskesmasName(item.puskesmas)).filter(Boolean))].sort();
   }, [globalPosyanduList]);
 
   // Available Posyandu List for filter dropdown
   const availablePosyanduList = useMemo(() => {
     let baseList = globalPosyanduList;
     if (selectedPuskesmas !== "Semua Puskesmas") {
-      baseList = baseList.filter(item => item.puskesmas === selectedPuskesmas);
+      const selClean = cleanPuskesmasName(selectedPuskesmas).toLowerCase();
+      baseList = baseList.filter(item => cleanPuskesmasName(item.puskesmas).toLowerCase() === selClean);
     }
-    return [...new Set(baseList.map((item) => item.nama).filter(Boolean))].sort();
+    return [...new Set(baseList.map((item) => cleanPosyanduName(item.nama)).filter(Boolean))].sort();
   }, [selectedPuskesmas, globalPosyanduList]);
 
   // Selected sasaran for detailed modal
@@ -70,26 +71,29 @@ export default function DinkesDataSasaranPage({
       // 3. Puskesmas / Faskes Filter
       let matchesPuskesmas = true;
       if (selectedPuskesmas !== "Semua Puskesmas") {
-        let puskesmasName = item.puskesmas;
-        if (!puskesmasName) {
-           const posyanduData = globalPosyanduList.find(p => p.nama === item.posyandu || p.nama_posyandu === item.posyandu);
-           if (posyanduData) {
-               puskesmasName = posyanduData.puskesmas || posyanduData.puskesmas?.nama_puskesmas;
-           }
+        let pusk = cleanPuskesmasName(item.puskesmas);
+        if (!pusk) {
+          const matchedPos = globalPosyanduList.find(p => 
+            (item.posyandu_id && p.id === item.posyandu_id) || 
+            (p.nama && cleanPosyanduName(p.nama).toLowerCase() === cleanPosyanduName(item.posyandu).toLowerCase())
+          );
+          pusk = cleanPuskesmasName(matchedPos?.puskesmas || "");
         }
-        const itemPusk = (puskesmasName || item.posyandu || "").toLowerCase();
-        matchesPuskesmas = itemPusk.includes(selectedPuskesmas.toLowerCase());
+        const selPusk = cleanPuskesmasName(selectedPuskesmas).toLowerCase();
+        matchesPuskesmas = (pusk || "").toLowerCase() === selPusk || (pusk || "").toLowerCase().includes(selPusk);
       }
 
       // 4. Posyandu Filter
       let matchesPosyandu = true;
       if (selectedPosyandu !== "Semua Posyandu") {
-        matchesPosyandu = (item.posyandu || "").toLowerCase().includes(selectedPosyandu.toLowerCase());
+        const itemPos = cleanPosyanduName(item.posyandu).toLowerCase();
+        const selPos = cleanPosyanduName(selectedPosyandu).toLowerCase();
+        matchesPosyandu = itemPos === selPos || itemPos.includes(selPos);
       }
 
       return matchesSearch && matchesCategory && matchesStatus && matchesPuskesmas && matchesPosyandu;
     });
-  }, [dataset, searchQuery, statusFilter, selectedCategory, selectedPuskesmas, selectedPosyandu]);
+  }, [dataset, searchQuery, statusFilter, selectedCategory, selectedPuskesmas, selectedPosyandu, globalPosyanduList]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;

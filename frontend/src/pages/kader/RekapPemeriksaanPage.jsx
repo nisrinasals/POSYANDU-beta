@@ -170,7 +170,12 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
   return (
     <div className="container-fluid p-0">
       <div className="d-flex justify-content-end mb-3">
-        <button className="btn btn-dark-custom btn-top-action shadow-xs" onClick={() => setIsExportModalOpen(true)} title="Export Laporan Rekapitulasi ke Excel">
+        <button
+          className="btn btn-sm px-3 py-2 fw-semibold d-flex align-items-center gap-2 rounded-3 shadow-xs text-white"
+          style={{ backgroundColor: "#059669" }}
+          onClick={() => setIsExportModalOpen(true)}
+          title="Export Laporan Rekapitulasi ke Excel"
+        >
           <Download size={16} /> <span>Export Excel</span>
         </button>
       </div>
@@ -304,7 +309,17 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
                         <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => handleOpenDetail(row)} title="Lihat Detail Hasil 5 Langkah">
                           <Eye size={14} /> <span>Detail</span>
                         </button>
-                        <button className="btn btn-sm btn-outline-pink d-inline-flex align-items-center gap-1.5 shadow-none" onClick={() => setEditingWarga(row)} title="Edit Data Pemeriksaan">
+                        <button
+                          className="btn btn-sm btn-outline-pink d-inline-flex align-items-center gap-1.5 shadow-none"
+                          onClick={() => {
+                            if (onNavigate) {
+                              onNavigate("pemeriksaan", row.subKategori || "bumil", { wargaId: row.id, returnTo: "rekap-pemeriksaan" });
+                            } else {
+                              setEditingWarga(row);
+                            }
+                          }}
+                          title="Edit Data Pemeriksaan"
+                        >
                           <Edit size={14} /> <span>Edit</span>
                         </button>
                       </div>
@@ -353,9 +368,14 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
           isLoading={isLoadingDetail}
           onClose={handleCloseDetail}
           theme="kader"
+          themeColor="#059669"
           onEdit={(citizen) => {
             handleCloseDetail();
-            setEditingWarga(citizen);
+            if (onNavigate) {
+              onNavigate("pemeriksaan", citizen.subKategori || "bumil", { wargaId: citizen.id, returnTo: "rekap-pemeriksaan" });
+            } else {
+              setEditingWarga(citizen);
+            }
           }}
         />
       )}
@@ -368,6 +388,8 @@ export default function RekapPemeriksaanPage({ onNavigate, globalSasaranList = [
         globalSasaranList={globalSasaranList}
         globalPemeriksaanData={globalPemeriksaanData}
         filteredList={filteredList}
+        theme="kader"
+        themeColor="#059669"
       />
 
       {editingWarga && (

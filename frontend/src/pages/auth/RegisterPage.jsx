@@ -2,356 +2,383 @@ import React, { useEffect, useState } from "react";
 import {
   HeartHandshake, ArrowLeft, Loader2, AlertCircle, CheckCircle2,
   ShieldCheck, Mail, Lock, User, Phone, CreditCard, Building2, KeyRound,
+  Stethoscope, ArrowRight
 } from "lucide-react";
 import { posyanduService, authService } from "../../services";
 import { validateNik, formatNikInput, validatePhone, formatPhoneInput, validateEmail, validatePassword } from "../../utils/validators";
 import { useNotification } from "../../context/NotificationContext";
 import SearchablePosyanduSelect from "../../components/common/SearchablePosyanduSelect";
 import logoJogja from "../../assets/logo_jogja.png";
-import logoKemenkes from "../../assets/logo_kemenkes.png";
+import logoKemenkes from "../../assets/logo_kemenkes_clean.png";
 import logoPosyandu from "../../assets/logo_posyandu.png";
+import logoSengkuyung from "../../assets/logo_sengkuyung_katresnan.png";
+import bannerSoft from "../../assets/auth_banner_soft.jpg";
 
-/* ─────────────────────────── SHARED CSS ─────────────────────────── */
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap');
 
-  .rg-root {
-    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    min-height: 100dvh;
+  .auth-screen-wrapper {
+    min-height: 100vh;
+    width: 100vw;
+    background: #e2e8f0;
+    background: radial-gradient(circle at 20% 25%, #f1f5f9 0%, #e2e8f0 45%, #cbd5e1 100%);
     display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-sizing: border-box;
+    position: relative;
+    overflow-x: hidden;
   }
 
-  /* ── LEFT PANEL ── */
-  .rg-left {
-    width: 42%;
-    min-height: 100dvh;
-    background: linear-gradient(155deg, #0d1b35 0%, #0f2557 50%, #1a3a8f 100%);
+  .auth-main-card {
+    width: 100%;
+    max-width: 1060px;
+    min-height: 600px;
+    background: #ffffff;
+    border-radius: 36px;
+    box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.20), 0 10px 24px rgba(0, 0, 0, 0.08);
+    display: flex;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+
+  /* ── PANEL KIRI: GAMBAR 3D & BRAND STORY ── */
+  .auth-left-panel {
+    flex: 1;
+    position: relative;
+    background-image: url('${bannerSoft}');
+    background-size: cover;
+    background-position: center;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 2.25rem 2.5rem;
-    position: relative;
+    padding: 44px 46px;
     overflow: hidden;
-    flex-shrink: 0;
-  }
-
-  .rg-left::before {
-    content: '';
-    position: absolute;
-    top: -120px; left: -80px;
-    width: 420px; height: 420px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(96,165,250,0.15) 0%, transparent 70%);
-    pointer-events: none;
-  }
-  .rg-left::after {
-    content: '';
-    position: absolute;
-    bottom: -80px; right: -60px;
-    width: 380px; height: 380px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(147,197,253,0.10) 0%, transparent 70%);
-    pointer-events: none;
-  }
-
-  .rg-logo-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(255,255,255,0.96);
-    padding: 7px 14px;
-    border-radius: 100px;
-    height: 42px;
-  }
-  .rg-logo-sep { width: 1px; height: 18px; background: #cbd5e1; }
-
-  .rg-ilp-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(29, 78, 216, 0.80);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(96, 165, 250, 0.35);
-    padding: 0 14px;
-    border-radius: 100px;
-    height: 42px;
-    font-size: 0.78rem;
-    font-weight: 600;
     color: #ffffff;
   }
-  .rg-ilp-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: #60a5fa;
-    box-shadow: 0 0 10px rgba(96,165,250,0.8);
-    flex-shrink: 0;
+
+  .auth-left-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(150deg, rgba(15, 23, 42, 0.72) 0%, rgba(30, 41, 59, 0.60) 50%, rgba(15, 23, 42, 0.82) 100%);
+    backdrop-filter: blur(1px);
+    z-index: 1;
   }
 
-  .rg-eyebrow {
-    font-size: 0.72rem; font-weight: 600;
-    letter-spacing: 0.14em; text-transform: uppercase;
-    color: #60a5fa; margin-bottom: 14px;
+  .auth-left-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
   }
-  .rg-headline {
-    font-family: 'Outfit', sans-serif;
-    font-size: 2.6rem; font-weight: 800;
-    line-height: 1.1; letter-spacing: -0.03em;
-    color: #ffffff; margin: 0 0 8px;
+
+  .auth-logos-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(12px);
+    padding: 7px 18px;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.20), 0 0 0 1px rgba(255, 255, 255, 0.4);
+    align-self: flex-start;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .rg-headline-accent {
-    background: linear-gradient(90deg, #60a5fa 0%, #93c5fd 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+
+  .auth-logos-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px -4px rgba(15, 23, 42, 0.28);
+  }
+
+  .auth-badge-logo {
+    height: 26px;
+    width: auto;
+    object-fit: contain;
     display: block;
   }
-  .rg-body {
-    font-size: 0.88rem; font-weight: 400;
-    line-height: 1.65; color: #94a3b8;
-    max-width: 380px; margin-bottom: 28px;
+
+  .auth-badge-logo.kemenkes {
+    height: 18px;
   }
 
-  .rg-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .rg-stat-card {
-    background: rgba(255,255,255,0.065);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 14px;
-    padding: 14px 12px 12px;
-    transition: border-color 0.2s;
-  }
-  .rg-stat-card:hover { border-color: rgba(96,165,250,0.25); }
-  .rg-stat-val {
-    font-size: 1.25rem; font-weight: 800;
-    letter-spacing: -0.03em; line-height: 1; margin-bottom: 5px;
-  }
-  .rg-stat-desc { font-size: 0.67rem; color: #94a3b8; line-height: 1.35; }
-
-  .rg-left-footer {
-    display: flex; align-items: center; justify-content: space-between;
-    padding-top: 18px;
-    border-top: 1px solid rgba(255,255,255,0.10);
-    font-size: 0.74rem; color: #64748b;
-    position: relative; z-index: 1;
+  .auth-badge-logo.posyandu {
+    height: 25px;
   }
 
-  /* ── RIGHT PANEL ── */
-  .rg-right {
-    flex: 1;
-    min-height: 100dvh;
+  .auth-logo-sep {
+    width: 1px;
+    height: 18px;
+    background: #cbd5e1;
+  }
+
+  .auth-hero-title {
+    font-size: 2.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 8px;
+    color: #ffffff;
+    text-transform: uppercase;
+  }
+
+  .auth-hero-appname {
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #cbd5e1;
+    margin-bottom: 12px;
+  }
+
+  .auth-hero-subtitle {
+    font-size: 0.92rem;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.92);
+    line-height: 1.65;
+    max-width: 420px;
+    margin: 0;
+  }
+
+  .auth-left-badge-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 600;
+  }
+
+  /* ── PANEL KANAN: FORMULIR ── */
+  .auth-right-panel {
+    flex: 1.15;
     background: #ffffff;
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    padding: 42px 50px;
+    position: relative;
+    z-index: 2;
+    max-height: 90vh;
     overflow-y: auto;
-    padding: 2rem 2.5rem;
   }
 
-  .rg-topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 0; flex-shrink: 0;
+  .auth-right-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
   }
 
-  .rg-brand { display: flex; align-items: center; gap: 10px; }
-  .rg-brand-name {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.95rem; font-weight: 700;
-    letter-spacing: -0.01em; color: #0f172a;
-  }
-  .rg-brand-sub { font-size: 0.7rem; font-weight: 500; color: #64748b; }
-
-  .rg-back-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: none;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 6px 14px;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.78rem; font-weight: 500; color: #64748b;
-    cursor: pointer; transition: all 0.15s;
-  }
-  .rg-back-btn:hover { border-color: #cbd5e1; color: #0f172a; background: #f8fafc; }
-
-  /* ── FORM AREA ── */
-  .rg-form-area {
-    flex: 1; display: flex; align-items: center; justify-content: center;
-    padding: 1.5rem 0;
-  }
-
-  .rg-card {
-    background: #ffffff;
-    border: 1px solid #e8edf3;
-    border-radius: 20px;
-    padding: 2.25rem 2rem;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
-    width: 100%;
-    max-width: 480px;
-  }
-
-  .rg-title {
-    font-family: 'Outfit', sans-serif;
-    font-size: 1.75rem; font-weight: 800;
-    letter-spacing: -0.04em; line-height: 1.1;
-    color: #0f172a; margin: 0 0 6px;
-  }
-  .rg-subtitle {
-    font-size: 0.83rem; font-weight: 400;
-    color: #64748b; line-height: 1.55; margin: 0 0 20px;
-  }
-
-  /* ── FORM FIELDS ── */
-  .rg-field { margin-bottom: 14px; }
-  .rg-label {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.77rem; font-weight: 600;
-    color: #374151; letter-spacing: 0.01em;
-    display: block; margin-bottom: 6px;
-  }
-  .rg-label-row {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 6px;
-  }
-  .rg-input-wrap {
-    position: relative; display: flex; align-items: center;
-    border: 1.5px solid #e2e8f0; border-radius: 10px;
-    background: #fafbfc;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    overflow: hidden;
-  }
-  .rg-input-wrap:focus-within {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
-    background: #ffffff;
-  }
-  .rg-input-icon {
-    padding: 0 11px; color: #94a3b8;
-    display: flex; align-items: center; flex-shrink: 0;
-  }
-  .rg-input {
-    flex: 1; height: 44px; border: none; background: transparent;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.875rem; font-weight: 400; color: #0f172a;
-    outline: none; padding: 0;
-    min-width: 0;
-  }
-  .rg-input::placeholder { color: #b0bcc8; font-weight: 400; }
-  .rg-input:disabled { color: #94a3b8; }
-  .rg-select {
-    flex: 1; height: 44px; border: none; background: transparent;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.875rem; color: #0f172a;
-    outline: none; padding: 0 10px 0 0; cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-  }
-
-  /* ── OTP INPUT ── */
-  .rg-otp-input {
-    width: 100%; height: 58px;
-    border: 1.5px solid #e2e8f0; border-radius: 12px;
-    background: #fafbfc;
-    font-family: 'Outfit', sans-serif;
-    font-size: 1.6rem; font-weight: 700;
-    letter-spacing: 0.45em;
-    text-align: center; color: #0f172a;
-    outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-  .rg-otp-input:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
-    background: #ffffff;
-  }
-
-  /* ── ERROR / SUCCESS ALERTS ── */
-  .rg-error {
-    background: #fef2f2; border: 1px solid #fecaca;
-    border-radius: 10px; padding: 10px 14px;
-    font-size: 0.81rem; font-weight: 500; color: #dc2626;
-    margin-bottom: 16px;
-    display: flex; align-items: flex-start; gap: 8px;
-  }
-  .rg-success {
-    background: #f0fdf4; border: 1px solid #bbf7d0;
-    border-radius: 10px; padding: 10px 14px;
-    font-size: 0.81rem; font-weight: 500; color: #16a34a;
-    margin-bottom: 16px;
-    display: flex; align-items: flex-start; gap: 8px;
-  }
-
-  /* ── SUBMIT BUTTON ── */
-  .rg-submit {
-    width: 100%; height: 48px;
-    background: #0f172a; color: #ffffff;
-    border: none; border-radius: 11px;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.92rem; font-weight: 700;
+  .auth-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #475569;
+    background: #f1f5f9;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 999px;
     cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    transition: background 0.15s, transform 0.1s;
-    margin-bottom: 14px;
-  }
-  .rg-submit:hover:not(:disabled) { background: #1e293b; }
-  .rg-submit:active:not(:disabled) { transform: translateY(1px) scale(0.99); }
-  .rg-submit:disabled { opacity: 0.6; cursor: not-allowed; }
-
-  /* ── LINK BUTTON ── */
-  .rg-link-btn {
-    background: none; border: none; padding: 0; cursor: pointer;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.81rem; color: #64748b;
-    transition: color 0.15s;
-    text-decoration: none;
-  }
-  .rg-link-btn strong { color: #0f172a; font-weight: 700; }
-  .rg-link-btn:hover { color: #0f172a; }
-
-  .rg-otp-resend {
-    background: none; border: none; padding: 0; cursor: pointer;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.79rem; font-weight: 500; color: #3b82f6;
-    transition: opacity 0.15s;
-  }
-  .rg-otp-resend:hover:not(:disabled) { opacity: 0.75; }
-  .rg-otp-resend:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* ── PENDING STATE ── */
-  .rg-icon-circle {
-    width: 64px; height: 64px; border-radius: 50%;
-    display: inline-flex; align-items: center; justify-content: center;
-    margin-bottom: 16px;
-  }
-  .rg-email-pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: #f1f5f9; border: 1px solid #e2e8f0;
-    border-radius: 100px; padding: 8px 16px;
-    font-size: 0.88rem; font-weight: 600; color: #0f172a;
-    font-family: monospace;
-    margin-bottom: 24px;
+    transition: all 0.15s;
   }
 
-  /* ── FOOTNOTE ── */
-  .rg-hint { font-size: 0.71rem; color: #94a3b8; margin-top: 4px; }
+  .auth-back-link:hover {
+    color: #0f172a;
+    background: #e2e8f0;
+  }
 
-  /* ── ROW FIELDS ── */
-  .rg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 480px) { .rg-row { grid-template-columns: 1fr; } }
+  .auth-right-title {
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.03em;
+    margin: 0 0 6px;
+  }
 
-  /* ── RIGHT FOOTER ── */
-  .rg-footer {
+  .auth-right-desc {
+    font-size: 0.88rem;
+    color: #64748b;
+    margin: 0 0 20px;
+    line-height: 1.5;
+  }
+
+  .auth-input-pill {
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border-radius: 999px;
+    padding: 3px 18px;
+    margin-bottom: 12px;
+    border: 1.5px solid #cbd5e1;
+    transition: all 0.2s ease;
+  }
+
+  .auth-input-pill:focus-within {
+    background: #ffffff;
+    border-color: #475569;
+    box-shadow: 0 0 0 3.5px rgba(71, 85, 105, 0.15);
+  }
+
+  .auth-input-pill-icon {
+    color: #64748b;
+    margin-right: 10px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .auth-field-input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    height: 44px;
+    font-size: 0.9rem;
+    color: #0f172a;
+    outline: none;
+    font-family: inherit;
+    font-weight: 600;
+  }
+
+  .auth-field-input::placeholder {
+    color: #94a3b8;
+    font-weight: 400;
+  }
+
+  .auth-select-pill {
+    border: none;
+    background: transparent;
+    width: 100%;
+    height: 44px;
+    font-size: 0.9rem;
+    color: #0f172a;
+    outline: none;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .auth-btn-primary {
+    width: 100%;
+    height: 50px;
+    border: none;
+    border-radius: 999px;
+    background: #0f172a;
+    color: #ffffff;
+    font-size: 0.98rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .auth-btn-primary:hover:not(:disabled) {
+    background: #1e293b;
+    transform: translateY(-1.5px);
+    box-shadow: 0 12px 28px -4px rgba(15, 23, 42, 0.45);
+  }
+
+  .auth-btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .auth-btn-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  .auth-bottom-switch {
     text-align: center;
-    font-size: 0.72rem; color: #94a3b8;
-    font-family: 'Outfit', sans-serif;
-    flex-shrink: 0; padding-top: 1rem;
+    margin-top: 18px;
+    font-size: 0.84rem;
+    color: #64748b;
   }
 
-  /* ── RESPONSIVE ── */
-  @media (max-width: 1023px) {
-    .rg-left { display: none !important; }
-    .rg-right { padding: 1.5rem 1.25rem; }
+  .auth-bottom-switch button {
+    border: none;
+    background: transparent;
+    color: #0f172a;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 4px;
+    text-decoration: underline;
   }
 
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .spin { animation: spin 0.9s linear infinite; }
+  .auth-alert-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 14px;
+    padding: 12px 16px;
+    color: #dc2626;
+    font-size: 0.84rem;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.45;
+  }
+
+  .auth-success-box {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 14px;
+    padding: 12px 16px;
+    color: #16a34a;
+    font-size: 0.84rem;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.45;
+  }
+
+  .auth-otp-field {
+    width: 100%;
+    height: 56px;
+    border-radius: 16px;
+    border: 2px solid #cbd5e1;
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: 0.45em;
+    text-align: center;
+    color: #0f172a;
+    outline: none;
+    background: #f8fafc;
+    transition: all 0.2s;
+  }
+
+  .auth-otp-field:focus {
+    border-color: #475569;
+    background: #ffffff;
+    box-shadow: 0 0 0 3.5px rgba(71, 85, 105, 0.15);
+  }
+
+  @media (max-width: 920px) {
+    .auth-main-card {
+      flex-direction: column;
+      border-radius: 28px;
+      max-width: 520px;
+    }
+    .auth-left-panel {
+      min-height: 240px;
+      padding: 30px 24px;
+    }
+    .auth-right-panel {
+      padding: 32px 24px;
+    }
+  }
 `;
 
 export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoToLogin }) {
@@ -471,298 +498,335 @@ export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoTo
     } finally { setIsResendingOtp(false); }
   };
 
-  const handleBackToLogin = () => { if (onRegisterSuccess) onRegisterSuccess(); };
-
   return (
     <>
       <style>{CSS}</style>
-      <div className="rg-root">
+      <div className="auth-screen-wrapper">
+        <div className="auth-main-card">
+          {/* ══════════════════════════════════════════════
+              PANEL KIRI: Visual Biru 3D Universal
+          ══════════════════════════════════════════════ */}
+          <div className="auth-left-panel">
+            <div className="auth-left-overlay" />
 
-        {/* ════════════════════════════════════
-            LEFT PANEL — Brand Story
-        ════════════════════════════════════ */}
-        <div className="rg-left">
-          {/* Top bar */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1 }}>
-            <div className="rg-logo-badge">
-              <img src={logoJogja} alt="Logo Pemda" style={{ height: "22px", objectFit: "contain" }} />
-              <div className="rg-logo-sep" />
-              <img src={logoKemenkes} alt="Logo Kemenkes" style={{ height: "15px", objectFit: "contain" }} />
-              <div className="rg-logo-sep" />
-              <img src={logoPosyandu} alt="Logo Posyandu" style={{ height: "19px", objectFit: "contain" }} />
-            </div>
-            <div className="rg-ilp-badge">
-              <div className="rg-ilp-dot" />
-              <span>Integrasi Layanan Primer</span>
-            </div>
-          </div>
-
-          {/* Center hero */}
-          <div style={{ position: "relative", zIndex: 1, maxWidth: "360px" }}>
-            <p className="rg-eyebrow">Registrasi Akun Resmi</p>
-            <h1 className="rg-headline">
-              Bergabung Bersama Transformasi
-              <span className="rg-headline-accent">Layanan Posyandu</span>
-            </h1>
-            <p className="rg-body">
-              Daftarkan akun petugas kader, staf puskesmas, atau dinas kesehatan untuk pencatatan dan pelaporan kesehatan terpadu.
-            </p>
-            <div className="rg-stats">
-              <div className="rg-stat-card">
-                <div className="rg-stat-val" style={{ color: "#60a5fa" }}>Otorisasi</div>
-                <div className="rg-stat-desc">Diverifikasi Pembina Wilayah</div>
+            <div className="auth-left-content">
+              {/* Badge Logo Lembaga Terpadu */}
+              <div className="auth-logos-badge">
+                <img
+                  src={logoJogja}
+                  alt="Pemerintah Kota Yogyakarta"
+                  className="auth-badge-logo"
+                  title="Pemerintah Kota Yogyakarta"
+                />
+                <div className="auth-logo-sep" />
+                <img
+                  src={logoKemenkes}
+                  alt="Kementerian Kesehatan RI"
+                  className="auth-badge-logo kemenkes"
+                  title="Kementerian Kesehatan RI"
+                />
+                <div className="auth-logo-sep" />
+                <img
+                  src={logoPosyandu}
+                  alt="Posyandu"
+                  className="auth-badge-logo posyandu"
+                  title="Posyandu"
+                />
               </div>
-              <div className="rg-stat-card">
-                <div className="rg-stat-val" style={{ color: "#93c5fd" }}>Keamanan</div>
-                <div className="rg-stat-desc">Akses Terenkripsi &amp; Aman</div>
-              </div>
-              <div className="rg-stat-card">
-                <div className="rg-stat-val" style={{ color: "#bfdbfe" }}>Real-Time</div>
-                <div className="rg-stat-desc">Sinkronisasi Otomatis</div>
-              </div>
-            </div>
-          </div>
 
-          {/* Bottom */}
-          <div className="rg-left-footer">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <ShieldCheck size={15} style={{ color: "#60a5fa" }} />
-              <span>Sistem Registrasi Terverifikasi Instansi</span>
-            </div>
-            <span>Dinas Kesehatan &amp; Puskesmas</span>
-          </div>
-        </div>
-
-        {/* ════════════════════════════════════
-            RIGHT PANEL — Registration Form
-        ════════════════════════════════════ */}
-        <div className="rg-right">
-          {/* Top bar */}
-          <div className="rg-topbar">
-            <div className="rg-brand">
-              <img src={logoPosyandu} alt="SENGKUYUNG KATRESNAN" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
-              <div>
-                <div className="rg-brand-name">SENGKUYUNG KATRESNAN</div>
-                <div className="rg-brand-sub">Sistem Informasi Posyandu</div>
-              </div>
-            </div>
-            <button type="button" className="rg-back-btn" onClick={onGoToLogin}>
-              <ArrowLeft size={13} /> Kembali ke Login
-            </button>
-          </div>
-
-          {/* Form area */}
-          <div className="rg-form-area">
-            <div className="rg-card">
-
-              {/* ── STEP: FORM ── */}
-              {step === "form" && (
-                <>
-                  <h2 className="rg-title">Daftar sebagai<br />{getRoleTitle()}</h2>
-                  <p className="rg-subtitle">
-                    Lengkapi formulir di bawah ini. Akun akan diverifikasi oleh <strong>{getVerifierTitle()}</strong>.
-                  </p>
-
-                  {errorMessage && (
-                    <div className="rg-error">
-                      <AlertCircle size={15} style={{ flexShrink: 0, marginTop: "1px" }} />
-                      <span>{errorMessage}</span>
-                    </div>
-                  )}
-
-                  <form onSubmit={handleSubmit}>
-                    {/* Nama Lengkap */}
-                    <div className="rg-field">
-                      <label className="rg-label" htmlFor="rg-nama">Nama Lengkap &amp; Gelar</label>
-                      <div className="rg-input-wrap">
-                        <span className="rg-input-icon"><User size={15} /></span>
-                        <input id="rg-nama" type="text" name="nama" className="rg-input" value={formData.nama}
-                          onChange={handleChange} placeholder="Contoh: dr. Sarah Amanda" required disabled={isLoading} />
-                      </div>
-                    </div>
-
-                    {/* Email */}
-                    <div className="rg-field">
-                      <label className="rg-label" htmlFor="rg-email">Alamat Email</label>
-                      <div className="rg-input-wrap">
-                        <span className="rg-input-icon"><Mail size={15} /></span>
-                        <input id="rg-email" type="email" name="email" className="rg-input" value={formData.email}
-                          onChange={handleChange} placeholder="nama@gmail.com" required disabled={isLoading} />
-                      </div>
-                      <div className="rg-hint">*Notifikasi persetujuan dari {getVerifierTitle()} dikirim ke email ini.</div>
-                    </div>
-
-                    {/* NIK + Telepon */}
-                    <div className="rg-row rg-field">
-                      <div>
-                        <label className="rg-label" htmlFor="rg-nik">NIK (16 Digit)</label>
-                        <div className="rg-input-wrap">
-                          <span className="rg-input-icon"><CreditCard size={15} /></span>
-                          <input id="rg-nik" type="text" name="nik" maxLength={16} className="rg-input" value={formData.nik}
-                            onChange={handleChange} placeholder="16 digit NIK" required disabled={isLoading} />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="rg-label" htmlFor="rg-telepon">No. WhatsApp / HP</label>
-                        <div className="rg-input-wrap">
-                          <span className="rg-input-icon"><Phone size={15} /></span>
-                          <input id="rg-telepon" type="text" name="telepon" className="rg-input" value={formData.telepon}
-                            onChange={handleChange} placeholder="0812xxxxxxxx" required disabled={isLoading} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Posyandu / Puskesmas */}
-                    {role === "puskesmas" ? (
-                      <div className="rg-field">
-                        <label className="rg-label" htmlFor="rg-puskesmas">Puskesmas</label>
-                        <div className="rg-input-wrap">
-                          <span className="rg-input-icon"><Building2 size={15} /></span>
-                          <select id="rg-puskesmas" name="posyandu" className="rg-select" value={formData.posyandu}
-                            onChange={handleChange} disabled={isLoading}>
-                            <option value="">-- Pilih Puskesmas --</option>
-                            {puskesmasOptions.map((item) => (
-                              <option key={item.id} value={item.id}>{item.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    ) : role === "kader" ? (
-                      <div className="rg-field">
-                        <label className="rg-label">Wilayah Posyandu</label>
-                        <SearchablePosyanduSelect
-                          name="posyandu"
-                          placeholder="Pilih / Cari nama Posyandu..."
-                          value={formData.posyandu}
-                          onChange={handleChange}
-                          onSelectPosyandu={(item) => setSelectedPosyandu(item)}
-                          disabled={isLoading}
-                          required
-                        />
-                      </div>
-                    ) : null}
-
-                    {/* Password */}
-                    <div className="rg-field">
-                      <label className="rg-label" htmlFor="rg-password">Kata Sandi (Min. 8 Karakter)</label>
-                      <div className="rg-input-wrap">
-                        <span className="rg-input-icon"><Lock size={15} /></span>
-                        <input id="rg-password" type="password" name="password" className="rg-input" value={formData.password}
-                          onChange={handleChange} placeholder="••••••••" required disabled={isLoading} />
-                      </div>
-                    </div>
-
-                    {/* Konfirmasi Password */}
-                    <div className="rg-field" style={{ marginBottom: "20px" }}>
-                      <label className="rg-label" htmlFor="rg-confirm">Konfirmasi Kata Sandi</label>
-                      <div className="rg-input-wrap">
-                        <span className="rg-input-icon"><Lock size={15} /></span>
-                        <input id="rg-confirm" type="password" name="confirmPassword" className="rg-input"
-                          value={formData.confirmPassword} onChange={handleChange} placeholder="••••••••" required disabled={isLoading} />
-                      </div>
-                    </div>
-
-                    <button type="submit" className="rg-submit" disabled={isLoading}>
-                      {isLoading ? (
-                        <><Loader2 size={16} className="spin" /><span>Mengajukan Pendaftaran…</span></>
-                      ) : (
-                        <><span>Daftar Akun</span><span style={{ fontSize: "1.05em" }}>→</span></>
-                      )}
-                    </button>
-                  </form>
-                </>
-              )}
-
-              {/* ── STEP: OTP ── */}
-              {step === "otp_verification" && (
-                <div style={{ textAlign: "center" }}>
-                  <div className="rg-icon-circle" style={{ background: "rgba(59,130,246,0.1)", color: "#2563eb", margin: "0 auto 16px" }}>
-                    <KeyRound size={28} />
-                  </div>
-                  <h2 className="rg-title" style={{ fontSize: "1.5rem" }}>Verifikasi Kode OTP</h2>
-                  <p className="rg-subtitle">
-                    Masukkan <strong>6 digit kode OTP</strong> yang telah dikirimkan ke:
-                  </p>
-                  <div className="rg-email-pill">
-                    <Mail size={13} style={{ color: "#3b82f6" }} />
-                    <span>{formData.email}</span>
-                  </div>
-
-                  {errorMessage && (
-                    <div className="rg-error">
-                      <AlertCircle size={15} style={{ flexShrink: 0 }} /><span>{errorMessage}</span>
-                    </div>
-                  )}
-                  {otpMessage && (
-                    <div className="rg-success">
-                      <CheckCircle2 size={15} style={{ flexShrink: 0 }} /><span>{otpMessage}</span>
-                    </div>
-                  )}
-
-                  <form onSubmit={handleVerifyOtp}>
-                    <div className="rg-field" style={{ marginBottom: "20px" }}>
-                      <label className="rg-label" style={{ textAlign: "center" }}>KODE OTP 6-DIGIT</label>
-                      <input
-                        type="text" maxLength={6} className="rg-otp-input"
-                        value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        placeholder="000000"
-                        required disabled={isVerifyingOtp} autoFocus
-                      />
-                    </div>
-                    <button type="submit" className="rg-submit" disabled={isVerifyingOtp || otpCode.length !== 6}>
-                      {isVerifyingOtp ? (
-                        <><Loader2 size={16} className="spin" /><span>Memverifikasi OTP…</span></>
-                      ) : (
-                        <><span>Verifikasi OTP</span><span style={{ fontSize: "1.05em" }}>→</span></>
-                      )}
-                    </button>
-                    <div style={{ textAlign: "center" }}>
-                      <button type="button" className="rg-otp-resend" onClick={handleResendOtp} disabled={isResendingOtp}>
-                        {isResendingOtp ? "Mengirim ulang kode…" : "Belum menerima kode OTP? Kirim Ulang"}
-                      </button>
-                    </div>
-                  </form>
+              {/* Teks Sambutan */}
+              <div style={{ margin: "auto 0", paddingTop: "20px", paddingBottom: "20px" }}>
+                <div className="mb-3 d-inline-flex p-2 bg-white rounded-4 shadow-sm" style={{ backdropFilter: "blur(8px)" }}>
+                  <img src={logoSengkuyung} alt="Sengkuyung Katresnan" style={{ width: "68px", height: "68px", objectFit: "contain" }} />
                 </div>
-              )}
-
-              {/* ── STEP: PENDING APPROVAL ── */}
-              {step === "pending_approval" && (
-                <div style={{ textAlign: "center" }}>
-                  <div className="rg-icon-circle" style={{ background: "rgba(22,163,74,0.1)", color: "#16a34a", margin: "0 auto 16px" }}>
-                    <CheckCircle2 size={28} />
-                  </div>
-                  <h2 className="rg-title" style={{ fontSize: "1.5rem" }}>Email Berhasil Diverifikasi!</h2>
-                  <p className="rg-subtitle">
-                    Pendaftaran akun Anda sedang ditinjau oleh <strong>{getVerifierTitle()}</strong>. Anda akan menerima notifikasi melalui email setelah akun disetujui.
-                  </p>
-                  <div className="rg-email-pill" style={{ margin: "0 auto 24px" }}>
-                    <Mail size={13} style={{ color: "#16a34a" }} />
-                    <span>{formData.email}</span>
-                  </div>
-                  <button type="button" className="rg-submit" onClick={onGoToLogin}>
-                    Kembali ke Halaman Login
-                  </button>
+                <h1 className="auth-hero-title">PENDAFTARAN AKUN</h1>
+                <div className="auth-hero-appname">
+                  {getRoleTitle()}
                 </div>
-              )}
+                <p className="auth-hero-subtitle">
+                  Bergabung bersama ekosistem layanan kesehatan digital berbasis Integrasi Layanan Primer (ILP) Kota Yogyakarta.
+                </p>
+              </div>
 
+              {/* Footer */}
+              <div className="auth-left-badge-footer">
+                <ShieldCheck size={17} style={{ color: "#cbd5e1" }} />
+                <span>Pendaftaran Resmi Terverifikasi · Dinas Kesehatan &amp; Puskesmas</span>
+              </div>
             </div>
           </div>
 
-          {/* Footer login link */}
-          {step === "form" && (
-            <div className="rg-footer">
-              <button type="button" className="rg-link-btn" onClick={onGoToLogin}>
-                Sudah memiliki akun? <strong>Masuk ke Sistem →</strong>
+          {/* ══════════════════════════════════════════════
+              PANEL KANAN: Formulir Pendaftaran (Bahasa Indonesia)
+          ══════════════════════════════════════════════ */}
+          <div className="auth-right-panel">
+            <div className="auth-right-top-bar">
+              <span style={{ fontSize: "0.82rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#475569" }}>
+                Pendaftaran {getRoleTitle()}
+              </span>
+              <button type="button" className="auth-back-link" onClick={onGoToLogin}>
+                <ArrowLeft size={14} /> Kembali ke Masuk
               </button>
             </div>
-          )}
 
-          {step !== "form" && (
-            <div className="rg-footer">
-              © 2026 SENGKUYUNG KATRESNAN &nbsp;·&nbsp; Terintegrasi Standar ILP Kemenkes RI
-            </div>
-          )}
+            {/* LANGKAH 1: FORMULIR */}
+            {step === "form" && (
+              <>
+                <h2 className="auth-right-title">Daftar Akun Baru</h2>
+                <p className="auth-right-desc">
+                  Lengkapi data diri Anda untuk pendaftaran resmi <strong>{getRoleTitle()}</strong>.
+                </p>
+
+                {errorMessage && (
+                  <div className="auth-alert-box">
+                    <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit}>
+                  {/* Nama Lengkap */}
+                  <div className="auth-input-pill">
+                    <span className="auth-input-pill-icon"><User size={16} /></span>
+                    <input
+                      type="text"
+                      name="nama"
+                      className="auth-field-input"
+                      placeholder="Nama Lengkap"
+                      value={formData.nama}
+                      onChange={handleChange}
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div className="auth-input-pill">
+                    <span className="auth-input-pill-icon"><Mail size={16} /></span>
+                    <input
+                      type="email"
+                      name="email"
+                      className="auth-field-input"
+                      placeholder="Alamat Email Aktif"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  {/* NIK & Telepon */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div className="auth-input-pill">
+                      <span className="auth-input-pill-icon"><CreditCard size={16} /></span>
+                      <input
+                        type="text"
+                        name="nik"
+                        maxLength={16}
+                        className="auth-field-input"
+                        placeholder="16 Digit NIK"
+                        value={formData.nik}
+                        onChange={handleChange}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="auth-input-pill">
+                      <span className="auth-input-pill-icon"><Phone size={16} /></span>
+                      <input
+                        type="text"
+                        name="telepon"
+                        className="auth-field-input"
+                        placeholder="No. WhatsApp / HP"
+                        value={formData.telepon}
+                        onChange={handleChange}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Posyandu / Puskesmas */}
+                  {role === "puskesmas" ? (
+                    <div className="auth-input-pill">
+                      <span className="auth-input-pill-icon"><Building2 size={16} /></span>
+                      <select
+                        name="posyandu"
+                        className="auth-select-pill"
+                        value={formData.posyandu}
+                        onChange={handleChange}
+                        disabled={isLoading}
+                        required
+                      >
+                        <option value="">-- Pilih Puskesmas Tempat Bertugas --</option>
+                        {puskesmasOptions.map((item) => (
+                          <option key={item.id} value={item.id}>{item.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : role === "kader" ? (
+                    <div style={{ marginBottom: "12px" }}>
+                      <SearchablePosyanduSelect
+                        name="posyandu"
+                        placeholder="Pilih / Cari Wilayah Posyandu..."
+                        value={formData.posyandu}
+                        onChange={handleChange}
+                        onSelectPosyandu={(item) => setSelectedPosyandu(item)}
+                        disabled={isLoading}
+                        required
+                      />
+                    </div>
+                  ) : null}
+
+                  {/* Password & Confirm Password */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div className="auth-input-pill">
+                      <span className="auth-input-pill-icon"><Lock size={16} /></span>
+                      <input
+                        type="password"
+                        name="password"
+                        className="auth-field-input"
+                        placeholder="Kata Sandi (Min 8)"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="auth-input-pill">
+                      <span className="auth-input-pill-icon"><Lock size={16} /></span>
+                      <input
+                        type="password"
+                        name="confirmPassword"
+                        className="auth-field-input"
+                        placeholder="Ulangi Sandi"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    className="auth-btn-primary"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 size={18} className="spin" />
+                        <span>Mendaftarkan akun...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Daftar Sekarang</span>
+                        <ArrowRight size={18} />
+                      </>
+                    )}
+                  </button>
+
+                  <div className="auth-bottom-switch">
+                    Sudah memiliki akun?{" "}
+                    <button
+                      type="button"
+                      onClick={onGoToLogin}
+                    >
+                      Masuk ke Sistem
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {/* LANGKAH 2: VERIFIKASI OTP */}
+            {step === "otp_verification" && (
+              <div style={{ textAlign: "center" }}>
+                <div style={{ width: "60px", height: "60px", borderRadius: "50%", background: "rgba(37, 99, 235, 0.12)", color: "#1d4ed8", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: "16px" }}>
+                  <KeyRound size={28} />
+                </div>
+                <h2 className="auth-right-title" style={{ fontSize: "1.8rem" }}>Verifikasi Kode OTP</h2>
+                <p className="auth-right-desc">
+                  Masukkan 6 digit kode yang telah dikirim ke email <strong>{formData.email}</strong>
+                </p>
+
+                {errorMessage && (
+                  <div className="auth-alert-box">
+                    <AlertCircle size={16} />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+                {otpMessage && (
+                  <div className="auth-success-box">
+                    <CheckCircle2 size={16} />
+                    <span>{otpMessage}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleVerifyOtp}>
+                  <div style={{ marginBottom: "22px" }}>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      className="auth-otp-field"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="000000"
+                      required
+                      disabled={isVerifyingOtp}
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="auth-btn-primary"
+                    disabled={isVerifyingOtp || otpCode.length !== 6}
+                  >
+                    {isVerifyingOtp ? (
+                      <>
+                        <Loader2 size={18} className="spin" />
+                        <span>Memverifikasi...</span>
+                      </>
+                    ) : (
+                      <span>Verifikasi &amp; Lanjutkan</span>
+                    )}
+                  </button>
+
+                  <div style={{ marginTop: "18px" }}>
+                    <button
+                      type="button"
+                      style={{ border: "none", background: "transparent", color: "#1d4ed8", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer" }}
+                      onClick={handleResendOtp}
+                      disabled={isResendingOtp}
+                    >
+                      {isResendingOtp ? "Mengirim ulang..." : "Belum menerima kode OTP? Kirim Ulang"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* LANGKAH 3: MENUNGGU PERSETUJUAN */}
+            {step === "pending_approval" && (
+              <div style={{ textAlign: "center" }}>
+                <div style={{ width: "60px", height: "60px", borderRadius: "50%", background: "rgba(22, 163, 74, 0.12)", color: "#16a34a", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: "16px" }}>
+                  <CheckCircle2 size={30} />
+                </div>
+                <h2 className="auth-right-title" style={{ fontSize: "1.8rem" }}>Pendaftaran Selesai!</h2>
+                <p className="auth-right-desc">
+                  Akun Anda sedang dalam proses verifikasi oleh <strong>{getVerifierTitle()}</strong>. Notifikasi persetujuan akan dikirimkan ke email Anda.
+                </p>
+                <button
+                  type="button"
+                  className="auth-btn-primary"
+                  onClick={onGoToLogin}
+                >
+                  Kembali ke Halaman Masuk
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

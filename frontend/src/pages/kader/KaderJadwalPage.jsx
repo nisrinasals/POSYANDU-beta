@@ -181,7 +181,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
 
       setGlobalJadwalList?.((prev) => [createdSesi, ...(prev || []).filter((j) => String(j.id) !== String(createdSesi.id))]);
 
-      showSuccess("Jadwal Tersimpan", `Jadwal posyandu pada tanggal ${formatTanggalIndo(formData.tanggal)} berhasil disimpan ke database.`);
+      showSuccess("Jadwal Tersimpan", `Jadwal posyandu pada tanggal ${formatTanggalIndo(formData.tanggal)} berhasil disimpan.`);
 
       setIsModalOpen(false);
 
@@ -189,7 +189,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
     } catch (err) {
       console.error("Gagal simpan jadwal sesi:", err);
 
-      showWarning("Gagal Menyimpan Jadwal", err?.message || "Gagal menyimpan jadwal posyandu ke database.");
+      showWarning("Gagal Menyimpan Jadwal", err?.message || "Gagal menyimpan jadwal posyandu.");
     }
   };
 
@@ -211,16 +211,21 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
         </button>
       </div>
 
-      {/* Jadwal Hari Buka Berikutnya */}
-      {upcomingJadwal && (
-        <div className="card border-0 shadow-sm rounded-4 p-4 bg-white position-relative overflow-hidden">
-          <div className="d-flex align-items-center gap-2 mb-2">
-            <span className="badge px-2.5 py-1 rounded-pill small fw-semibold text-white" style={{ backgroundColor: "#2b2e4a" }}>
-              Jadwal Hari Buka Berikutnya
-            </span>
-          </div>
+      {/* Jadwal Hari Buka (Hari Ini / Berikutnya) */}
+      {upcomingJadwal && (() => {
+        const isToday = getDateOnly(upcomingJadwal.tanggal) === dateToday;
+        return (
+          <div className="card border-0 shadow-sm rounded-4 p-4 bg-white position-relative overflow-hidden">
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <span
+                className={`badge px-2.5 py-1 rounded-pill small fw-semibold text-white ${isToday ? "bg-success" : ""}`}
+                style={!isToday ? { backgroundColor: "#2b2e4a" } : undefined}
+              >
+                {isToday ? "Jadwal Buka Hari Ini" : "Jadwal Hari Buka Berikutnya"}
+              </span>
+            </div>
 
-          <h3 className="fw-bold text-dark mb-2 fs-4">{upcomingJadwal.tanggalFormatted}</h3>
+            <h3 className="fw-bold text-dark mb-2 fs-4">{upcomingJadwal.tanggalFormatted}</h3>
 
           <div className="d-flex flex-wrap align-items-center gap-3 text-secondary small">
             <div className="d-flex align-items-center gap-1">
@@ -241,7 +246,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
             )}
           </div>
         </div>
-      )}
+      ); })()}
 
       {/* Daftar Jadwal */}
       <div className="card border-0 shadow-sm rounded-4 bg-white">
