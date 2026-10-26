@@ -30,7 +30,7 @@ const getAllPosyandu = async (req, res, next) => {
       where: whereCondition,
       limit: parseInt(limit, 10),
       offset: parseInt(offset, 10),
-      order: [["id", "DESC"]],
+      order: [["nama_posyandu", "ASC"], ["id", "ASC"]],
       include: [
         {
           model: Puskesmas,

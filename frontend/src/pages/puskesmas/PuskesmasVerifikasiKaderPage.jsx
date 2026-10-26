@@ -26,6 +26,7 @@ import {
 import { useNotification } from "../../context/NotificationContext";
 import { userService } from "../../services";
 import { formatDateId } from "../../utils/dataMappers";
+import { subscribeRealtimeEvent } from "../../utils/realtimeSync";
 
 export default function PuskesmasVerifikasiKaderPage({
   activeSubmenu = "kader",
@@ -122,10 +123,18 @@ export default function PuskesmasVerifikasiKaderPage({
     // Also fetch immediately when user returns to this tab
     const handleFocus = () => fetchUsers(true);
     window.addEventListener("focus", handleFocus);
+
+    // Listen to realtime user registration / verification events
+    const unsub = subscribeRealtimeEvent((event) => {
+      if (!event || event.type === "user") {
+        fetchUsers(true);
+      }
+    });
     
     return () => {
       clearInterval(intervalRef.current);
       window.removeEventListener("focus", handleFocus);
+      unsub();
     };
   }, [fetchUsers]);
 

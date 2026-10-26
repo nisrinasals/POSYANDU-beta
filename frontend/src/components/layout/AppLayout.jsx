@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { LayoutDashboard, Calendar, Users, Stethoscope, ClipboardList, User, LogOut, ChevronDown, ChevronRight, HeartHandshake, Menu, Building2, UserCheck, UserCog, Activity, FileSpreadsheet, Shield, ShieldCheck } from "lucide-react";
 import { kategoriPemeriksaan } from "../../data/kategoriPemeriksaan";
+import { cleanPosyanduName } from "../../utils/dataMappers";
 import logoSengkuyung from "../../assets/logo_sengkuyung_katresnan.png";
 
 export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate, onLogout, globalJadwalList = [], children }) {
@@ -40,14 +41,18 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
     const todayDate = new Date(`${todayStr}T00:00:00Z`);
 
     const userPosyanduId = user?.posyandu_id ? Number(user.posyandu_id) : null;
-    const userPosyanduName = (user?.posyandu || "").toLowerCase().trim();
+    const cleanUserPos = cleanPosyanduName(user?.posyandu || "").toLowerCase().trim();
 
     // Cari sesi posyandu milik kader yang statusnya open dan dalam rentang H s.d H+6
     const matchingSessions = globalJadwalList.filter((j) => {
       const jPosId = j?.posyandu_id ? Number(j.posyandu_id) : null;
-      const jPosName = (j?.posyandu || j?.namaPosyandu || "").toLowerCase().trim();
-      const matchPos = (userPosyanduId && jPosId === userPosyanduId) || (userPosyanduName && jPosName.includes(userPosyanduName));
-      if (!matchPos && (userPosyanduId || userPosyanduName)) return false;
+      const cleanJPos = cleanPosyanduName(j?.posyandu || j?.namaPosyandu || "").toLowerCase().trim();
+
+      const matchPos =
+        (userPosyanduId && jPosId && userPosyanduId === jPosId) ||
+        (cleanUserPos && cleanJPos && (cleanUserPos === cleanJPos || cleanUserPos.includes(cleanJPos) || cleanJPos.includes(cleanUserPos)));
+
+      if (!matchPos && (userPosyanduId || cleanUserPos)) return false;
 
       const rawDate = j?.tanggal || (j?._raw?.tanggal_pelaksanaan ? String(j._raw.tanggal_pelaksanaan).slice(0, 10) : "");
       if (!rawDate) return false;
@@ -960,8 +965,9 @@ export default function AppLayout({ user, activeMenu, activeSubmenu, onNavigate,
             >
               {profilePictureSrc ? (
                 <img
+                  key={`avatar_${user?.id || 'none'}_${profilePictureSrc}`}
                   src={profilePictureSrc}
-                  alt={user.nama || "User"}
+                  alt={user?.nama || "User"}
                   className="w-100 h-100 object-fit-cover"
                   onError={(e) => {
                     e.currentTarget.style.display = "none";

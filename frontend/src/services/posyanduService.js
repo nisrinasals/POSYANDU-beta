@@ -31,6 +31,10 @@ export const posyanduService = {
       page += 1;
     } while (page <= totalPages);
 
+    allItems.sort((a, b) =>
+      (a.nama || "").localeCompare(b.nama || "", undefined, { numeric: true, sensitivity: "base" })
+    );
+
     return { success: true, data: allItems, pagination: { total_items: allItems.length } };
   },
 

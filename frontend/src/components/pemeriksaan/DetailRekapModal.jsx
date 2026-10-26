@@ -1,6 +1,6 @@
 import React from "react";
 import { User, Activity, BarChart2, Stethoscope, HeartHandshake, CheckCircle2, Edit3, X, ShieldCheck, Loader2 } from "lucide-react";
-import { formatDateId } from "../../utils/dataMappers";
+import { formatDateId, cleanAndDeduplicateReasons } from "../../utils/dataMappers";
 import { evaluasiPemeriksaan } from "../../utils/plotHelper";
 
 const SCREENING_LABELS = {
@@ -323,6 +323,19 @@ export const resolve5StepDetails = (citizen, examData = null) => {
 
   const normalizedCategory = resolveCategoryKey();
 
+  const isChildCategory = ["bayi", "balita", "apras", "uskrem_6_14"].includes(normalizedCategory);
+  if (isChildCategory) {
+    delete l1.statusPernikahan;
+    delete l1.status_pernikahan;
+    delete l1.status_perkawinan;
+    delete l1.pekerjaan;
+    delete l1.nama_suami;
+    delete l1.nama_istri;
+    if (normalizedCategory === "balita") {
+      delete l1.nama_ayah;
+    }
+  }
+
   let computedPlot = (plot && Object.keys(plot).length > 0) ? plot : null;
   const rawBb = step2.bb_kg ?? exam?.bb_kg ?? source.bb_kg ?? step2.bb ?? exam?.bb;
   const rawTb = step2.tb_cm ?? exam?.tb_cm ?? source.tb_cm ?? step2.tb ?? exam?.tb;
@@ -595,6 +608,8 @@ export const resolve5StepDetails = (citizen, examData = null) => {
   l5.is_perlu_rujukan = isRujuk ? "Ya" : "Tidak";
 
   let finalAlasanRujuk = step5.alasanRujukan || step5.statusRujukan || step5.alasan_rujukan || exam?.rujukan?.alasan_rujukan || exam?.alasan_rujukan;
+  finalAlasanRujuk = cleanAndDeduplicateReasons(finalAlasanRujuk);
+
   if (!finalAlasanRujuk && isRujuk) {
     const reasons = [];
     if (l4?.tbc?.is_tbc_terindikasi || l4?.tbc?.status_tbc === "risiko" || l4?.tbc?.status_tbc === "rujukan") reasons.push("Indikasi Skrining TBC");
@@ -603,7 +618,7 @@ export const resolve5StepDetails = (citizen, examData = null) => {
     if (l4?.skrining_jiwa?.is_rujukan_jiwa) reasons.push("Indikasi Skrining Kesehatan Jiwa");
     if (l4?.aks_aktifitas_harian?.is_rujukan_aks) reasons.push("Indikasi Evaluasi AKS");
     if (l4?.skilas?.is_rujukan_skilas) reasons.push("Indikasi Evaluasi SKILAS");
-    finalAlasanRujuk = reasons.length > 0 ? reasons.join("; ") : "Indikasi medis hasil pemeriksaan & skrining";
+    finalAlasanRujuk = cleanAndDeduplicateReasons(reasons.length > 0 ? reasons : "Indikasi medis hasil pemeriksaan & skrining");
   }
 
   if (isRujuk || isFilled(finalAlasanRujuk)) {

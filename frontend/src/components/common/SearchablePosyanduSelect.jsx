@@ -41,13 +41,15 @@ export default function SearchablePosyanduSelect({ value = "", onChange, placeho
         const rows = Array.isArray(res?.data) ? res.data : [];
         if (!cancelled) {
           setPosyanduList(
-            rows.map((item) => ({
-              ...item,
-              nama: item.nama_posyandu || "",
-              kelurahan: item.kelurahan?.nama_kelurahan || "",
-              kecamatan: item.kelurahan?.kecamatan?.nama_kecamatan || "",
-              puskesmas: item.puskesmas?.nama_puskesmas || "",
-            })),
+            rows
+              .map((item) => ({
+                ...item,
+                nama: item.nama_posyandu || "",
+                kelurahan: item.kelurahan?.nama_kelurahan || "",
+                kecamatan: item.kelurahan?.kecamatan?.nama_kecamatan || "",
+                puskesmas: item.puskesmas?.nama_puskesmas || "",
+              }))
+              .sort((a, b) => (a.nama || "").localeCompare(b.nama || "", undefined, { numeric: true, sensitivity: "base" }))
           );
         }
       } catch (error) {

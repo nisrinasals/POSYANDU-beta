@@ -1,7 +1,7 @@
 "use strict";
 
 const { Op } = require("sequelize");
-const { SesiPosyandu, Posyandu } = require("../models");
+const { SesiPosyandu, Posyandu, Puskesmas } = require("../models");
 const { canAccessPosyandu, getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { assertSessionManager } = require("../utils/sesiPosyanduHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
@@ -63,7 +63,16 @@ const createSesiPosyandu = async (req, res, next) => {
       oldValue: null,
       newValue: { id: session.id, posyandu_id: session.posyandu_id, tanggal_pelaksanaan: session.tanggal_pelaksanaan, lokasi: session.lokasi, rw: session.rw, status: session.status },
     });
-    return res.status(201).json({ success: true, message: "Sesi Posyandu berhasil dibuat.", data: session });
+    const fullSession = await SesiPosyandu.findByPk(session.id, {
+      include: [
+        {
+          model: Posyandu,
+          as: "posyandu",
+          include: [{ model: Puskesmas, as: "puskesmas", attributes: ["id", "nama_puskesmas"] }],
+        },
+      ],
+    });
+    return res.status(201).json({ success: true, message: "Sesi Posyandu berhasil dibuat.", data: fullSession || session });
   } catch (error) {
     if (error.name === "SequelizeUniqueConstraintError") return res.status(409).json({ success: false, message: "Sudah ada sesi pada Posyandu dan tanggal tersebut." });
     next(error);

@@ -9,7 +9,7 @@ import { mapFlatScreeningToBackend, unflattenScreeningFromBackend } from "../../
 import DetailRekapModal from "../../components/pemeriksaan/DetailRekapModal";
 import { pemeriksaanService, kunjunganService, wargaService, sesiService, imunisasiService } from "../../services";
 import { emptyImunisasiRows, mergeImunisasiRows } from "../../data/imunisasi";
-import { formatDateId, formatAgeFromMonths } from "../../utils/dataMappers";
+import { formatDateId, formatAgeFromMonths, cleanAndDeduplicateReasons } from "../../utils/dataMappers";
 
 // Hitung umur dalam bulan untuk menentukan apakah layanan ASI eksklusif (0-6 bulan) ditampilkan.
 const getAgeInMonths = (warga, referenceDate = new Date()) => {
@@ -1487,7 +1487,7 @@ export default function PemeriksaanPage({
     setLangkah5Form((prev) => ({
       topikPenyuluhan: (!isCitizenChanged && prev.topikPenyuluhan) ? prev.topikPenyuluhan : (l5.topikPenyuluhan || ""),
       statusRujukan: (!isCitizenChanged && prev.statusRujukan) ? prev.statusRujukan : (l5.statusRujukan || ""),
-      alasanRujukan: (!isCitizenChanged && prev.alasanRujukan) ? prev.alasanRujukan : (l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || ""),
+      alasanRujukan: cleanAndDeduplicateReasons((!isCitizenChanged && prev.alasanRujukan) ? prev.alasanRujukan : (l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || "")),
     }));
 
     setSequentialForm((prev) => {
@@ -1528,7 +1528,7 @@ export default function PemeriksaanPage({
         gulaDarah: isCitizenChanged ? "" : (prev.gulaDarah || ""),
         topikPenyuluhan: (!isCitizenChanged && prev.topikPenyuluhan) ? prev.topikPenyuluhan : (l5.topikPenyuluhan || ""),
         statusRujukan: (!isCitizenChanged && prev.statusRujukan) ? prev.statusRujukan : (l5.statusRujukan || ""),
-        alasanRujukan: (!isCitizenChanged && prev.alasanRujukan) ? prev.alasanRujukan : (l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || ""),
+        alasanRujukan: cleanAndDeduplicateReasons((!isCitizenChanged && prev.alasanRujukan) ? prev.alasanRujukan : (l5.alasanRujukan || currentExamData?.rujukan?.alasan_rujukan || "")),
       };
     });
   }, [currentSelectedWarga, currentExamData, activeSubmenu, currentCategory.label]);
@@ -1798,7 +1798,7 @@ export default function PemeriksaanPage({
         backendPersistedRujukan ||
         String(formData.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu"
       );
-      const effectiveAlasanRujukan = String(formData.alasanRujukan || "").trim() || (step5AutoReferral.reasons.length > 0 ? step5AutoReferral.reasons.join("; ") : undefined);
+      const effectiveAlasanRujukan = cleanAndDeduplicateReasons([formData.alasanRujukan, ...step5AutoReferral.reasons]) || undefined;
 
       const step5Res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
@@ -2076,7 +2076,7 @@ export default function PemeriksaanPage({
         backendPersistedRujukan ||
         String(formToSave.statusRujukan || "").trim() === "Rujuk ke Puskesmas / Pustu"
       );
-      const effectiveAlasanRujukan = String(formToSave.alasanRujukan || "").trim() || (step5AutoReferral.reasons.length > 0 ? step5AutoReferral.reasons.join("; ") : undefined);
+      const effectiveAlasanRujukan = cleanAndDeduplicateReasons([formToSave.alasanRujukan, ...step5AutoReferral.reasons]) || undefined;
 
       const res = await pemeriksaanService.saveStep5({
         kunjungan_id: Number(kunjunganId),
@@ -2725,6 +2725,15 @@ export default function PemeriksaanPage({
                                 <p className="text-muted small mb-0" style={{ maxWidth: "420px", fontSize: "0.8rem" }}>
                                   Data sasaran kategori <strong>{currentCategory.label}</strong> belum terdaftar. Silakan tambahkan sasaran melalui menu <strong>Data Sasaran</strong>.
                                 </p>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm text-white mt-2.5 px-3.5 py-1.5 rounded-3 d-inline-flex align-items-center gap-1.5 shadow-xs"
+                                  style={{ backgroundColor: "#2b2e4a", borderColor: "#2b2e4a" }}
+                                  onClick={() => onNavigate?.("data-sasaran")}
+                                >
+                                  <Users size={15} />
+                                  <span>+ Tambah di Menu Data Sasaran</span>
+                                </button>
                               </div>
                             ) : (
                               <div className="d-flex flex-column align-items-center justify-content-center py-3">
@@ -5579,7 +5588,7 @@ export default function PemeriksaanPage({
 
           const manualAlasan = sequentialForm.alasanRujukan || langkah5Form.alasanRujukan || "";
           const autoAlasan = step5AutoReferral.reasons.length > 0 ? step5AutoReferral.reasons.join("; ") : "";
-          const finalAlasan = [autoAlasan, manualAlasan].filter(Boolean).join(" - ") || (isRujuk ? "Indikasi medis hasil pemeriksaan & skrining" : "");
+          const finalAlasan = cleanAndDeduplicateReasons([autoAlasan, manualAlasan]) || (isRujuk ? "Indikasi medis hasil pemeriksaan & skrining" : "");
 
           const previewExamData = {
             kategori_sasaran: getBackendCategory(activeSubmenu),
@@ -5594,7 +5603,9 @@ export default function PemeriksaanPage({
               usiaBayi: sequentialForm.usiaBayi,
               usiaBalita: sequentialForm.usiaBalita,
               usiaApras: sequentialForm.usiaApras,
-              statusPernikahan: sequentialForm.statusPernikahan,
+              ...(!["bayi", "balita", "apras", "bayi-0-11", "balita-12-59", "apras-60-72", "usekrem-6-14"].some((c) => activeSubmenu.includes(c))
+                ? { statusPernikahan: sequentialForm.statusPernikahan }
+                : {}),
             },
             pengukuran_step_2: currentL2,
             langkah2: currentL2,

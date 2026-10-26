@@ -1,5 +1,6 @@
 import React from "react";
 import { IMUNISASI_MASTER, TEMPAT_IMUNISASI } from "../../data/imunisasi";
+import IndonesianDateInput from "../common/IndonesianDateInput";
 
 const TEMPAT_LABEL = {
   puskesmas: "Puskesmas",
@@ -57,7 +58,12 @@ export default function ImunisasiTableHistory({ rows = [], onChange = () => {} }
                     </div>
                   </td>
                   <td>
-                    <input className="form-control form-control-sm" type="date" value={row.tanggal_imunisasi || ""} disabled={!row.is_diberikan} onChange={(event) => updateRow(index, { tanggal_imunisasi: event.target.value })} />
+                    <IndonesianDateInput
+                      value={row.tanggal_imunisasi || ""}
+                      disabled={!row.is_diberikan}
+                      onChange={(val) => updateRow(index, { tanggal_imunisasi: val })}
+                      placeholder="DD/MM/YYYY"
+                    />
                   </td>
                   <td>
                     <select className="form-select form-select-sm" value={row.tempat || ""} disabled={!row.is_diberikan} onChange={(event) => updateRow(index, { tempat: event.target.value })}>

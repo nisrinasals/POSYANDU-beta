@@ -157,7 +157,13 @@ const changeUserStatus = async (req, res, next) => {
 
 const getMyProfile = async (req, res, next) => {
   try {
-    const user = await User.findByPk(req.user.id, { attributes: userAttributes });
+    const user = await User.findByPk(req.user.id, {
+      attributes: userAttributes,
+      include: [
+        { model: Puskesmas, as: "puskesmas", attributes: ["id", "nama_puskesmas", "kode_puskesmas"] },
+        { model: Posyandu, as: "posyandu", attributes: ["id", "nama_posyandu", "puskesmas_id"] },
+      ],
+    });
     return res.status(200).json({ success: true, message: "Berhasil mengambil profil saya.", data: user });
   } catch (error) {
     next(error);

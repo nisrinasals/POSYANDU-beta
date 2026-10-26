@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Eye, FileText, RotateCcw, AlertTriangle, User } from "lucide-react";
 import { rujukanService } from "../../services";
-import { formatAgeFromMonths, formatDateId } from "../../utils/dataMappers";
+import { formatAgeFromMonths, formatDateId, cleanAndDeduplicateReasons } from "../../utils/dataMappers";
 
 export default function KaderRiwayatRujukanPage({ globalSasaranList = [], globalPemeriksaanData = {}, onNavigate }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,8 +56,8 @@ export default function KaderRiwayatRujukanPage({ globalSasaranList = [], global
         usia: formatAgeFromMonths(item.pemeriksaan?.usia_bulan, item.pemeriksaan?.kategori_sasaran),
         posyandu: item.warga?.posyandu?.nama_posyandu || "",
         kaderPerujuk: item.kader?.nama_lengkap || "",
-        masalahBadge: item.alasan_rujukan || "",
-        masalahSub: item.alasan_rujukan || "",
+        masalahBadge: cleanAndDeduplicateReasons(item.alasan_rujukan) || "",
+        masalahSub: cleanAndDeduplicateReasons(item.alasan_rujukan) || "",
         tglDirujuk: formatDateId(item.tanggal_rujukan),
         raw: item,
       })),

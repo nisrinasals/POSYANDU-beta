@@ -122,7 +122,7 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
 
   // Available Puskesmas List
   const availablePuskesmasList = useMemo(() => {
-    return [...new Set(globalPosyanduList.map((item) => cleanPuskesmasName(item.puskesmas)).filter(Boolean))].sort();
+    return [...new Set(globalPosyanduList.map((item) => cleanPuskesmasName(item.puskesmas)).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
   }, [globalPosyanduList]);
 
   // Available Posyandu List for filter dropdown
@@ -135,7 +135,7 @@ export default function PuskesmasRekapitulasiPage({ globalSasaranList = [], glob
       const userPuskClean = cleanPuskesmasName(user.puskesmas).toLowerCase();
       baseList = baseList.filter((item) => cleanPuskesmasName(item.puskesmas).toLowerCase() === userPuskClean);
     }
-    return [...new Set(baseList.map((item) => cleanPosyanduName(item.nama)).filter(Boolean))].sort();
+    return [...new Set(baseList.map((item) => cleanPosyanduName(item.nama)).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
   }, [isSuperAdminOrDinkes, selectedPuskesmas, user?.puskesmas, globalPosyanduList]);
 
   // Filtered List Logic (Search, Category, Posyandu, Month & Year)

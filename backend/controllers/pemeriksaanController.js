@@ -8,7 +8,7 @@ const { assertKaderCanMutateSession } = require("../utils/sesiPosyanduHelper");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
 const { STANDAR_PLOT, evaluasiPemeriksaan } = require("../utils/plotHelper");
 const { createAuditLog, AUDIT_ACTIONS } = require("../utils/auditLogHelper");
-const { getScreeningReferralReasons, getPlotReferralReasons, getCombinedReferralReasons } = require("../utils/rujukanHelper");
+const { getScreeningReferralReasons, getPlotReferralReasons, getCombinedReferralReasons, cleanAndDeduplicateReferralReasons } = require("../utils/rujukanHelper");
 const { REKAP_GROUPS, REKAP_EXPORT_COLUMNS, aggregateRekapRows } = require("../utils/export/rekapExportHelper");
 const { calculateGrowthZScores } = require("../utils/growthZScoreHelper");
 const { calculatePregnancyAge, validateHphtAgainstDate } = require("../utils/pregnancyHelper");
@@ -1389,7 +1389,7 @@ const saveStep5 = async (req, res, next) => {
     const automaticReasons = getCombinedReferralReasons(pemeriksaan.detail_skrining, plotData);
     const manualReason = String(alasan_rujukan ?? "").trim();
     const keputusanRujukan = automaticReasons.length > 0 || is_perlu_rujukan === true;
-    const alasanFinal = [...automaticReasons, ...(manualReason ? [manualReason] : [])].join("; ");
+    const alasanFinal = cleanAndDeduplicateReferralReasons([...automaticReasons, manualReason]);
     const oldReferral = await Rujukan.findOne({
       where: {
         pemeriksaan_id: pemeriksaan.id,

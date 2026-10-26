@@ -2,7 +2,9 @@ import React, { useState, useMemo } from "react";
 import { Calendar, MapPin, Plus, Search, ChevronLeft, ChevronRight, X, Eye, Info, FileText, CheckCircle2 } from "lucide-react";
 import { useNotification } from "../../context/NotificationContext";
 import { sesiService } from "../../services";
-import { formatDateId, mapBackendSesiToFrontend } from "../../utils/dataMappers";
+import { formatDateId, mapBackendSesiToFrontend, cleanPosyanduName } from "../../utils/dataMappers";
+import { broadcastRealtimeEvent } from "../../utils/realtimeSync";
+import IndonesianDateInput from "../../components/common/IndonesianDateInput";
 
 export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwalList, user, onRefreshData }) {
   const { showWarning, showSuccess } = useNotification();
@@ -178,8 +180,18 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
       }
 
       const createdSesi = mapBackendSesiToFrontend(res.data);
+      if (createdSesi) {
+        if (!createdSesi.posyandu && user?.posyandu) {
+          createdSesi.posyandu = cleanPosyanduName(user.posyandu);
+        }
+        if (!createdSesi.posyandu_id && user?.posyandu_id) {
+          createdSesi.posyandu_id = Number(user.posyandu_id);
+        }
+      }
 
       setGlobalJadwalList?.((prev) => [createdSesi, ...(prev || []).filter((j) => String(j.id) !== String(createdSesi.id))]);
+
+      broadcastRealtimeEvent("jadwal", { id: createdSesi?.id, posyandu: createdSesi?.posyandu });
 
       showSuccess("Jadwal Tersimpan", `Jadwal posyandu pada tanggal ${formatTanggalIndo(formData.tanggal)} berhasil disimpan.`);
 
@@ -482,8 +494,7 @@ export default function KaderJadwalPage({ globalJadwalList = [], setGlobalJadwal
                         Tanggal Pelaksanaan <span className="text-danger">*</span>
                       </label>
 
-                      <input
-                        type="date"
+                      <IndonesianDateInput
                         className="form-control form-control-sm"
                         value={formData.tanggal}
                         onChange={(e) =>

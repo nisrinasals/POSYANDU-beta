@@ -34,6 +34,8 @@ import { useNotification } from "../../context/NotificationContext";
 import DetailSasaranModal from "../../components/sasaran/DetailSasaranModal";
 import ExportSasaranButton from "../../components/sasaran/ExportSasaranButton";
 import { formatDateId } from "../../utils/dataMappers";
+import IndonesianDateInput from "../../components/common/IndonesianDateInput";
+import { broadcastRealtimeEvent } from "../../utils/realtimeSync";
 
 const HEALTH_HISTORY_FIELDS = [
   { label: "Hipertensi", key: "hipertensi" },
@@ -686,6 +688,7 @@ export default function DataSasaranPage({
       setSasaranList([createdItem, ...sasaranList.filter((s) => s.nik !== createdItem.nik)]);
       setShowCategoryFormModal(false);
       showSuccess("Data Sasaran Tersimpan", `Berhasil menyimpan data sasaran [${selectedCategory?.title || "Warga"}] atas nama "${createdItem.nama}".`);
+      broadcastRealtimeEvent("sasaran", { id: createdItem.id, nik: createdItem.nik });
       onRefreshData?.();
     } catch (err) {
       console.error("Gagal simpan sasaran:", err);
@@ -709,6 +712,7 @@ export default function DataSasaranPage({
             });
             setShowCategoryFormModal(false);
             showSuccess("Peralihan ke Ibu Hamil Berhasil", `Sasaran atas nama "${found.nama_lengkap}" berhasil dialihkan statusnya menjadi sasaran Ibu Hamil (Bumil).`);
+            broadcastRealtimeEvent("sasaran", { id: found.id, nik: found.nik });
             onRefreshData?.();
             return;
           }
@@ -848,6 +852,7 @@ export default function DataSasaranPage({
 
       setShowMutasiFormModal(false);
       showSuccess("Mutasi Berhasil", `Sasaran atas nama "${mutasiForm.nama}" berhasil dimutasi ke Posyandu tujuan.`);
+      broadcastRealtimeEvent("sasaran", { id: mutasiForm.wargaId });
       onRefreshData?.();
     } catch (err) {
       console.error("Gagal menyimpan mutasi:", err);
@@ -933,6 +938,7 @@ export default function DataSasaranPage({
         setSasaranList((prev) => (prev || []).map((item) => (String(item.id) === String(selectedSasaran.id) ? refreshedWarga : item)));
         setShowEditModal(false);
         showSuccess("Pembaruan Berhasil", `Data sasaran "${selectedSasaran?.nama || "Warga"}" berhasil diperbarui.`);
+        broadcastRealtimeEvent("sasaran", { id: selectedSasaran.id });
         onRefreshData?.();
       } catch (err) {
         console.error("Backend edit warga error:", err);
@@ -1238,8 +1244,7 @@ export default function DataSasaranPage({
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
-                      <input
-                        type="date"
+                      <IndonesianDateInput
                         max={new Date().toISOString().split("T")[0]}
                         className="form-control form-control-custom"
                         value={categoryForm.tglLahir}
@@ -1261,12 +1266,12 @@ export default function DataSasaranPage({
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">HPHT (Hari Pertama Haid Terakhir)</label>
-                      <input type="date" className="form-control form-control-custom" value={categoryForm.hpht} onChange={(e) => setCategoryForm({ ...categoryForm, hpht: e.target.value })} />
+                      <IndonesianDateInput className="form-control form-control-custom" value={categoryForm.hpht} onChange={(e) => setCategoryForm({ ...categoryForm, hpht: e.target.value })} />
                     </div>
 
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">HPL</label>
-                      <input type="date" className="form-control form-control-custom" value={categoryForm.hpl} onChange={(e) => setCategoryForm({ ...categoryForm, hpl: e.target.value })} />
+                      <IndonesianDateInput className="form-control form-control-custom" value={categoryForm.hpl} onChange={(e) => setCategoryForm({ ...categoryForm, hpl: e.target.value })} />
                     </div>
 
                   </div>
@@ -1381,7 +1386,7 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
-                      <input type="date" className="form-control form-control-custom" value={categoryForm.tglLahir} onChange={(e) => setCategoryForm({ ...categoryForm, tglLahir: e.target.value })} required />
+                      <IndonesianDateInput className="form-control form-control-custom" value={categoryForm.tglLahir} onChange={(e) => setCategoryForm({ ...categoryForm, tglLahir: e.target.value })} required />
                     </div>
 
                     <div className="mb-3">
@@ -1491,11 +1496,47 @@ export default function DataSasaranPage({
                       </>
                     )}
 
+                    {/* KHUSUS BAYI, BALITA, DAN APRAS: BERAT LAHIR (BBL) & PANJANG LAHIR (PBL) */}
+                    {["bayi-0-11", "balita-12-59", "apras-60-72"].includes(selectedCategory.id) && (
+                      <div className="mb-3">
+                        <div className="row g-2">
+                          <div className="col-6">
+                            <label className="form-label fw-medium small mb-1">Berat Lahir (BBL)</label>
+                            <div className="input-group">
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="form-control form-control-custom"
+                                placeholder="Contoh: 3.2"
+                                value={categoryForm.bbl || ""}
+                                onChange={(e) => setCategoryForm({ ...categoryForm, bbl: e.target.value })}
+                              />
+                              <span className="input-group-text bg-light text-muted small">kg</span>
+                            </div>
+                          </div>
+                          <div className="col-6">
+                            <label className="form-label fw-medium small mb-1">Panjang Lahir (PBL)</label>
+                            <div className="input-group">
+                              <input
+                                type="number"
+                                step="0.1"
+                                className="form-control form-control-custom"
+                                placeholder="Contoh: 49"
+                                value={categoryForm.pbl || ""}
+                                onChange={(e) => setCategoryForm({ ...categoryForm, pbl: e.target.value })}
+                              />
+                              <span className="input-group-text bg-light text-muted small">cm</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* KHUSUS NIFAS / MENYUSUI: TANGGAL PERSALINAN & CARA PERSALINAN (Opsional) */}
                     {selectedCategory.id === "nifas" && (
                       <div className="mb-3">
                         <label className="form-label fw-bold text-primary small mb-1">Tanggal Persalinan</label>
-                        <input type="date" className="form-control form-control-custom border-primary" value={categoryForm.tglPersalinan} onChange={(e) => setCategoryForm({ ...categoryForm, tglPersalinan: e.target.value })} />
+                        <IndonesianDateInput className="form-control form-control-custom border-primary" value={categoryForm.tglPersalinan} onChange={(e) => setCategoryForm({ ...categoryForm, tglPersalinan: e.target.value })} />
                       </div>
                     )}
 
@@ -1526,8 +1567,7 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
-                      <input
-                        type="date"
+                      <IndonesianDateInput
                         max={new Date().toISOString().split("T")[0]}
                         className="form-control form-control-custom"
                         value={categoryForm.tglLahir}
@@ -2145,8 +2185,7 @@ export default function DataSasaranPage({
               <div className="col-md-6">
                 <div className="mb-3">
                   <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
-                  <input
-                    type="date"
+                  <IndonesianDateInput
                     max={new Date().toISOString().split("T")[0]}
                     className="form-control form-control-custom"
                     value={mutasiForm.tglLahir}
@@ -2258,8 +2297,7 @@ export default function DataSasaranPage({
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
-                      <input
-                        type="date"
+                      <IndonesianDateInput
                         max={new Date().toISOString().split("T")[0]}
                         className="form-control form-control-custom"
                         value={selectedSasaran.tglLahir || ""}
@@ -2279,11 +2317,11 @@ export default function DataSasaranPage({
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">HPHT (Hari Pertama Haid Terakhir)</label>
-                      <input type="date" className="form-control form-control-custom" value={selectedSasaran.hpht || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpht: e.target.value })} />
+                      <IndonesianDateInput className="form-control form-control-custom" value={selectedSasaran.hpht || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpht: e.target.value })} />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">HPL</label>
-                      <input type="date" className="form-control form-control-custom" value={selectedSasaran.hpl || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpl: e.target.value })} />
+                      <IndonesianDateInput className="form-control form-control-custom" value={selectedSasaran.hpl || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, hpl: e.target.value })} />
                     </div>
                   </div>
 
@@ -2317,7 +2355,7 @@ export default function DataSasaranPage({
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Persalinan</label>
-                      <input type="date" className="form-control form-control-custom" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} />
+                      <IndonesianDateInput className="form-control form-control-custom" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Cara Persalinan</label>
@@ -2350,8 +2388,8 @@ export default function DataSasaranPage({
                     </div>
                   </div>
                 </div>
-              ) : selectedSasaran.kategori?.toLowerCase().includes("bayi") ? (
-                /* 2. EDIT BAYI 0-11 BULAN (GAMBAR 3) */
+              ) : (selectedSasaran.kategori?.toLowerCase().includes("bayi") || selectedSasaran.kategori?.toLowerCase().includes("balita") || selectedSasaran.kategori?.toLowerCase().includes("apras")) ? (
+                /* 2. EDIT BAYI, BALITA, DAN APRAS */
                 <div className="row g-3 mb-4">
                   {/* Kolom Kiri */}
                   <div className="col-md-6">
@@ -2391,25 +2429,31 @@ export default function DataSasaranPage({
                       <div className="row g-2">
                         <div className="col-6">
                           <label className="form-label fw-medium small mb-1">Berat Lahir (BBL)</label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            className="form-control form-control-custom"
-                            placeholder="BBL (kg)"
-                            value={selectedSasaran.bbl ? selectedSasaran.bbl.toString().replace(/[^0-9.]/g, "") : selectedSasaran.bb || ""}
-                            onChange={(e) => setSelectedSasaran({ ...selectedSasaran, bbl: e.target.value, bb: e.target.value })}
-                          />
+                          <div className="input-group">
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="form-control form-control-custom"
+                              placeholder="BBL (kg)"
+                              value={selectedSasaran.bbl ? selectedSasaran.bbl.toString().replace(/[^0-9.]/g, "") : ""}
+                              onChange={(e) => setSelectedSasaran({ ...selectedSasaran, bbl: e.target.value })}
+                            />
+                            <span className="input-group-text bg-light text-muted small">kg</span>
+                          </div>
                         </div>
                         <div className="col-6">
                           <label className="form-label fw-medium small mb-1">Panjang Lahir (PBL)</label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            className="form-control form-control-custom"
-                            placeholder="PBL (cm)"
-                            value={selectedSasaran.pbl ? selectedSasaran.pbl.toString().replace(/[^0-9.]/g, "") : selectedSasaran.tb || ""}
-                            onChange={(e) => setSelectedSasaran({ ...selectedSasaran, pbl: e.target.value, tb: e.target.value })}
-                          />
+                          <div className="input-group">
+                            <input
+                              type="number"
+                              step="0.1"
+                              className="form-control form-control-custom"
+                              placeholder="PBL (cm)"
+                              value={selectedSasaran.pbl ? selectedSasaran.pbl.toString().replace(/[^0-9.]/g, "") : ""}
+                              onChange={(e) => setSelectedSasaran({ ...selectedSasaran, pbl: e.target.value })}
+                            />
+                            <span className="input-group-text bg-light text-muted small">cm</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2426,22 +2470,16 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
-                      <input
-                        type="date"
-                        max={new Date().toISOString().split("T")[0]}
-                        className="form-control form-control-custom"
+                      <IndonesianDateInput
                         value={selectedSasaran.tglLahir || ""}
-                        onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglLahir: e.target.value })}
+                        onChange={(val) => setSelectedSasaran({ ...selectedSasaran, tglLahir: val })}
+                        placeholder="DD/MM/YYYY"
                         required
                       />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Nama Ibu</label>
                       <input type="text" className="form-control form-control-custom" value={selectedSasaran.namaIbu || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, namaIbu: e.target.value })} />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label fw-medium small mb-1">Nama Ayah</label>
-                      <input type="text" className="form-control form-control-custom" value={selectedSasaran.namaAyah || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, namaAyah: e.target.value })} />
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Alamat Domisili</label>
@@ -2520,7 +2558,7 @@ export default function DataSasaranPage({
                       <>
                         <div className="mb-3">
                           <label className="form-label fw-bold text-primary small mb-1">Tanggal Persalinan</label>
-                          <input type="date" className="form-control form-control-custom border-primary" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} />
+                          <IndonesianDateInput className="form-control form-control-custom border-primary" value={selectedSasaran.tglPersalinan || ""} onChange={(e) => setSelectedSasaran({ ...selectedSasaran, tglPersalinan: e.target.value })} />
                         </div>
                         <div className="mb-3">
                           <label className="form-label fw-bold text-primary small mb-1">Cara Persalinan</label>
@@ -2553,8 +2591,7 @@ export default function DataSasaranPage({
                   <div className="col-md-6">
                     <div className="mb-3">
                       <label className="form-label fw-medium small mb-1">Tanggal Lahir</label>
-                      <input
-                        type="date"
+                      <IndonesianDateInput
                         max={new Date().toISOString().split("T")[0]}
                         className="form-control form-control-custom"
                         value={selectedSasaran.tglLahir || ""}

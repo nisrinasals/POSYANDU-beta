@@ -3,6 +3,7 @@ import { Search, Filter, Check, X, Clock, UserCheck, UserX, UserCog, RefreshCw, 
 import { useNotification } from "../../context/NotificationContext";
 import { userService } from "../../services";
 import { formatDateId } from "../../utils/dataMappers";
+import { subscribeRealtimeEvent } from "../../utils/realtimeSync";
 
 export default function DinkesVerifikasiAkunPage({
   activeSubmenu = "puskesmas",
@@ -99,9 +100,17 @@ export default function DinkesVerifikasiAkunPage({
     intervalRef.current = setInterval(() => fetchUsers(true), 5000);
     const handleFocus = () => fetchUsers(true);
     window.addEventListener("focus", handleFocus);
+
+    const unsub = subscribeRealtimeEvent((event) => {
+      if (!event || event.type === "user") {
+        fetchUsers(true);
+      }
+    });
+
     return () => {
       clearInterval(intervalRef.current);
       window.removeEventListener("focus", handleFocus);
+      unsub();
     };
   }, [fetchUsers]);
 

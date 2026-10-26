@@ -128,13 +128,13 @@ export default function DetailSasaranModal({ show = true, onHide, onClose, selec
                         </div>
                       </div>
                     )}
-                    {(isBayiBalita || target.namaAyah) && (
+                    {!katLower.includes("balita") && target.namaAyah && (
                       <div className="col-12 col-md-6">
                         <div className="p-3 bg-light rounded-3 h-100">
                           <div className="text-muted small mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 500 }}>
                             Nama Ayah
                           </div>
-                          <div className="fw-bold text-dark">{target.namaAyah || "-"}</div>
+                          <div className="fw-bold text-dark">{target.namaAyah}</div>
                         </div>
                       </div>
                     )}

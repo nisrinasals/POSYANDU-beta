@@ -129,9 +129,16 @@ export default function ExportRekapModal({
       posyanduService.getPublicPuskesmasList().catch(() => ({ data: [] })),
       posyanduService.getAllPosyandu().catch(() => ({ data: [] })),
     ]).then(([pkmRes, posRes]) => {
-      if (cancelled) return;
-      const pkms = Array.isArray(pkmRes?.value?.data) ? pkmRes.value.data : [];
-      const posyandus = Array.isArray(posRes?.value?.data) ? posRes.value.data : [];
+      const pkms = (Array.isArray(pkmRes?.value?.data) ? pkmRes.value.data : []).sort((a, b) => {
+        const nameA = cleanPuskesmasName(a.nama_puskesmas || a.nama || "");
+        const nameB = cleanPuskesmasName(b.nama_puskesmas || b.nama || "");
+        return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+      });
+      const posyandus = (Array.isArray(posRes?.value?.data) ? posRes.value.data : []).sort((a, b) => {
+        const nameA = cleanPosyanduName(a.nama_posyandu || a.nama || "");
+        const nameB = cleanPosyanduName(b.nama_posyandu || b.nama || "");
+        return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+      });
       setPuskesmasList(pkms);
       setAllPosyanduList(posyandus);
 
@@ -207,8 +214,9 @@ export default function ExportRekapModal({
 
   // Filtered Posyandu list: Jika role Puskesmas, HANYA posyandu di bawah naungannya sendiri!
   const availablePosyandus = useMemo(() => {
+    let list = [];
     if (isPuskesmas) {
-      return allPosyanduList.filter((pos) => {
+      list = allPosyanduList.filter((pos) => {
         const pkmId = String(pos.puskesmas_id || pos.puskesmas?.id || "");
         if (userPuskesmasId && pkmId === String(userPuskesmasId)) return true;
         if (userPuskesmasName) {
@@ -218,12 +226,19 @@ export default function ExportRekapModal({
         }
         return false;
       });
+    } else if (selectedPuskesmasId === "all") {
+      list = allPosyanduList;
+    } else {
+      list = allPosyanduList.filter(
+        (pos) => String(pos.puskesmas_id || pos.puskesmas?.id) === String(selectedPuskesmasId)
+      );
     }
 
-    if (selectedPuskesmasId === "all") return allPosyanduList;
-    return allPosyanduList.filter(
-      (pos) => String(pos.puskesmas_id || pos.puskesmas?.id) === String(selectedPuskesmasId)
-    );
+    return [...list].sort((a, b) => {
+      const nameA = cleanPosyanduName(a.nama_posyandu || a.nama || "");
+      const nameB = cleanPosyanduName(b.nama_posyandu || b.nama || "");
+      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+    });
   }, [isPuskesmas, userPuskesmasId, userPuskesmasName, selectedPuskesmasId, allPosyanduList]);
 
   // Otomatis pilih Posyandu pertama jika user memilih scope posyandu

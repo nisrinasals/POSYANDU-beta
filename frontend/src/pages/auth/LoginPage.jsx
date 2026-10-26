@@ -4,7 +4,7 @@ import RegisterRoleModal from "../../components/auth/RegisterRoleModal";
 import { useNotification } from "../../context/NotificationContext";
 import { authService, userService } from "../../services";
 import logoJogja from "../../assets/logo_jogja.png";
-import logoKemenkes from "../../assets/logo_kemenkes_clean.png";
+import logoKemenkes from "../../assets/logo_kemenkes.png";
 import logoPosyandu from "../../assets/logo_posyandu.png";
 import logoSengkuyung from "../../assets/logo_sengkuyung_katresnan.png";
 import bannerSoft from "../../assets/auth_banner_soft.jpg";

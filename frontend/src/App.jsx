@@ -32,6 +32,84 @@ import wargaService from "./services/wargaService";
 
 import { mapBackendWargaToFrontend, mapBackendSesiToFrontend, cleanPuskesmasName, cleanPosyanduName } from "./utils/dataMappers";
 import { recordLogin } from "./utils/loginTracker";
+import { subscribeRealtimeEvent } from "./utils/realtimeSync";
+
+const INITIAL_USER_STATE = {
+  id: null,
+  email: "",
+  nama: "",
+  nama_lengkap: "",
+  posyandu: "",
+  posyandu_id: null,
+  puskesmas: "",
+  puskesmas_id: null,
+  roleType: "",
+  role: "",
+  telepon: "",
+  nik: "",
+  profile_picture: null,
+};
+
+const mapRoleToFrontend = (backendRole) => {
+  const role = String(backendRole || "").trim();
+  if (role === "dinkesAdmin" || role === "dinkes-admin") {
+    return { roleType: "dinkes-admin", roleTitle: "Admin Dinas Kesehatan" };
+  }
+  if (role === "dinkes" || role === "dinkes-staf") {
+    return { roleType: "dinkes-staf", roleTitle: "Staf Dinas Kesehatan" };
+  }
+  if (role === "puskesmasAdmin" || role === "puskesmas-admin") {
+    return { roleType: "puskesmas-admin", roleTitle: "Admin Puskesmas" };
+  }
+  if (role === "puskesmas" || role === "puskesmas-staf" || role === "puskesmas-user") {
+    return { roleType: "puskesmas-staf", roleTitle: "Staf Puskesmas" };
+  }
+  if (role === "sa") {
+    return { roleType: "sa", roleTitle: "Super Admin" };
+  }
+  return { roleType: "kader", roleTitle: "Kader" };
+};
+
+const formatUserObject = (data) => {
+  if (!data) return INITIAL_USER_STATE;
+  const rawRole = data.roleType || data.role || data.user?.role || "";
+  const { roleType, roleTitle } = mapRoleToFrontend(rawRole);
+
+  const rawPhoto =
+    data.profile_picture ??
+    data.profilePicture ??
+    data.foto_profil ??
+    data.foto ??
+    data.avatar ??
+    data.user?.profile_picture ??
+    null;
+
+  const posyanduName =
+    typeof data.posyandu === "object"
+      ? data.posyandu?.nama_posyandu
+      : data.posyandu || data.user?.posyandu?.nama_posyandu || "";
+
+  const puskesmasName =
+    typeof data.puskesmas === "object"
+      ? data.puskesmas?.nama_puskesmas
+      : data.puskesmas || data.user?.puskesmas?.nama_puskesmas || "";
+
+  return {
+    id: data.id || data.user?.id || null,
+    email: data.email || data.user?.email || "",
+    nama: data.nama_lengkap || data.nama || data.user?.nama_lengkap || data.user?.nama || "",
+    nama_lengkap: data.nama_lengkap || data.nama || data.user?.nama_lengkap || data.user?.nama || "",
+    posyandu: posyanduName || "",
+    posyandu_id: data.posyandu_id || data.posyandu?.id || data.user?.posyandu_id || null,
+    puskesmas: puskesmasName || "",
+    puskesmas_id: data.puskesmas_id || data.puskesmas?.id || data.user?.puskesmas_id || null,
+    roleType,
+    role: roleTitle,
+    telepon: data.telepon || data.user?.telepon || "",
+    nik: data.nik || data.user?.nik || "",
+    profile_picture: rawPhoto || null,
+  };
+};
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -41,20 +119,7 @@ export default function App() {
   // =========================================================
   // GLOBAL USER STATE
   // =========================================================
-  const [user, setUser] = useState({
-    id: null,
-    email: "",
-    nama: "",
-    posyandu: "",
-    posyandu_id: null,
-    puskesmas: "",
-    puskesmas_id: null,
-    roleType: "",
-    role: "",
-    telepon: "",
-    nik: "",
-    profile_picture: null,
-  });
+  const [user, setUser] = useState(INITIAL_USER_STATE);
 
   // =========================================================
   // GLOBAL DATA
@@ -93,101 +158,39 @@ export default function App() {
 
         if (meRes?.data) {
           const u = meRes.data;
+          const formatted = formatUserObject(u);
 
-          currentBackendRole = u.role || currentBackendRole;
-
-          let roleType = currentBackendRole;
-
-          let roleTitle = "Kader";
-
-          if (roleType === "dinkesAdmin") {
-            roleTitle = "Admin Dinas Kesehatan";
-            roleType = "dinkes-admin";
-          } else if (roleType === "dinkes") {
-            roleTitle = "Staf Dinas Kesehatan";
-            roleType = "dinkes-staf";
-          } else if (roleType === "puskesmasAdmin") {
-            roleTitle = "Admin Puskesmas";
-            roleType = "puskesmas-admin";
-          } else if (roleType === "puskesmas") {
-            roleTitle = "Staf Puskesmas";
-            roleType = "puskesmas-staf";
-          } else if (roleType === "sa") {
-            roleTitle = "Super Admin";
-            roleType = "sa";
-          }
-
-          setUser((prev) => ({
-            ...prev,
-
-            id: u.id ?? prev.id,
-
-            email: u.email || prev.email,
-
-            nama: u.nama_lengkap || prev.nama,
-
-            posyandu: u.posyandu?.nama_posyandu || prev.posyandu,
-
-            puskesmas: u.puskesmas?.nama_puskesmas || u.puskesmas?.nama || prev.puskesmas,
-
-            posyandu_id: u.posyandu_id || u.posyandu?.id || prev.posyandu_id,
-
-            puskesmas_id: u.puskesmas_id || u.puskesmas?.id || prev.puskesmas_id,
-
-            roleType: roleType,
-
-            role: roleTitle,
-
-            telepon: u.telepon || prev.telepon,
-
-            nik: u.nik || prev.nik,
-
-            /*
-             * PENTING:
-             * profile_picture sekarang disimpan
-             * di global user.
-             */
-            profile_picture: u.profile_picture ?? u.profilePicture ?? u.foto_profil ?? u.foto ?? u.avatar ?? prev.profile_picture,
-          }));
-
-          // /users/me pada backend mengembalikan puskesmas_id, tetapi tidak menyertakan relasi puskesmas.
-          // Resolve nama Puskesmas berdasarkan ID user agar sidebar/profil tidak mengambil nama Posyandu.
-          if (u.puskesmas_id) {
+          // Resolve nama Puskesmas jika belum ada tetapi memiliki puskesmas_id
+          if (u.puskesmas_id && !formatted.puskesmas) {
             try {
               const puskesmasRes = await posyanduService.getPublicPuskesmasList();
-              const puskesmas = (Array.isArray(puskesmasRes?.data) ? puskesmasRes.data : []).find((item) => String(item?.id) === String(u.puskesmas_id));
-
-              if (puskesmas) {
-                setUser((prev) => ({
-                  ...prev,
-                  puskesmas: puskesmas.nama_puskesmas || prev.puskesmas,
-                  puskesmas_id: puskesmas.id,
-                }));
+              const found = (Array.isArray(puskesmasRes?.data) ? puskesmasRes.data : []).find(
+                (item) => String(item?.id) === String(u.puskesmas_id)
+              );
+              if (found) {
+                formatted.puskesmas = found.nama_puskesmas || "";
+                formatted.puskesmas_id = found.id;
               }
             } catch (error) {
               console.warn("Gagal mengambil nama Puskesmas user:", error);
             }
           }
 
-          if (u.posyandu_id) {
+          // Resolve nama Posyandu jika belum ada tetapi memiliki posyandu_id
+          if (u.posyandu_id && !formatted.posyandu) {
             try {
               const posyanduRes = await posyanduService.getPosyanduById(u.posyandu_id);
-
-              const posyandu = posyanduRes?.data;
-
-              if (posyandu) {
-                setUser((prev) => ({
-                  ...prev,
-                  posyandu: posyandu.nama_posyandu || prev.posyandu,
-                  posyandu_id: posyandu.id,
-                }));
+              if (posyanduRes?.data) {
+                formatted.posyandu = posyanduRes.data.nama_posyandu || "";
+                formatted.posyandu_id = posyanduRes.data.id;
               }
             } catch (error) {
-              // Profile tetap digunakan
-              // walaupun lookup posyandu gagal.
+              // ignore
             }
           }
 
+          currentBackendRole = formatted.roleType;
+          setUser(formatted);
           recordLogin(u);
         }
       } catch (err) {
@@ -324,11 +327,13 @@ export default function App() {
     try {
       const posyanduRes = await posyanduService.getAllPosyandu();
       const rawPosList = Array.isArray(posyanduRes?.data) ? posyanduRes.data : [];
-      const cleanPosList = rawPosList.map((p) => ({
-        ...p,
-        nama: cleanPosyanduName(p.nama || p.nama_posyandu || ""),
-        puskesmas: cleanPuskesmasName(p.puskesmas || p.puskesmas?.nama_puskesmas || ""),
-      }));
+      const cleanPosList = rawPosList
+        .map((p) => ({
+          ...p,
+          nama: cleanPosyanduName(p.nama || p.nama_posyandu || ""),
+          puskesmas: cleanPuskesmasName(p.puskesmas || p.puskesmas?.nama_puskesmas || ""),
+        }))
+        .sort((a, b) => (a.nama || "").localeCompare(b.nama || "", undefined, { numeric: true, sensitivity: "base" }));
       setGlobalPosyanduList(cleanPosList);
 
       // Sinkronkan ke globalSasaranList jika ada warga yang belum punya puskesmas
@@ -396,15 +401,34 @@ export default function App() {
   }, []);
 
   // =========================================================
-  // LOAD BACKEND DATA AFTER LOGIN
+  // LOAD BACKEND DATA AFTER LOGIN & REALTIME SYNC MULTI-ROLE
   // =========================================================
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchBackendData();
-    }
+    if (!isAuthenticated) return;
 
-    // Jangan bergantung pada object user,
-    // karena fetchBackendData sendiri membaca data terbaru.
+    fetchBackendData();
+
+    // 1. Subscribe ke BroadcastChannel & Storage Event lintas tab / role
+    const unsubscribe = subscribeRealtimeEvent(() => {
+      fetchBackendData();
+    });
+
+    // 2. Refetch otomatis ketika user kembali ke tab browser
+    const handleFocus = () => {
+      fetchBackendData();
+    };
+    window.addEventListener("focus", handleFocus);
+
+    // 3. Polling lembut setiap 12 detik sebagai jaring pengaman sinkronisasi
+    const pollInterval = setInterval(() => {
+      fetchBackendData();
+    }, 12000);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(pollInterval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
@@ -413,6 +437,7 @@ export default function App() {
   // =========================================================
   useEffect(() => {
     const handleUnauthorized = () => {
+      setUser(INITIAL_USER_STATE);
       setIsAuthenticated(false);
       setAuthScreen("login");
     };
@@ -433,67 +458,10 @@ export default function App() {
   // LOGIN SUCCESS
   // =========================================================
   const handleLoginSuccess = (loginData) => {
-    const backendRole = loginData.roleType || loginData.role || "";
-
-    const roleMap = {
-      kader: ["kader", "Kader"],
-
-      puskesmas: ["puskesmas-staf", "Staf Puskesmas"],
-
-      puskesmasAdmin: ["puskesmas-admin", "Admin Puskesmas"],
-
-      dinkes: ["dinkes-staf", "Staf Dinas Kesehatan"],
-
-      dinkesAdmin: ["dinkes-admin", "Admin Dinas Kesehatan"],
-
-      sa: ["sa", "Super Admin"],
-    };
-
-    const [roleType, roleTitle] = roleMap[backendRole] || ["", ""];
-
-    setUser((prev) => ({
-      ...prev,
-
-      id: loginData.id || loginData.user?.id || prev.id,
-
-      email: loginData.email || loginData.user?.email || prev.email,
-
-      nama: loginData.nama || loginData.nama_lengkap || loginData.user?.nama_lengkap || prev.nama,
-
-      posyandu: loginData.posyandu?.nama_posyandu || loginData.posyandu || prev.posyandu,
-
-      puskesmas: loginData.puskesmas?.nama_puskesmas || loginData.puskesmas?.nama || loginData.user?.puskesmas?.nama_puskesmas || prev.puskesmas,
-
-      roleType,
-
-      role: roleTitle,
-
-      telepon: loginData.telepon || prev.telepon,
-
-      nik: loginData.nik || prev.nik,
-
-      /*
-       * Tambahkan profile_picture
-       * apabila login response memilikinya.
-       */
-      profile_picture:
-        loginData.profile_picture ||
-        loginData.profilePicture ||
-        loginData.foto_profil ||
-        loginData.foto ||
-        loginData.avatar ||
-        loginData.user?.profile_picture ||
-        loginData.user?.profilePicture ||
-        loginData.user?.foto_profil ||
-        loginData.user?.foto ||
-        loginData.user?.avatar ||
-        prev.profile_picture,
-    }));
-
+    const formattedUser = formatUserObject(loginData);
+    setUser(formattedUser);
     recordLogin(loginData);
-
     setActiveMenu("dashboard");
-
     setIsAuthenticated(true);
   };
 
@@ -536,6 +504,19 @@ export default function App() {
     } catch (e) {
       console.warn("Logout error", e);
     }
+
+    // Reset user state to initial empty state to prevent leakage to next login
+    setUser(INITIAL_USER_STATE);
+
+    // Clear all global cached data
+    setGlobalSasaranList([]);
+    setGlobalPemeriksaanData({});
+    setGlobalStatistikSasaran({});
+    setGlobalJadwalList([]);
+    setGlobalPosyanduList([]);
+    setGlobalRujukanList([]);
+    setActivePemeriksaanWargaId(null);
+    setPemeriksaanReturnTo(null);
 
     setIsAuthenticated(false);
 

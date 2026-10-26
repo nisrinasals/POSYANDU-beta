@@ -64,4 +64,40 @@ const getCombinedReferralReasons = (detailSkrining = {}, plotData = null) => {
   return [...new Set([...screeningReasons, ...plotReasons])];
 };
 
-module.exports = { getScreeningReferralReasons, getPlotReferralReasons, getCombinedReferralReasons };
+const cleanAndDeduplicateReferralReasons = (input) => {
+  if (!input) return "";
+  const rawList = Array.isArray(input) ? input : [input];
+  const items = [];
+
+  for (const item of rawList) {
+    if (!item) continue;
+    if (typeof item === "string") {
+      const parts = item.split(/[;\n]+| - /);
+      for (const p of parts) {
+        const trimmed = p.trim();
+        if (trimmed) items.push(trimmed);
+      }
+    } else if (typeof item === "object") {
+      items.push(String(item));
+    }
+  }
+
+  const seen = new Set();
+  const unique = [];
+  for (const item of items) {
+    const norm = item.toLowerCase().replace(/\s+/g, " ");
+    if (!seen.has(norm)) {
+      seen.add(norm);
+      unique.push(item);
+    }
+  }
+
+  return unique.join("; ");
+};
+
+module.exports = {
+  getScreeningReferralReasons,
+  getPlotReferralReasons,
+  getCombinedReferralReasons,
+  cleanAndDeduplicateReferralReasons,
+};

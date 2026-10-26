@@ -242,9 +242,9 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
       mounted = false;
     };
 
-    // Hanya load sekali ketika halaman dibuka.
+    // Load ulang profil ketika user berganti.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id]);
 
   // =========================================================
   // START EDIT
@@ -442,16 +442,18 @@ export default function ProfilPenggunaPage({ user, onUpdateUser }) {
        * Cache bust supaya browser tidak menggunakan
        * gambar lama yang masih tersimpan di cache.
        */
-      const photoUrl = `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}v=${Date.now()}`;
+      const bustTimestamp = Date.now();
+      const photoUrl = `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}v=${bustTimestamp}`;
+      const cacheBustedRaw = `${rawPhoto}${rawPhoto.includes("?") ? "&" : "?"}v=${bustTimestamp}`;
 
       setProfileImage(photoUrl);
 
       if (onUpdateUser) {
         onUpdateUser({
           ...user,
-          profile_picture: rawPhoto,
-          foto: rawPhoto,
-          avatar: rawPhoto,
+          profile_picture: cacheBustedRaw,
+          foto: cacheBustedRaw,
+          avatar: cacheBustedRaw,
         });
       }
 

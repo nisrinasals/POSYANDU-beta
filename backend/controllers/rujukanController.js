@@ -4,6 +4,7 @@ const { Op } = require("sequelize");
 const PDFDocument = require("pdfkit");
 const { Rujukan, Warga, Posyandu, Pemeriksaan, Puskesmas, User } = require("../models");
 const { getPosyanduInclude } = require("../utils/posyanduAccessHelper");
+const { cleanAndDeduplicateReferralReasons } = require("../utils/rujukanHelper");
 
 const getWargaInclude = (req, search) => ({
   model: Warga,
@@ -43,10 +44,18 @@ const getAllRujukan = async (req, res, next) => {
       ],
     });
 
+    const cleanedRows = rows.map((row) => {
+      const json = row.toJSON ? row.toJSON() : { ...row };
+      if (json.alasan_rujukan) {
+        json.alasan_rujukan = cleanAndDeduplicateReferralReasons(json.alasan_rujukan);
+      }
+      return json;
+    });
+
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil daftar rujukan.",
-      data: rows,
+      data: cleanedRows,
       pagination: {
         total_items: count,
         total_pages: Math.ceil(count / Number(limit)),

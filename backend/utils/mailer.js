@@ -2,17 +2,20 @@
 
 const nodemailer = require("nodemailer");
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "localhost",
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === "true",
-  auth: process.env.SMTP_USER && process.env.SMTP_USER !== "your-smtp-user"
-    ? {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-      }
-    : undefined,
-});
+const getTransporter = () => {
+  const isSecure = process.env.SMTP_SECURE === "true" || Number(process.env.SMTP_PORT) === 465;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "localhost",
+    port: Number(process.env.SMTP_PORT) || (isSecure ? 465 : 587),
+    secure: isSecure,
+    auth: process.env.SMTP_USER && process.env.SMTP_USER !== "your-smtp-user"
+      ? {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASSWORD,
+        }
+      : undefined,
+  });
+};
 
 const sendEmail = async ({ to, subject, html }) => {
   // Log OTP Code to terminal console for local development & testing
@@ -31,6 +34,7 @@ const sendEmail = async ({ to, subject, html }) => {
   }
 
   try {
+    const transporter = getTransporter();
     const info = await transporter.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to,

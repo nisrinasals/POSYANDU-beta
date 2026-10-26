@@ -27,7 +27,7 @@ export default function DinkesDataSasaranPage({
 
   // Available Puskesmas List (Bersih tanpa prefix Puskesmas)
   const availablePuskesmasList = useMemo(() => {
-    return [...new Set(globalPosyanduList.map((item) => cleanPuskesmasName(item.puskesmas)).filter(Boolean))].sort();
+    return [...new Set(globalPosyanduList.map((item) => cleanPuskesmasName(item.puskesmas)).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
   }, [globalPosyanduList]);
 
   // Available Posyandu List for filter dropdown
@@ -37,7 +37,7 @@ export default function DinkesDataSasaranPage({
       const selClean = cleanPuskesmasName(selectedPuskesmas).toLowerCase();
       baseList = baseList.filter(item => cleanPuskesmasName(item.puskesmas).toLowerCase() === selClean);
     }
-    return [...new Set(baseList.map((item) => cleanPosyanduName(item.nama)).filter(Boolean))].sort();
+    return [...new Set(baseList.map((item) => cleanPosyanduName(item.nama)).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
   }, [selectedPuskesmas, globalPosyanduList]);
 
   // Selected sasaran for detailed modal

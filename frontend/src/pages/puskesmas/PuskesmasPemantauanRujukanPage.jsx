@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Search, Eye, FileText, ChevronLeft, ChevronRight, X, RotateCcw, Filter, User, AlertTriangle, ShieldCheck } from "lucide-react";
 import { STANDAR_KATEGORI } from "../../data/kategoriPemeriksaan";
 import { rujukanService } from "../../services";
-import { formatAgeFromMonths, formatDateId } from "../../utils/dataMappers";
+import { formatAgeFromMonths, formatDateId, cleanAndDeduplicateReasons } from "../../utils/dataMappers";
 
 export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [], globalPemeriksaanData = {} }) {
   // State kehadiran pasien rujukan (id: 'Hadir' | 'Tidak Hadir')
@@ -60,8 +60,8 @@ export default function PuskesmasPemantauanRujukanPage({ globalSasaranList = [],
         usia: formatAgeFromMonths(item.pemeriksaan?.usia_bulan, item.pemeriksaan?.kategori_sasaran),
         posyandu: item.warga?.posyandu?.nama_posyandu || "",
         kader: item.kader?.nama_lengkap || "",
-        masalahBadge: item.alasan_rujukan || "",
-        masalahSub: item.alasan_rujukan || "",
+        masalahBadge: cleanAndDeduplicateReasons(item.alasan_rujukan) || "",
+        masalahSub: cleanAndDeduplicateReasons(item.alasan_rujukan) || "",
         tglDirujuk: formatDateId(item.tanggal_rujukan || item.createdAt || item.updatedAt) || "-",
         kehadiran: item.status_kehadiran_rujukan === "tidak_hadir" ? "Tidak Hadir" : item.status_kehadiran_rujukan === "hadir" ? "Hadir" : "",
         catatanKunjungan: "",

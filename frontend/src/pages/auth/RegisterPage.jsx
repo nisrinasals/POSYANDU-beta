@@ -8,8 +8,9 @@ import { posyanduService, authService } from "../../services";
 import { validateNik, formatNikInput, validatePhone, formatPhoneInput, validateEmail, validatePassword } from "../../utils/validators";
 import { useNotification } from "../../context/NotificationContext";
 import SearchablePosyanduSelect from "../../components/common/SearchablePosyanduSelect";
+import { broadcastRealtimeEvent } from "../../utils/realtimeSync";
 import logoJogja from "../../assets/logo_jogja.png";
-import logoKemenkes from "../../assets/logo_kemenkes_clean.png";
+import logoKemenkes from "../../assets/logo_kemenkes.png";
 import logoPosyandu from "../../assets/logo_posyandu.png";
 import logoSengkuyung from "../../assets/logo_sengkuyung_katresnan.png";
 import bannerSoft from "../../assets/auth_banner_soft.jpg";
@@ -467,6 +468,7 @@ export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoTo
       setRegisteredData(response?.data || null);
       setStep("otp_verification");
       setOtpMessage("Registrasi berhasil. Kode OTP verifikasi telah dikirimkan ke email Anda.");
+      broadcastRealtimeEvent("user", { action: "register", email: formData.email, role: mapRoleParam() });
     } catch (err) {
       setErrorMessage(err.message || "Registrasi gagal. Periksa data dan koneksi ke backend.");
     } finally { setIsLoading(false); }
@@ -481,6 +483,7 @@ export default function RegisterPage({ role = "kader", onRegisterSuccess, onGoTo
     try {
       await authService.verifyOtp({ email: formData.email.trim().toLowerCase(), otp_code: cleanOtp, purpose: "register" });
       if (showSuccess) showSuccess("Verifikasi OTP Berhasil", "Email Anda berhasil diverifikasi! Akun kini menunggu persetujuan Admin.");
+      broadcastRealtimeEvent("user", { action: "otp_verified", email: formData.email, role: mapRoleParam() });
       setStep("pending_approval");
     } catch (err) {
       setErrorMessage(err.message || "Kode OTP tidak valid atau sudah kedaluwarsa.");
